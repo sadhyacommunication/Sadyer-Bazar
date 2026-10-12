@@ -593,24 +593,81 @@ export async function fetchLiveStoreFromSupabase(): Promise<{
         ? mapSettingsFromRow(settingsData as Record<string, unknown>)
         : undefined,
       products: loadedProducts,
-      coupons:
-        cpnRes.data && cpnRes.data.length > 0
-          ? cpnRes.data.map((r) => mapCouponFromRow(r as Record<string, unknown>))
-          : undefined,
-      orders:
-        ordRes.data && ordRes.data.length > 0
-          ? ordRes.data.map((r) => mapOrderFromRow(r as Record<string, unknown>))
-          : undefined,
-      transactions:
-        txRes.data && txRes.data.length > 0
-          ? txRes.data.map((r) => mapTxFromRow(r as Record<string, unknown>))
-          : undefined,
-      reviews:
-        revRes.data && revRes.data.length > 0
-          ? revRes.data.map((r) => mapReviewFromRow(r as Record<string, unknown>))
-          : undefined,
+      coupons: cpnRes.data
+        ? cpnRes.data.map((r) => mapCouponFromRow(r as Record<string, unknown>))
+        : undefined,
+      orders: ordRes.data
+        ? ordRes.data.map((r) => mapOrderFromRow(r as Record<string, unknown>))
+        : undefined,
+      transactions: txRes.data
+        ? txRes.data.map((r) => mapTxFromRow(r as Record<string, unknown>))
+        : undefined,
+      reviews: revRes.data
+        ? revRes.data.map((r) => mapReviewFromRow(r as Record<string, unknown>))
+        : undefined,
     };
   } catch {
     return { status: "offline" };
   }
 }
+
+export async function fetchOrderByCodeFromSupabase(
+  orderCode: string
+): Promise<Order | null> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return null;
+  const clean = orderCode.trim().toUpperCase();
+  if (!clean) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from("orders")
+      .select("*")
+      .ilike("order_code", clean)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return mapOrderFromRow(data as Record<string, unknown>);
+  } catch {
+    return null;
+  }
+}
+
+export function subscribeToRealtimeStore(onUpdate: () => void): () => void {
+  const supabase = getSupabaseClient();
+  if (!supabase) return () => {};
+
+  const channel = supabase
+    .channel("sadyer-bazar-realtime-sync")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "orders" },
+      () => onUpdate()
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "products" },
+      () => onUpdate()
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "site_settings" },
+      () => onUpdate()
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "coupons" },
+      () => onUpdate()
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "product_reviews" },
+      () => onUpdate()
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
+

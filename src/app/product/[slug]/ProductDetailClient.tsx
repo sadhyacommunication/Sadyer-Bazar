@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -20,6 +20,8 @@ import {
   MessageSquarePlus,
 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
+import { checkRateLimit, sanitizeText } from "@/lib/security";
+import { fetchOrderByCodeFromSupabase } from "@/services/supabaseSync";
 import ProductCard from "@/components/storefront/ProductCard";
 
 export default function ProductDetailClient({
@@ -51,6 +53,15 @@ export default function ProductDetailClient({
     product?.cuttingOptions[0] || ""
   );
   const [quantity, setQuantity] = useState<number>(1);
+
+  useEffect(() => {
+    if (product) {
+      const defVar =
+        product.variants.find((v) => v.isDefault) || product.variants[0];
+      if (defVar) setSelectedVariantId(defVar.id);
+      setSelectedCutting(product.cuttingOptions[0] || "");
+    }
+  }, [product?.id]);
 
   // Verified Order-ID Review Form State
   const [revOrderCode, setRevOrderCode] = useState("");
@@ -108,25 +119,52 @@ export default function ProductDetailClient({
     router.push("/checkout");
   };
 
-  const handleReviewSubmit = (e: React.FormEvent) => {
+  const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setRevError(null);
     const cleanCode = revOrderCode.trim().toUpperCase();
     if (!/^SB-\d{4}-[A-Z0-9]{5}$/.test(cleanCode)) {
       setRevError(
-        "Please enter a valid Sadyer Bazar Order ID (e.g., SB-2610-8K4M2) to verify your purchase."
+        "Please enter a valid Sadyer Bazar Order ID (e.g., SB-2610-5P9R7) to verify your purchase."
       );
       return;
     }
-    const matchedOrder = findOrderByCode(cleanCode);
+
+    const rl = checkRateLimit(`review_${cleanCode}`, 5, 60_000);
+    if (!rl.allowed) {
+      setRevError("Too many attempts. Please wait a minute and try again.");
+      return;
+    }
+
+    let matchedOrder = findOrderByCode(cleanCode);
+    if (!matchedOrder) {
+      const liveOrder = await fetchOrderByCodeFromSupabase(cleanCode);
+      if (liveOrder) matchedOrder = liveOrder;
+    }
+
+    if (!matchedOrder) {
+      setRevError(
+        "Order ID not found in our database. Only verified Sadyer Bazar customers can post a review."
+      );
+      return;
+    }
+
+    const cleanComment = sanitizeText(revComment);
+    if (cleanComment.length < 4) {
+      setRevError("Please write a short review comment (at least 4 characters).");
+      return;
+    }
+
     addProductReview({
       id: `rev-${Date.now()}`,
       productId: product.id,
       orderCode: cleanCode,
-      customerName: matchedOrder?.customerName || revName || "Verified Buyer",
-      customerDistrict: matchedOrder?.customerDistrict || revDistrict,
+      customerName:
+        sanitizeText(revName) || matchedOrder.customerName || "Verified Buyer",
+      customerDistrict:
+        sanitizeText(revDistrict) || matchedOrder.customerDistrict || "Dhaka",
       rating: revRating,
-      comment: revComment,
+      comment: cleanComment,
       isVerifiedPurchase: true,
       createdAt: new Date().toISOString(),
     });

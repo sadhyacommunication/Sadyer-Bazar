@@ -166,7 +166,7 @@ export default function Navbar() {
                       <img
                         src={item.primaryImage}
                         alt={item.title}
-                        className="w-12 h-12 rounded-lg object-cover border border-stone-200 shrink-0"
+                        className="w-12 h-12 rounded-lg object-contain bg-stone-950 p-0.5 border border-stone-200 shrink-0"
                       />
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-bold text-emerald-800 truncate">

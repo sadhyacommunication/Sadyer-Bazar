@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   LayoutDashboard,
@@ -28,6 +28,7 @@ import {
   Download,
 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
+import { checkRateLimit } from "@/lib/security";
 import {
   Coupon,
   Order,
@@ -69,10 +70,18 @@ export default function AdminDashboardPage() {
     syncDatabaseWithSupabase,
   } = useStore();
 
-  // Admin Passkey Gate
-  const [isUnlocked, setIsUnlocked] = useState(true);
-  const [pinInput, setPinInput] = useState("2026");
-  const [pinError, setPinError] = useState(false);
+  // Admin Passkey Gate (Locked by Default + Session Token Persistence)
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem("sb_admin_auth_v2") === "verified") {
+        setIsUnlocked(true);
+      }
+    } catch {}
+  }, []);
 
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>("all");
@@ -123,8 +132,12 @@ export default function AdminDashboardPage() {
   const [var2Label, setVar2Label] = useState("1kg Pack");
   const [var2Price, setVar2Price] = useState(1050);
 
-  // Settings Form State
+  // Settings Form State (Synced live with Supabase settings)
   const [settingsForm, setSettingsForm] = useState<SiteSettings>(settings);
+
+  useEffect(() => {
+    setSettingsForm(settings);
+  }, [settings]);
 
   // Executive KPIs
   const metrics = useMemo(() => {
@@ -422,18 +435,30 @@ export default function AdminDashboardPage() {
               Sadyer Bazar Admin Security Gate
             </h1>
             <p className="text-xs text-stone-500">
-              Enter Merchant Passkey (Default Demo PIN: <strong>2026</strong>)
+              Protected Merchant Portal • Enter Authorized Admin Passkey
             </p>
           </div>
 
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              const rl = checkRateLimit("admin_login_gate", 5, 60_000);
+              if (!rl.allowed) {
+                setPinError(
+                  "Too many failed attempts. Please wait 60 seconds."
+                );
+                return;
+              }
               if (pinInput === "2026" || pinInput === "SadyerBazar@2026!") {
                 setIsUnlocked(true);
-                setPinError(false);
+                setPinError(null);
+                try {
+                  sessionStorage.setItem("sb_admin_auth_v2", "verified");
+                } catch {}
               } else {
-                setPinError(true);
+                setPinError(
+                  `Invalid Passkey (${rl.remaining} attempts remaining).`
+                );
               }
             }}
             className="space-y-4"
@@ -442,17 +467,18 @@ export default function AdminDashboardPage() {
               type="password"
               value={pinInput}
               onChange={(e) => setPinInput(e.target.value)}
-              placeholder="Enter Admin PIN"
-              className="w-full px-4 py-3.5 rounded-2xl bg-stone-50 border border-stone-200 text-center text-lg font-mono tracking-widest"
+              placeholder="Enter Admin Passkey"
+              autoFocus
+              className="w-full px-4 py-3.5 rounded-2xl bg-stone-50 border border-stone-200 text-center text-lg font-mono tracking-widest focus:outline-none focus:border-[#0F3D2E]"
             />
             {pinError && (
               <p className="text-xs text-red-600 text-center font-bold">
-                Incorrect Passkey. Try 2026.
+                {pinError}
               </p>
             )}
             <button
               type="submit"
-              className="w-full py-3.5 rounded-2xl bg-[#0F3D2E] text-white font-bold text-sm cursor-pointer"
+              className="w-full py-3.5 rounded-2xl bg-[#0F3D2E] hover:bg-[#15533f] text-white font-bold text-sm transition cursor-pointer"
             >
               Unlock Merchant Portal
             </button>
@@ -489,7 +515,13 @@ export default function AdminDashboardPage() {
               </div>
             </Link>
             <button
-              onClick={() => setIsUnlocked(false)}
+              onClick={() => {
+                setIsUnlocked(false);
+                setPinInput("");
+                try {
+                  sessionStorage.removeItem("sb_admin_auth_v2");
+                } catch {}
+              }}
               className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-emerald-200 text-xs cursor-pointer"
               title="Lock Admin Session"
             >
@@ -738,7 +770,7 @@ export default function AdminDashboardPage() {
                         <img
                           src={item.productImage}
                           alt={item.productTitle}
-                          className="w-11 h-11 rounded-xl object-cover border border-stone-200 shrink-0"
+                          className="w-11 h-11 rounded-xl object-contain bg-stone-950 p-0.5 border border-stone-200 shrink-0"
                         />
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-[#0F3D2E] truncate">
@@ -1044,7 +1076,7 @@ export default function AdminDashboardPage() {
                           <img
                             src={item.productImage}
                             alt={item.productTitle}
-                            className="w-9 h-9 rounded-lg object-cover"
+                            className="w-9 h-9 rounded-lg object-contain bg-stone-950 p-0.5"
                           />
                           <div>
                             <p className="font-bold text-stone-900">
@@ -1148,7 +1180,7 @@ export default function AdminDashboardPage() {
                     <img
                       src={item.productImage}
                       alt={item.productTitle}
-                      className="w-14 h-14 rounded-xl object-cover border border-stone-200 shrink-0"
+                      className="w-14 h-14 rounded-xl object-contain bg-stone-950 p-0.5 border border-stone-200 shrink-0"
                     />
                     <div className="min-w-0">
                       <p className="text-xs font-extrabold text-[#C83E2B] truncate">
@@ -1211,7 +1243,7 @@ export default function AdminDashboardPage() {
                   <img
                     src={prod.primaryImage}
                     alt={prod.title}
-                    className="w-24 h-24 rounded-2xl object-cover border border-stone-200 shrink-0"
+                    className="w-24 h-24 rounded-2xl object-contain bg-stone-950 p-1 border border-stone-200 shrink-0"
                   />
                   <div className="flex-1 min-w-0 space-y-1.5">
                     <div className="flex items-center justify-between gap-2">

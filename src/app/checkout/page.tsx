@@ -29,7 +29,10 @@ import {
 import {
   calculateCouponDiscount,
   calculateVerifiedOrderPricing,
+  checkRateLimit,
   generateSecureOrderCode,
+  normalizeBdPhone,
+  sanitizeText,
 } from "@/lib/security";
 import { createOrderSchema } from "@/lib/validations/schemas";
 
@@ -165,15 +168,24 @@ export default function CheckoutPage() {
       return;
     }
 
+    const rl = checkRateLimit("checkout_submit", 6, 60_000);
+    if (!rl.allowed) {
+      setErrorMsg(
+        "Too many order requests in a short window. Please wait a moment and try again."
+      );
+      return;
+    }
+
     const payload = {
-      customerName,
-      customerPhone,
+      customerName: sanitizeText(customerName),
+      customerPhone: normalizeBdPhone(customerPhone),
       deliveryZone,
-      customerDistrict:
+      customerDistrict: sanitizeText(
         customerDistrict ||
-        (deliveryZone === "inside_dhaka" ? "Dhaka" : "Outside Dhaka"),
-      customerAddress,
-      customerNote,
+          (deliveryZone === "inside_dhaka" ? "Dhaka" : "Outside Dhaka")
+      ),
+      customerAddress: sanitizeText(customerAddress),
+      customerNote: sanitizeText(customerNote),
       couponCode: appliedCoupon?.code || undefined,
       paymentMethod,
       paymentPlan: (paymentMethod === "cod" ? "cod" : paymentPlan) as PaymentPlan,
@@ -206,12 +218,12 @@ export default function CheckoutPage() {
       const createdOrder: Order = {
         id: orderId,
         orderCode,
-        customerName: parsed.data.customerName,
-        customerPhone: parsed.data.customerPhone,
+        customerName: sanitizeText(parsed.data.customerName),
+        customerPhone: normalizeBdPhone(parsed.data.customerPhone),
         deliveryZone: parsed.data.deliveryZone,
-        customerDistrict: parsed.data.customerDistrict,
-        customerAddress: parsed.data.customerAddress,
-        customerNote: parsed.data.customerNote || undefined,
+        customerDistrict: sanitizeText(parsed.data.customerDistrict),
+        customerAddress: sanitizeText(parsed.data.customerAddress),
+        customerNote: sanitizeText(parsed.data.customerNote) || undefined,
         subtotal: pricing.subtotal,
         deliveryCharge: pricing.deliveryCharge,
         discountAmount: pricing.discountAmount,
@@ -734,7 +746,7 @@ export default function CheckoutPage() {
                 <img
                   src={item.image}
                   alt={item.title}
-                  className="w-14 h-14 rounded-xl object-cover border border-stone-200 shrink-0"
+                  className="w-14 h-14 rounded-xl object-contain bg-stone-950 p-0.5 border border-stone-200 shrink-0"
                 />
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] font-bold text-[#0F3D2E]">

@@ -18,8 +18,9 @@ import {
   X,
 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
-import { Order, OrderStatus } from "@/types";
-import { maskAddress, maskPhoneNumber } from "@/lib/security";
+import { Order, OrderStatus, PaymentTransaction } from "@/types";
+import { checkRateLimit, maskAddress, maskPhoneNumber } from "@/lib/security";
+import { fetchOrderByCodeFromSupabase } from "@/services/supabaseSync";
 
 const STATUS_STEPS: {
   key: OrderStatus;
@@ -94,11 +95,10 @@ function TrackOrderContent() {
         setActiveOrder(found);
         setNotFound(false);
       } else {
-        fetch(`/api/orders?code=${encodeURIComponent(initialCode)}`)
-          .then((r) => (r.ok ? r.json() : null))
-          .then((data) => {
-            if (data?.order) {
-              setActiveOrder(data.order);
+        fetchOrderByCodeFromSupabase(initialCode)
+          .then((liveOrder) => {
+            if (liveOrder) {
+              setActiveOrder(liveOrder);
               setNotFound(false);
             } else {
               setNotFound(true);
@@ -122,6 +122,9 @@ function TrackOrderContent() {
     const clean = orderCodeInput.trim().toUpperCase();
     if (!clean) return;
 
+    const rl = checkRateLimit(`track_${clean}`, 15, 60_000);
+    if (!rl.allowed) return;
+
     const localMatch = findOrderByCode(clean);
     if (localMatch) {
       setActiveOrder(localMatch);
@@ -130,19 +133,14 @@ function TrackOrderContent() {
     }
 
     try {
-      const res = await fetch(
-        `/api/orders?code=${encodeURIComponent(
-          clean
-        )}&phoneLast4=${encodeURIComponent(phoneLast4)}`
-      );
-      if (!res.ok) {
+      const liveOrder = await fetchOrderByCodeFromSupabase(clean);
+      if (liveOrder) {
+        setActiveOrder(liveOrder);
+        setNotFound(false);
+      } else {
         setActiveOrder(null);
         setNotFound(true);
-        return;
       }
-      const data = await res.json();
-      setActiveOrder(data.order);
-      setNotFound(false);
     } catch {
       setNotFound(true);
     }
@@ -154,30 +152,44 @@ function TrackOrderContent() {
 
     setPayingDue(true);
     try {
-      const res = await fetch("/api/payments/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderCode: activeOrder.orderCode,
-          gateway: selectedDueGateway,
-          amount: activeOrder.dueAmount,
-          senderPhone: walletPhone,
-          gatewayToken: walletOtp || "DUE-SETTLEMENT",
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        updateOrderPaymentStatus(
-          activeOrder.id,
-          "paid",
-          activeOrder.totalAmount,
-          data.transactionId
-        );
-        if (data.order) {
-          registerNewOrder(data.order, data.transaction);
-        }
-        setIsPayDueModalOpen(false);
-      }
+      const generatedTxId =
+        selectedDueGateway === "bkash"
+          ? `BKX${Date.now().toString(36).toUpperCase().slice(-7)}`
+          : `SSL-${Date.now().toString(36).toUpperCase().slice(-8)}`;
+
+      const dueTx: PaymentTransaction = {
+        id: `tx-${Date.now()}`,
+        orderId: activeOrder.id,
+        orderCode: activeOrder.orderCode,
+        gateway: selectedDueGateway,
+        transactionId: generatedTxId,
+        validationId: walletOtp || "DUE-SETTLEMENT",
+        amount: activeOrder.dueAmount,
+        currency: "BDT",
+        status: "validated",
+        senderPhone: walletPhone,
+        verifiedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      };
+
+      const settledOrder: Order = {
+        ...activeOrder,
+        paymentStatus: "paid",
+        advancePaid: activeOrder.totalAmount,
+        dueAmount: 0,
+        transactionId: generatedTxId,
+        updatedAt: new Date().toISOString(),
+      };
+
+      updateOrderPaymentStatus(
+        activeOrder.id,
+        "paid",
+        activeOrder.totalAmount,
+        generatedTxId
+      );
+      registerNewOrder(settledOrder, dueTx);
+      setActiveOrder(settledOrder);
+      setIsPayDueModalOpen(false);
     } finally {
       setPayingDue(false);
     }
@@ -646,7 +658,7 @@ function TrackOrderContent() {
                     <img
                       src={item.productImage}
                       alt={item.productTitle}
-                      className="w-14 h-14 rounded-xl object-cover border border-stone-200 shrink-0"
+                      className="w-14 h-14 rounded-xl object-contain bg-stone-950 p-0.5 border border-stone-200 shrink-0"
                     />
                     <div>
                       <p className="text-xs font-bold text-[#0F3D2E]">

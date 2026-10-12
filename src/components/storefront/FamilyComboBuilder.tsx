@@ -211,11 +211,11 @@ export default function FamilyComboBuilder() {
                   }`}
                 >
                   <div>
-                    <div className="relative aspect-square rounded-xl overflow-hidden mb-2">
+                    <div className="relative aspect-square rounded-xl overflow-hidden bg-stone-950 p-1 mb-2">
                       <img
                         src={prod.primaryImage}
                         alt={prod.title}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-contain rounded-lg block"
                       />
                       <span
                         className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${

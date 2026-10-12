@@ -7,7 +7,8 @@ import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL || "https://sadyerbazar.pages.dev"
+    process.env.NEXT_PUBLIC_SITE_URL ||
+      "https://sadyer-bazar.sadhyacommunication.workers.dev"
   ),
   title: {
     default:
@@ -70,8 +71,9 @@ export default function RootLayout({
     description:
       "Nationwide pre-order and home delivery of wild Jamuna River fish, pure Gawa Ghee, authentic Bogura Shahi Doi, village Deshi chicken, eggs, and heritage organic rice.",
     telephone: "+8801713477780",
-    url: "https://sadyerbazar.pages.dev",
-    image: "https://sadyerbazar.pages.dev/images/hero-banner-bn.jpg",
+    url: "https://sadyer-bazar.sadhyacommunication.workers.dev",
+    image:
+      "https://sadyer-bazar.sadhyacommunication.workers.dev/images/hero-banner-bn.jpg",
     priceRange: "৳৳",
     address: {
       "@type": "PostalAddress",

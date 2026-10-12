@@ -152,7 +152,7 @@ export default function SlideCart() {
                     <img
                       src={item.image}
                       alt={item.title}
-                      className="w-20 h-20 rounded-xl object-cover border border-stone-200 shrink-0"
+                      className="w-20 h-20 rounded-xl object-contain bg-stone-950 p-0.5 border border-stone-200 shrink-0"
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
@@ -237,7 +237,7 @@ export default function SlideCart() {
                       <img
                         src={upsellProduct.primaryImage}
                         alt={upsellProduct.title}
-                        className="w-14 h-14 rounded-xl object-cover border border-amber-200 shrink-0"
+                        className="w-14 h-14 rounded-xl object-contain bg-stone-950 p-0.5 border border-amber-200 shrink-0"
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-bold text-[#0F3D2E]">

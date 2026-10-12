@@ -12,12 +12,14 @@ import {
   Clock,
   MessageCircle,
   Lock,
+  ShoppingBag,
+  ArrowRight,
 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 
 export default function Footer() {
   const pathname = usePathname();
-  const { settings } = useStore();
+  const { settings, cartCount, cartSubtotal, setIsCartOpen } = useStore();
 
   if (pathname?.startsWith("/admin")) {
     return null;
@@ -253,11 +255,49 @@ export default function Footer() {
         )}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="fixed bottom-5 left-5 z-40 inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-xl border border-white/20 transition no-print"
+        className={`fixed left-4 z-40 inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-xl border border-white/20 transition no-print ${
+          cartCount > 0 && pathname !== "/checkout"
+            ? "bottom-20 sm:bottom-5"
+            : "bottom-5"
+        }`}
       >
         <MessageCircle className="w-4 h-4 fill-current" />
         <span>WhatsApp: {settings.supportPhone}</span>
       </a>
+
+      {/* Mobile Sticky Bottom Basket & Express 1-Click Checkout Ribbon */}
+      {cartCount > 0 && pathname !== "/checkout" && (
+        <div className="fixed bottom-0 inset-x-0 z-40 sm:hidden bg-[#0F3D2E] text-white border-t border-emerald-700/80 px-4 py-3 shadow-2xl flex items-center justify-between gap-3 no-print">
+          <button
+            type="button"
+            onClick={() => setIsCartOpen(true)}
+            className="flex items-center gap-2.5 text-left cursor-pointer"
+          >
+            <div className="relative w-10 h-10 rounded-xl bg-amber-400 text-stone-950 flex items-center justify-center font-extrabold">
+              <ShoppingBag className="w-5 h-5" />
+              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[#C83E2B] text-white text-[10px] font-extrabold flex items-center justify-center">
+                {cartCount}
+              </span>
+            </div>
+            <div>
+              <span className="text-[11px] text-emerald-200 block leading-none">
+                Your Organic Basket
+              </span>
+              <strong className="text-sm font-extrabold text-white">
+                ৳{cartSubtotal.toLocaleString()}
+              </strong>
+            </div>
+          </button>
+
+          <Link
+            href="/checkout"
+            className="px-4 py-2.5 rounded-xl bg-[#C83E2B] hover:bg-[#b03221] text-white text-xs font-extrabold inline-flex items-center gap-1.5 shadow-lg"
+          >
+            <span>1-Click Checkout</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
     </>
   );
 }

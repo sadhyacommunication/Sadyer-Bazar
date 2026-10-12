@@ -36,6 +36,7 @@ import {
   fetchLiveStoreFromSupabase,
   insertReviewToSupabase,
   seedFullDatabaseToSupabase,
+  subscribeToRealtimeStore,
   SupabaseConnectionState,
   upsertCouponToSupabase,
   upsertOrderToSupabase,
@@ -187,20 +188,33 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
     setHydrated(true);
 
+    const loadFromSupabase = () => {
+      fetchLiveStoreFromSupabase().then((live) => {
+        setSupabaseStatus(live.status);
+        if (live.status === "connected_live") {
+          if (live.settings) setSettings(live.settings);
+          if (live.products && live.products.length > 0)
+            setProducts(live.products);
+          if (live.coupons && live.coupons.length > 0) setCoupons(live.coupons);
+          if (live.orders && live.orders.length > 0) setOrders(live.orders);
+          if (live.transactions && live.transactions.length > 0)
+            setTransactions(live.transactions);
+          if (live.reviews && live.reviews.length > 0) setReviews(live.reviews);
+        }
+      });
+    };
+
     // Connect and hydrate live data from Supabase (https://uqyjtlndgnvfqjcdwbop.supabase.co)
-    fetchLiveStoreFromSupabase().then((live) => {
-      setSupabaseStatus(live.status);
-      if (live.status === "connected_live") {
-        if (live.settings) setSettings(live.settings);
-        if (live.products && live.products.length > 0)
-          setProducts(live.products);
-        if (live.coupons && live.coupons.length > 0) setCoupons(live.coupons);
-        if (live.orders && live.orders.length > 0) setOrders(live.orders);
-        if (live.transactions && live.transactions.length > 0)
-          setTransactions(live.transactions);
-        if (live.reviews && live.reviews.length > 0) setReviews(live.reviews);
-      }
+    loadFromSupabase();
+
+    // Subscribe to real-time Postgres changes across devices
+    const unsubscribe = subscribeToRealtimeStore(() => {
+      loadFromSupabase();
     });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const syncDatabaseWithSupabase = async () => {

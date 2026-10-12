@@ -3,9 +3,10 @@ compatibility_date = "2025-03-01"
 
 [assets]
 directory = "./out"
+not_found_handling = "404-page"
 
 [vars]
-NEXT_PUBLIC_SITE_URL = "https://sadyerbazar.pages.dev"
+NEXT_PUBLIC_SITE_URL = "https://sadyer-bazar.sadhyacommunication.workers.dev"
 NEXT_PUBLIC_SUPABASE_URL = "https://uqyjtlndgnvfqjcdwbop.supabase.co"
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_fjenVMXelWDkrC8CEu3XeQ_xxrpxzOu"
 NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVxeWp0bG5kZ252ZnFqY2R3Ym9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwMDU3MTQsImV4cCI6MjEwNTU4MTcxNH0.e82cv5ugvYRgkDqRYW5Nw8dZ1R4RskEJIjrTw9d22H0"
