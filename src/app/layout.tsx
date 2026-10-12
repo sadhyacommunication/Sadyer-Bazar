@@ -1,16 +1,9 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { StoreProvider } from "@/context/StoreContext";
 import Navbar from "@/components/layout/Navbar";
 import SlideCart from "@/components/storefront/SlideCart";
 import Footer from "@/components/layout/Footer";
-
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL(
@@ -22,7 +15,7 @@ export const metadata: Metadata = {
     template: "%s | Sadyer Bazar (সাধ্যের বাজার)",
   },
   description:
-    "Order 100% chemical-free wild Jamuna River Fish (যমুনা নদীর মাছ), Sirajganj Pure Gawa Ghee (গাওয়া ঘি), Authentic Bogura Shahi Doi (বগুড়ার দই), Free-Range Deshi Chicken, Eggs & Full-Fiber Red Rice with nationwide home delivery across Bangladesh.",
+    "Order 100% chemical-free wild Jamuna River Fish (যমুনা নদীর মাছ), Sirajganj Pure Gawa Ghee (গাওয়া ঘি), Authentic Bogura Shahi Doi (বগুড়ার দই), Free-Range Deshi Chicken, Eggs, Kataribhog, Basmati & Full-Fiber Red Rice with nationwide home delivery across Bangladesh.",
   keywords: [
     "Sadyer Bazar",
     "সাধ্যের বাজার",
@@ -34,6 +27,10 @@ export const metadata: Metadata = {
     "বগুড়ার দই",
     "Deshi chicken meat",
     "দেশি মুরগির ডিম",
+    "Kataribhog rice",
+    "কাটারিভোগ চাল",
+    "Basmati rice",
+    "বাসমতি চাল",
     "Full fiber red rice",
     "লাল চাল",
     "Organic food Bangladesh",
@@ -71,7 +68,7 @@ export default function RootLayout({
     "@type": "GroceryStore",
     name: "Sadyer Bazar (সাধ্যের বাজার)",
     description:
-      "Nationwide pre-order and home delivery of wild Jamuna River fish, pure Gawa Ghee, authentic Bogura Shahi Doi, village Deshi chicken, eggs, and organic red rice.",
+      "Nationwide pre-order and home delivery of wild Jamuna River fish, pure Gawa Ghee, authentic Bogura Shahi Doi, village Deshi chicken, eggs, and heritage organic rice.",
     telephone: "+8801713477780",
     url: "https://sadyerbazar.pages.dev",
     image: "https://sadyerbazar.pages.dev/images/hero-banner-bn.jpg",
@@ -87,7 +84,19 @@ export default function RootLayout({
 
   return (
     <html lang="en">
-      <body className={`${jakarta.className} antialiased min-h-screen flex flex-col`}>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body className="antialiased min-h-screen flex flex-col">
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

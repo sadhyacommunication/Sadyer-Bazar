@@ -1,7 +1,6 @@
 name = "sadyer-bazar"
 compatibility_date = "2025-03-01"
-compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = ".vercel/output/static"
+pages_build_output_dir = "out"
 
 [vars]
 NEXT_PUBLIC_SITE_URL = "https://sadyerbazar.pages.dev"
