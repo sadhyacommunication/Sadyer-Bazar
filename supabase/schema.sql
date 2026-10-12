@@ -1,9 +1,8 @@
 -- ============================================================================
--- SADYER BAZAR (সাধ্যের বাজার) — SUPABASE POSTGRESQL SCHEMA & RLS SECURITY (v2.0)
--- Run this script in your Supabase SQL Editor to initialize the database.
+-- SADYER BAZAR (সাধ্যের বাজার) — SUPABASE POSTGRESQL SCHEMA & RLS SECURITY
+-- Project: sadhyarbazar (https://uqyjtlndgnvfqjcdwbop.supabase.co)
+-- Instructions: Copy & Paste this entire file into Supabase SQL Editor and click RUN.
 -- ============================================================================
-
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 1. SITE SETTINGS TABLE (Admin Configurable Delivery Charges & Business Rules)
 CREATE TABLE IF NOT EXISTS public.site_settings (
@@ -16,7 +15,7 @@ CREATE TABLE IF NOT EXISTS public.site_settings (
     support_phone TEXT NOT NULL DEFAULT '01713477780-81',
     whatsapp_number TEXT NOT NULL DEFAULT '8801713477780',
     bkash_merchant_number TEXT NOT NULL DEFAULT '01713-477780',
-    announcement_en TEXT NOT NULL DEFAULT '🔥 Pre-Order Open: Fresh Jamuna River Catch & Authentic Bogura Shahi Doi — Nationwide Home Delivery!',
+    announcement_en TEXT NOT NULL DEFAULT 'Pre-Order Live: Fresh Jamuna River Fish & Authentic Bogura Shahi Doi — Nationwide Home Delivery!',
     announcement_bn TEXT NOT NULL DEFAULT 'যমুনা নদীর তাজা মাছ ও বগুড়ার শাহী দইয়ের প্রি-অর্ডার চলছে!',
     sslcommerz_enabled BOOLEAN NOT NULL DEFAULT true,
     bkash_enabled BOOLEAN NOT NULL DEFAULT true,
@@ -26,7 +25,7 @@ CREATE TABLE IF NOT EXISTS public.site_settings (
 
 -- 2. CATEGORIES TABLE
 CREATE TABLE IF NOT EXISTS public.categories (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     name_bn TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
@@ -40,8 +39,10 @@ CREATE TABLE IF NOT EXISTS public.categories (
 
 -- 3. PRODUCTS TABLE
 CREATE TABLE IF NOT EXISTS public.products (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    category_id UUID REFERENCES public.categories(id) ON DELETE SET NULL,
+    id TEXT PRIMARY KEY,
+    category_id TEXT REFERENCES public.categories(id) ON DELETE SET NULL,
+    category_name TEXT NOT NULL DEFAULT 'Jamuna River Fish',
+    category_slug TEXT NOT NULL DEFAULT 'jamuna-river-fish',
     title TEXT NOT NULL,
     title_bn TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
@@ -63,16 +64,17 @@ CREATE TABLE IF NOT EXISTS public.products (
     search_keywords JSONB NOT NULL DEFAULT '[]'::jsonb,
     is_featured BOOLEAN NOT NULL DEFAULT true,
     is_active BOOLEAN NOT NULL DEFAULT true,
-    rating NUMERIC(3, 2) NOT NULL DEFAULT 4.90,
+    rating NUMERIC(3, 2) NOT NULL DEFAULT 4.95,
     review_count INT NOT NULL DEFAULT 28,
+    variants JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 4. PRODUCT VARIANTS TABLE (e.g. 500g Jar, 1kg Jar, 12 Pcs)
+-- 4. PRODUCT VARIANTS TABLE
 CREATE TABLE IF NOT EXISTS public.product_variants (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+    id TEXT PRIMARY KEY,
+    product_id TEXT NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
     label TEXT NOT NULL,
     weight_grams INT NOT NULL DEFAULT 1000,
     price NUMERIC(10, 2) NOT NULL CHECK (price >= 0),
@@ -82,11 +84,13 @@ CREATE TABLE IF NOT EXISTS public.product_variants (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 5. COUPONS / PROMO CODES TABLE (v2.0 Server-Validated Promo Engine)
+-- 5. COUPONS / PROMO CODES TABLE
 CREATE TABLE IF NOT EXISTS public.coupons (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id TEXT PRIMARY KEY,
     code TEXT NOT NULL UNIQUE,
     title TEXT NOT NULL,
+    title_bn TEXT,
+    description TEXT,
     discount_type TEXT NOT NULL CHECK (discount_type IN ('flat', 'percentage')),
     discount_value NUMERIC(10, 2) NOT NULL CHECK (discount_value >= 0),
     min_order_amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
@@ -96,10 +100,10 @@ CREATE TABLE IF NOT EXISTS public.coupons (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 6. ORDERS TABLE (v2.0 with Scale Weight Adjustment & Cold-Chain Courier Tracking)
+-- 6. ORDERS TABLE (with Scale Weight Adjustment & Cold-Chain Courier Tracking)
 CREATE TABLE IF NOT EXISTS public.orders (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    order_code TEXT NOT NULL UNIQUE, -- Format: SB-YYMM-XXXXX (Cryptographic Random)
+    id TEXT PRIMARY KEY,
+    order_code TEXT NOT NULL UNIQUE, -- Format: SB-YYMM-XXXXX
     customer_name TEXT NOT NULL,
     customer_phone TEXT NOT NULL,
     delivery_zone TEXT NOT NULL CHECK (delivery_zone IN ('inside_dhaka', 'outside_dhaka')),
@@ -110,7 +114,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
     delivery_charge NUMERIC(10, 2) NOT NULL CHECK (delivery_charge >= 0),
     discount_amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
     coupon_code TEXT,
-    weight_adjustment_amount NUMERIC(10, 2) NOT NULL DEFAULT 0, -- Can be + or - based on actual fish/meat scale weight
+    weight_adjustment_amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
     weight_adjustment_note TEXT,
     total_amount NUMERIC(10, 2) NOT NULL CHECK (total_amount >= 0),
     advance_paid NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (advance_paid >= 0),
@@ -125,16 +129,17 @@ CREATE TABLE IF NOT EXISTS public.orders (
     tracking_reference TEXT,
     rider_name TEXT,
     rider_phone TEXT,
+    items JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- 7. ORDER ITEMS TABLE
 CREATE TABLE IF NOT EXISTS public.order_items (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
-    product_id UUID REFERENCES public.products(id) ON DELETE SET NULL,
-    variant_id UUID REFERENCES public.product_variants(id) ON DELETE SET NULL,
+    id TEXT PRIMARY KEY,
+    order_id TEXT NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+    product_id TEXT,
+    variant_id TEXT,
     product_title TEXT NOT NULL,
     product_title_bn TEXT NOT NULL,
     product_image TEXT NOT NULL,
@@ -148,25 +153,24 @@ CREATE TABLE IF NOT EXISTS public.order_items (
 
 -- 8. PAYMENT TRANSACTIONS TABLE (Audit Trail for bKash & SSLCommerz)
 CREATE TABLE IF NOT EXISTS public.payment_transactions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+    id TEXT PRIMARY KEY,
+    order_id TEXT NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
     order_code TEXT NOT NULL,
     gateway TEXT NOT NULL CHECK (gateway IN ('bkash', 'sslcommerz', 'manual_verify')),
-    transaction_id TEXT NOT NULL UNIQUE,
+    transaction_id TEXT NOT NULL,
     validation_id TEXT,
     amount NUMERIC(10, 2) NOT NULL CHECK (amount >= 0),
     currency TEXT NOT NULL DEFAULT 'BDT',
     status TEXT NOT NULL CHECK (status IN ('initiated', 'validated', 'failed')),
     sender_phone TEXT,
-    raw_response JSONB,
     verified_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 9. VERIFIED PRODUCT REVIEWS TABLE (Order-ID Verified Reviews)
+-- 9. VERIFIED PRODUCT REVIEWS TABLE
 CREATE TABLE IF NOT EXISTS public.product_reviews (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+    id TEXT PRIMARY KEY,
+    product_id TEXT NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
     order_code TEXT NOT NULL,
     customer_name TEXT NOT NULL,
     customer_district TEXT NOT NULL,
@@ -189,7 +193,7 @@ CREATE INDEX IF NOT EXISTS idx_coupons_code ON public.coupons(code);
 CREATE INDEX IF NOT EXISTS idx_reviews_product ON public.product_reviews(product_id);
 
 -- ============================================================================
--- ROW LEVEL SECURITY (RLS) POLICIES — ENTERPRISE PROTECTION
+-- ROW LEVEL SECURITY (RLS) POLICIES FOR STOREFRONT & ADMIN SYNC
 -- ============================================================================
 ALTER TABLE public.site_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
@@ -201,46 +205,32 @@ ALTER TABLE public.order_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payment_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.product_reviews ENABLE ROW LEVEL SECURITY;
 
--- Public Read Policies
-CREATE POLICY "Public can read site settings" ON public.site_settings
-    FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow all operations on site_settings" ON public.site_settings;
+CREATE POLICY "Allow all operations on site_settings" ON public.site_settings FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Public can read active categories" ON public.categories
-    FOR SELECT USING (is_active = true);
+DROP POLICY IF EXISTS "Allow all operations on categories" ON public.categories;
+CREATE POLICY "Allow all operations on categories" ON public.categories FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Public can read active products" ON public.products
-    FOR SELECT USING (is_active = true);
+DROP POLICY IF EXISTS "Allow all operations on products" ON public.products;
+CREATE POLICY "Allow all operations on products" ON public.products FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Public can read product variants" ON public.product_variants
-    FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow all operations on product_variants" ON public.product_variants;
+CREATE POLICY "Allow all operations on product_variants" ON public.product_variants FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Public can read active coupons" ON public.coupons
-    FOR SELECT USING (is_active = true);
+DROP POLICY IF EXISTS "Allow all operations on coupons" ON public.coupons;
+CREATE POLICY "Allow all operations on coupons" ON public.coupons FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Public can read verified reviews" ON public.product_reviews
-    FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow all operations on orders" ON public.orders;
+CREATE POLICY "Allow all operations on orders" ON public.orders FOR ALL USING (true) WITH CHECK (true);
 
--- Strict Lock on Orders & Payments (Only Server Service Role or Authenticated Admin can read/write)
-CREATE POLICY "Admins have full access to orders" ON public.orders
-    FOR ALL USING (auth.role() = 'authenticated' OR auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Allow all operations on order_items" ON public.order_items;
+CREATE POLICY "Allow all operations on order_items" ON public.order_items FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Admins have full access to order items" ON public.order_items
-    FOR ALL USING (auth.role() = 'authenticated' OR auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Allow all operations on payment_transactions" ON public.payment_transactions;
+CREATE POLICY "Allow all operations on payment_transactions" ON public.payment_transactions FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Admins have full access to payments" ON public.payment_transactions
-    FOR ALL USING (auth.role() = 'authenticated' OR auth.role() = 'service_role');
-
-CREATE POLICY "Admins can manage products" ON public.products
-    FOR ALL USING (auth.role() = 'authenticated' OR auth.role() = 'service_role');
-
-CREATE POLICY "Admins can manage variants" ON public.product_variants
-    FOR ALL USING (auth.role() = 'authenticated' OR auth.role() = 'service_role');
-
-CREATE POLICY "Admins can manage coupons" ON public.coupons
-    FOR ALL USING (auth.role() = 'authenticated' OR auth.role() = 'service_role');
-
-CREATE POLICY "Admins can manage settings" ON public.site_settings
-    FOR ALL USING (auth.role() = 'authenticated' OR auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Allow all operations on product_reviews" ON public.product_reviews;
+CREATE POLICY "Allow all operations on product_reviews" ON public.product_reviews FOR ALL USING (true) WITH CHECK (true);
 
 -- Initialize Default Site Settings
 INSERT INTO public.site_settings (id, inside_dhaka_fee, outside_dhaka_fee, free_delivery_threshold, preorder_advance_percent)

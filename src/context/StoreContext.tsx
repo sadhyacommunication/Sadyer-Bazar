@@ -30,6 +30,18 @@ import {
   INITIAL_SITE_SETTINGS,
   INITIAL_TRANSACTIONS,
 } from "@/services/seedData";
+import {
+  deleteCouponFromSupabase,
+  deleteProductFromSupabase,
+  fetchLiveStoreFromSupabase,
+  insertReviewToSupabase,
+  seedFullDatabaseToSupabase,
+  SupabaseConnectionState,
+  upsertCouponToSupabase,
+  upsertOrderToSupabase,
+  upsertProductToSupabase,
+  upsertSettingsToSupabase,
+} from "@/services/supabaseSync";
 
 interface StoreContextValue {
   products: Product[];
@@ -45,6 +57,10 @@ interface StoreContextValue {
   toastMessage: string | null;
   showToast: (msg: string) => void;
 
+  // Live Supabase Connection Status & Manual Sync
+  supabaseStatus: SupabaseConnectionState;
+  syncDatabaseWithSupabase: () => Promise<void>;
+
   // Cart Actions
   addToCart: (
     product: Product,
@@ -59,7 +75,7 @@ interface StoreContextValue {
   cartSubtotal: number;
   cartCount: number;
 
-  // Order, Scale Weight Adjustment, Logistics & Payment Actions
+  // Order & Tracking Actions
   registerNewOrder: (order: Order, transaction?: PaymentTransaction) => void;
   findOrderByCode: (code: string) => Order | undefined;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
@@ -127,6 +143,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [supabaseStatus, setSupabaseStatus] =
+    useState<SupabaseConnectionState>("checking");
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -168,7 +186,41 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // Ignore storage parse issues
     }
     setHydrated(true);
+
+    // Connect and hydrate live data from Supabase (https://uqyjtlndgnvfqjcdwbop.supabase.co)
+    fetchLiveStoreFromSupabase().then((live) => {
+      setSupabaseStatus(live.status);
+      if (live.status === "connected_live") {
+        if (live.settings) setSettings(live.settings);
+        if (live.products && live.products.length > 0)
+          setProducts(live.products);
+        if (live.coupons && live.coupons.length > 0) setCoupons(live.coupons);
+        if (live.orders && live.orders.length > 0) setOrders(live.orders);
+        if (live.transactions && live.transactions.length > 0)
+          setTransactions(live.transactions);
+        if (live.reviews && live.reviews.length > 0) setReviews(live.reviews);
+      }
+    });
   }, []);
+
+  const syncDatabaseWithSupabase = async () => {
+    setSupabaseStatus("checking");
+    const res = await seedFullDatabaseToSupabase(
+      products,
+      orders,
+      coupons,
+      reviews,
+      transactions,
+      settings
+    );
+    if (res.ok) {
+      setSupabaseStatus("connected_live");
+      showToast(res.message);
+    } else {
+      setSupabaseStatus("schema_missing");
+      showToast(res.message);
+    }
+  };
 
   useEffect(() => {
     if (!hydrated) return;
@@ -244,6 +296,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         };
         return updated;
       }
+
       return [
         ...prev,
         {
@@ -265,9 +318,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       ];
     });
 
-    showToast(`Added "${product.titleBn}" (${variant.label}) to your basket!`);
     if (openDrawer) {
       setIsCartOpen(true);
+    } else {
+      showToast(`Added "${product.titleBn}" (${variant.label}) to basket!`);
     }
   };
 
@@ -311,11 +365,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
     if (order.couponCode) {
       setCoupons((prev) =>
-        prev.map((c) =>
-          c.code.toUpperCase() === order.couponCode?.toUpperCase()
-            ? { ...c, usageCount: c.usageCount + 1 }
-            : c
-        )
+        prev.map((c) => {
+          if (c.code.toUpperCase() === order.couponCode?.toUpperCase()) {
+            const updatedCoupon = { ...c, usageCount: c.usageCount + 1 };
+            upsertCouponToSupabase(updatedCoupon);
+            return updatedCoupon;
+          }
+          return c;
+        })
       );
     }
     setProducts((prev) =>
@@ -324,15 +381,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           .filter((i) => i.productId === prod.id)
           .reduce((acc, i) => acc + i.quantity, 0);
         if (orderedQty === 0) return prod;
-        return {
+        const updatedProd = {
           ...prod,
           batchBookedQty: Math.min(
             prod.batchTargetQty,
             prod.batchBookedQty + orderedQty
           ),
         };
+        upsertProductToSupabase(updatedProd);
+        return updatedProd;
       })
     );
+
+    // Sync order & payment transaction to live Supabase
+    upsertOrderToSupabase(order, transaction);
   };
 
   const findOrderByCode = (code: string): Order | undefined => {
@@ -342,11 +404,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const updateOrderStatus = (orderId: string, status: OrderStatus) => {
     setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? { ...o, orderStatus: status, updatedAt: new Date().toISOString() }
-          : o
-      )
+      prev.map((o) => {
+        if (o.id !== orderId) return o;
+        const updated = {
+          ...o,
+          orderStatus: status,
+          updatedAt: new Date().toISOString(),
+        };
+        upsertOrderToSupabase(updated);
+        return updated;
+      })
     );
     showToast(`Order status updated to "${status.toUpperCase()}"`);
   };
@@ -367,7 +434,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             ? o.totalAmount
             : o.advancePaid;
         const nextDue = Math.max(0, o.totalAmount - nextAdvance);
-        return {
+        const updated: Order = {
           ...o,
           paymentStatus,
           advancePaid: nextAdvance,
@@ -375,12 +442,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           transactionId: transactionId || o.transactionId,
           updatedAt: new Date().toISOString(),
         };
+        upsertOrderToSupabase(updated);
+        return updated;
       })
     );
     showToast(`Payment status updated to "${paymentStatus.toUpperCase()}"`);
   };
 
-  // Step 1: Dynamic Scale Weight & Final Bill Adjustment
   const adjustOrderWeightAndBill = (
     orderId: string,
     weightAdjustmentAmount: number,
@@ -401,7 +469,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             : o.advancePaid > 0
             ? "advance_paid"
             : o.paymentStatus;
-        return {
+        const updated: Order = {
           ...o,
           weightAdjustmentAmount,
           weightAdjustmentNote,
@@ -410,6 +478,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           paymentStatus: nextPaymentStatus,
           updatedAt: new Date().toISOString(),
         };
+        upsertOrderToSupabase(updated);
+        return updated;
       })
     );
     showToast(
@@ -419,7 +489,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
-  // Step 4: Cold-Chain Logistics & Rider Assignment
   const assignOrderLogistics = (
     orderId: string,
     courierName: string,
@@ -428,28 +497,30 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     riderPhone: string
   ) => {
     setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? {
-              ...o,
-              courierName,
-              trackingReference,
-              riderName,
-              riderPhone,
-              orderStatus:
-                o.orderStatus === "pending" || o.orderStatus === "confirmed"
-                  ? "shipped"
-                  : o.orderStatus,
-              updatedAt: new Date().toISOString(),
-            }
-          : o
-      )
+      prev.map((o) => {
+        if (o.id !== orderId) return o;
+        const updated: Order = {
+          ...o,
+          courierName,
+          trackingReference,
+          riderName,
+          riderPhone,
+          orderStatus:
+            o.orderStatus === "pending" || o.orderStatus === "confirmed"
+              ? "shipped"
+              : o.orderStatus,
+          updatedAt: new Date().toISOString(),
+        };
+        upsertOrderToSupabase(updated);
+        return updated;
+      })
     );
     showToast(`Assigned to "${courierName}" & updated tracking info!`);
   };
 
   const addProduct = (newProduct: Product) => {
     setProducts((prev) => [newProduct, ...prev]);
+    upsertProductToSupabase(newProduct);
     showToast(`Product "${newProduct.title}" published to store!`);
   };
 
@@ -457,11 +528,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setProducts((prev) =>
       prev.map((p) => (p.id === updatedProduct.id ? updatedProduct : p))
     );
+    upsertProductToSupabase(updatedProduct);
     showToast(`Product "${updatedProduct.title}" updated!`);
   };
 
   const deleteProduct = (productId: string) => {
     setProducts((prev) => prev.filter((p) => p.id !== productId));
+    deleteProductFromSupabase(productId);
     showToast("Product removed from catalog.");
   };
 
@@ -470,45 +543,46 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       coupon,
       ...prev.filter((c) => c.code.toUpperCase() !== coupon.code.toUpperCase()),
     ]);
+    upsertCouponToSupabase(coupon);
     showToast(`Promo code "${coupon.code.toUpperCase()}" created!`);
   };
 
   const toggleCouponStatus = (couponId: string) => {
     setCoupons((prev) =>
-      prev.map((c) => (c.id === couponId ? { ...c, isActive: !c.isActive } : c))
+      prev.map((c) => {
+        if (c.id !== couponId) return c;
+        const updated = { ...c, isActive: !c.isActive };
+        upsertCouponToSupabase(updated);
+        return updated;
+      })
     );
     showToast("Coupon status updated.");
   };
 
   const deleteCoupon = (couponId: string) => {
     setCoupons((prev) => prev.filter((c) => c.id !== couponId));
+    deleteCouponFromSupabase(couponId);
     showToast("Promo code deleted.");
   };
 
   const addProductReview = (review: ProductReview) => {
     setReviews((prev) => [review, ...prev]);
+    insertReviewToSupabase(review);
     setProducts((prev) =>
-      prev.map((p) =>
-        p.id === review.productId
-          ? { ...p, reviewCount: p.reviewCount + 1 }
-          : p
-      )
+      prev.map((p) => {
+        if (p.id !== review.productId) return p;
+        const updated = { ...p, reviewCount: p.reviewCount + 1 };
+        upsertProductToSupabase(updated);
+        return updated;
+      })
     );
     showToast("JazakAllah! Your verified review has been published!");
   };
 
   const updateSiteSettings = async (nextSettings: SiteSettings) => {
     setSettings(nextSettings);
-    try {
-      await fetch("/api/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(nextSettings),
-      });
-    } catch {
-      // Local state still updated
-    }
-    showToast("Delivery charges & site settings saved!");
+    await upsertSettingsToSupabase(nextSettings);
+    showToast("Delivery charges & site settings saved to Supabase!");
   };
 
   const procurementSummary = useMemo<ProcurementSummaryItem[]>(() => {
@@ -562,6 +636,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setIsCartOpen,
         toastMessage,
         showToast,
+        supabaseStatus,
+        syncDatabaseWithSupabase,
         addToCart,
         removeFromCart,
         updateCartQty,

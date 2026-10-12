@@ -65,6 +65,8 @@ export default function AdminDashboardPage() {
     toggleCouponStatus,
     deleteCoupon,
     updateSiteSettings,
+    supabaseStatus,
+    syncDatabaseWithSupabase,
   } = useStore();
 
   // Admin Passkey Gate
@@ -585,10 +587,27 @@ export default function AdminDashboardPage() {
         {/* Top Bar */}
         <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-stone-200/80 shadow-2xs">
           <div>
-            <span className="text-xs font-extrabold uppercase tracking-wider text-[#0F3D2E] flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4" /> Supabase RLS • Scale Weight &
-              Cold-Chain Engine Active
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-extrabold uppercase tracking-wider text-[#0F3D2E] flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4" /> Supabase Project:
+                sadhyarbazar (uqyjtlndgnvfqjcdwbop)
+              </span>
+              {supabaseStatus === "connected_live" && (
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[11px] font-extrabold">
+                  ● LIVE DATABASE SYNCED
+                </span>
+              )}
+              {supabaseStatus === "schema_missing" && (
+                <a
+                  href="https://supabase.com/dashboard/project/uqyjtlndgnvfqjcdwbop/sql/new"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-2.5 py-0.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-[11px] font-extrabold underline"
+                >
+                  ⚠ Run supabase/schema.sql in SQL Editor →
+                </a>
+              )}
+            </div>
             <h1 className="text-xl sm:text-2xl font-extrabold text-stone-900 mt-0.5">
               {activeTab === "overview" && "Executive Business Overview"}
               {activeTab === "orders" &&
@@ -607,6 +626,14 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={syncDatabaseWithSupabase}
+              className="px-3.5 py-2.5 rounded-2xl bg-[#0F3D2E] hover:bg-[#165b44] text-amber-300 text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer"
+              title="Push & Sync All Products, Orders, Coupons & Settings to Supabase"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Sync to Supabase</span>
+            </button>
             <button
               onClick={handleExportOrdersCsv}
               className="px-3.5 py-2.5 rounded-2xl bg-emerald-50 hover:bg-emerald-100 text-[#0F3D2E] border border-emerald-200 text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer"
