@@ -11,7 +11,6 @@ import {
   Flame,
   ShieldCheck,
   PackageSearch,
-  LayoutDashboard,
   Menu,
   X,
   Leaf,
@@ -128,7 +127,8 @@ export default function Navbar() {
           </Link>
 
           {/* Bilingual Instant Search Bar */}
-          <div className="hidden lg:block relative flex-1 max-w-md mx-4">
+          {/* Bilingual Instant Search Bar */}
+          <div className="hidden md:block relative flex-1 max-w-sm lg:max-w-md mx-3 lg:mx-6">
             <form onSubmit={handleSearchSubmit} className="relative">
               <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
@@ -138,7 +138,7 @@ export default function Navbar() {
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
                 placeholder="Search Jamuna fish, Gawa Ghee, গাওয়া ঘি, বগুড়ার দই..."
-                className="w-full pl-10 pr-20 py-2.5 bg-white border border-stone-200/90 rounded-full text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#0F3D2E] focus:ring-2 focus:ring-[#0F3D2E]/10 transition"
+                className="w-full pl-10 pr-20 py-2.5 bg-white border border-stone-200/90 rounded-full text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#0F3D2E] focus:ring-2 focus:ring-[#0F3D2E]/10 transition shadow-2xs"
               />
               {searchQuery && (
                 <button
@@ -191,13 +191,13 @@ export default function Navbar() {
           </div>
 
           {/* Primary Navigation Links */}
-          <nav className="hidden md:flex items-center gap-1 lg:gap-2">
+          <nav className="hidden md:flex items-center gap-1.5 lg:gap-2 shrink-0">
             <Link
               href="/"
               className={`px-3.5 py-2 rounded-full text-sm font-semibold transition ${
                 pathname === "/"
-                  ? "bg-[#0F3D2E] text-white"
-                  : "text-stone-700 hover:bg-stone-200/60"
+                  ? "bg-[#0F3D2E] text-white shadow-xs"
+                  : "text-stone-700 hover:text-stone-900 hover:bg-stone-200/60"
               }`}
             >
               Home
@@ -206,8 +206,8 @@ export default function Navbar() {
               href="/shop"
               className={`px-3.5 py-2 rounded-full text-sm font-semibold transition ${
                 pathname === "/shop"
-                  ? "bg-[#0F3D2E] text-white"
-                  : "text-stone-700 hover:bg-stone-200/60"
+                  ? "bg-[#0F3D2E] text-white shadow-xs"
+                  : "text-stone-700 hover:text-stone-900 hover:bg-stone-200/60"
               }`}
             >
               All Products
@@ -216,8 +216,8 @@ export default function Navbar() {
               href="/pre-orders"
               className={`px-3.5 py-2 rounded-full text-sm font-semibold flex items-center gap-1.5 transition ${
                 pathname === "/pre-orders"
-                  ? "bg-[#C83E2B] text-white"
-                  : "text-[#C83E2B] bg-red-50 hover:bg-red-100/80"
+                  ? "bg-[#C83E2B] text-white shadow-xs"
+                  : "text-[#C83E2B] bg-red-50 hover:bg-red-100/80 border border-red-200/50"
               }`}
             >
               <Flame className="w-3.5 h-3.5 fill-current" />
@@ -227,40 +227,12 @@ export default function Navbar() {
               href="/track-order"
               className={`px-3.5 py-2 rounded-full text-sm font-semibold flex items-center gap-1.5 transition ${
                 pathname === "/track-order"
-                  ? "bg-[#0F3D2E] text-white"
-                  : "text-stone-700 hover:bg-stone-200/60"
+                  ? "bg-[#0F3D2E] text-white shadow-xs"
+                  : "text-stone-700 hover:text-stone-900 hover:bg-stone-200/60"
               }`}
             >
               <PackageSearch className="w-4 h-4 text-emerald-700" />
               Track Order
-            </Link>
-            <Link
-              href="/about"
-              className={`px-3.5 py-2 rounded-full text-sm font-semibold transition ${
-                pathname === "/about"
-                  ? "bg-[#0F3D2E] text-white"
-                  : "text-stone-700 hover:bg-stone-200/60"
-              }`}
-            >
-              About Us
-            </Link>
-            <Link
-              href="/contact"
-              className={`px-3.5 py-2 rounded-full text-sm font-semibold transition ${
-                pathname === "/contact"
-                  ? "bg-[#0F3D2E] text-white"
-                  : "text-stone-700 hover:bg-stone-200/60"
-              }`}
-            >
-              Contact Us
-            </Link>
-            <Link
-              href="/admin"
-              className="px-3 py-2 rounded-full text-xs font-semibold text-stone-600 hover:text-[#0F3D2E] hover:bg-stone-200/60 flex items-center gap-1 transition"
-              title="Merchant Admin Dashboard"
-            >
-              <LayoutDashboard className="w-3.5 h-3.5" />
-              Admin
             </Link>
           </nav>
 
@@ -340,28 +312,13 @@ export default function Navbar() {
               >
                 <PackageSearch className="w-4 h-4" /> Track Order
               </Link>
-              <Link
-                href="/about"
-                onClick={() => setMobileMenuOpen(false)}
-                className="col-span-2 px-3.5 py-2.5 rounded-xl bg-stone-100 text-stone-800 font-semibold text-sm flex items-center justify-center gap-1.5"
+              <a
+                href={`tel:${settings.supportPhone.split("-")[0]}`}
+                className="col-span-2 px-3.5 py-2.5 rounded-xl bg-emerald-50 text-[#0F3D2E] font-semibold text-sm flex items-center justify-center gap-2 border border-emerald-200"
               >
-                আমাদের সম্পর্কে (About Us)
-              </Link>
-              <Link
-                href="/contact"
-                onClick={() => setMobileMenuOpen(false)}
-                className="col-span-2 px-3.5 py-2.5 rounded-xl bg-stone-100 text-stone-800 font-semibold text-sm flex items-center justify-center gap-1.5"
-              >
-                যোগাযোগ ও হেল্পডেস্ক (Contact Us)
-              </Link>
-              <Link
-                href="/admin"
-                onClick={() => setMobileMenuOpen(false)}
-                className="col-span-2 px-3.5 py-2.5 rounded-xl bg-stone-900 text-white font-semibold text-sm flex items-center justify-center gap-2"
-              >
-                <LayoutDashboard className="w-4 h-4" /> Open Merchant Admin
-                Dashboard
-              </Link>
+                <PhoneCall className="w-4 h-4 text-emerald-700" />
+                হটলাইন: {settings.supportPhone}
+              </a>
             </div>
           </div>
         )}
