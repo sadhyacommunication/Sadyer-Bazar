@@ -231,6 +231,14 @@ export default function Footer() {
               </li>
               <li>
                 <Link
+                  href="/refund-policy"
+                  className="hover:text-amber-300 transition"
+                >
+                  Refund & Return Policy (রিফান্ড নীতি)
+                </Link>
+              </li>
+              <li>
+                <Link
                   href="/checkout"
                   className="hover:text-amber-300 transition"
                 >
@@ -291,6 +299,12 @@ export default function Footer() {
               className="text-emerald-200 hover:text-white underline"
             >
               Terms & Conditions (শর্তাবলী)
+            </Link>
+            <Link
+              href="/refund-policy"
+              className="text-emerald-200 hover:text-white underline"
+            >
+              Refund Policy (রিফান্ড নীতি)
             </Link>
             <Link
               href="/about"
