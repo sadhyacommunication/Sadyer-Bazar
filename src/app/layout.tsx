@@ -53,9 +53,27 @@ export const metadata: Metadata = {
       },
     ],
   },
+  alternates: {
+    canonical: "https://sadyer-bazar.sadhyacommunication.workers.dev",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title:
+      "Sadyer Bazar (সাধ্যের বাজার) — Fresh Jamuna River Fish & Pure Organic Food",
+    description:
+      "Direct from Jamuna River fishermen & rural homesteads to your doorstep. Pre-order fresh river catch, Gawa Ghee, Bogura Doi & organic staples.",
+    images: ["/images/hero-banner-bn.jpg"],
+  },
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
   },
 };
 
@@ -64,28 +82,78 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const jsonLd = {
+  const websiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Sadyer Bazar (সাধ্যের বাজার)",
+    url: "https://sadyer-bazar.sadhyacommunication.workers.dev",
+    description:
+      "100% formalin-free Jamuna River fish, pure Gawa Ghee, and authentic Bogura Shahi Doi online store in Bangladesh.",
+    potentialAction: {
+      "@type": "SearchAction",
+      target: {
+        "@type": "EntryPoint",
+        urlTemplate:
+          "https://sadyer-bazar.sadhyacommunication.workers.dev/shop?q={search_term_string}",
+      },
+      "query-input": "required name=search_term_string",
+    },
+  };
+
+  const storeSchema = {
     "@context": "https://schema.org",
     "@type": "GroceryStore",
     name: "Sadyer Bazar (সাধ্যের বাজার)",
+    alternateName: "Sadyer Bazar",
     description:
       "Nationwide pre-order and home delivery of wild Jamuna River fish, pure Gawa Ghee, authentic Bogura Shahi Doi, village Deshi chicken, eggs, and heritage organic rice.",
     telephone: "+8801713477780",
     url: "https://sadyer-bazar.sadhyacommunication.workers.dev",
     image:
       "https://sadyer-bazar.sadhyacommunication.workers.dev/images/hero-banner-bn.jpg",
+    logo: "https://sadyer-bazar.sadhyacommunication.workers.dev/images/hero-banner-bn.jpg",
     priceRange: "৳৳",
+    currenciesAccepted: "BDT",
+    paymentAccepted: "bKash, SSLCommerz, Nagad, Cash on Delivery",
     address: {
       "@type": "PostalAddress",
+      streetAddress: "Tejgaon Industrial Area",
+      addressLocality: "Dhaka",
+      postalCode: "1208",
       addressCountry: "BD",
-      addressLocality: "Dhaka & Bogura",
     },
-    paymentAccepted: "bKash, SSLCommerz, Nagad, Cash on Delivery",
-    currenciesAccepted: "BDT",
+    geo: {
+      "@type": "GeoCoordinates",
+      latitude: "23.7639",
+      longitude: "90.3889",
+    },
+    openingHoursSpecification: [
+      {
+        "@type": "OpeningHoursSpecification",
+        dayOfWeek: [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+          "Sunday",
+        ],
+        opens: "08:00",
+        closes: "22:00",
+      },
+    ],
+    contactPoint: {
+      "@type": "ContactPoint",
+      telephone: "+8801713477780",
+      contactType: "customer service",
+      availableLanguage: ["bn", "en"],
+      areaServed: "BD",
+    },
   };
 
   return (
-    <html lang="en">
+    <html lang="bn">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
@@ -101,7 +169,11 @@ export default function RootLayout({
       <body className="antialiased min-h-screen flex flex-col">
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(storeSchema) }}
         />
         <StoreProvider>
           <Navbar />

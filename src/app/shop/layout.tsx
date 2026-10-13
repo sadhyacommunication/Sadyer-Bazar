@@ -1,0 +1,44 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "সকল প্রাকৃতিক খাদ্যপণ্য ও নদীর তাজা মাছ (All Products) | সাধ্যের বাজার",
+  description:
+    "যমুনা নদীর তাজা দেশি মাছ, খাঁটি গাওয়া ঘি, আসল বগুড়ার শাহী দই, চলনবিলের দেশি হাঁস ও মুরগি, সুগন্ধি কাটারিভোগ ও লাল চালের লাইভ দাম ও হোম ডেলিভারি ক্যাটালগ।",
+  keywords: [
+    "যমুনা নদীর মাছ",
+    "গাওয়া ঘি",
+    "বগুড়ার দই",
+    "দেশি মুরগি",
+    "অর্গানিক খাবার বাংলাদেশ",
+    "Jamuna river fish price BD",
+    "Pure gawa ghee Dhaka",
+    "Bogura shahi doi online",
+    "Organic food catalog BD",
+  ],
+  alternates: {
+    canonical: "https://sadyer-bazar.sadhyacommunication.workers.dev/shop",
+  },
+  openGraph: {
+    title: "সকল অর্গানিক খাদ্যপণ্য ও তাজা মাছের বাজার দর | সাধ্যের বাজার",
+    description:
+      "১০০% কেমিক্যাল ও ফরমালিনমুক্ত যমুনার মাছ, খাঁটি ঘি, বগুড়ার দই ও আদি শস্যের অনলাইন ক্যাটালগ।",
+    url: "https://sadyer-bazar.sadhyacommunication.workers.dev/shop",
+    siteName: "Sadyer Bazar (সাধ্যের বাজার)",
+    images: [
+      {
+        url: "/images/banners/jamuna-fisherman-banner.jpg",
+        width: 1200,
+        height: 675,
+        alt: "Sadyer Bazar Organic Food Catalog",
+      },
+    ],
+  },
+};
+
+export default function ShopLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return <>{children}</>;
+}

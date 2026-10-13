@@ -1,0 +1,22 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "শর্তাবলী ও নীতিমালা (Terms & Conditions) | সাধ্যের বাজার",
+  description:
+    "সাধ্যের বাজার প্ল্যাটফর্ম ব্যবহারের নিয়মাবলি, পণ্যের অর্ডার, ডিজিটাল ওজন স্লিপ ও ডেলিভারির আইনি শর্তাবলী।",
+  alternates: {
+    canonical: "https://sadyer-bazar.sadhyacommunication.workers.dev/terms-and-conditions",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+};
+
+export default function TermsLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return <>{children}</>;
+}
