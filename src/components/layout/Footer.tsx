@@ -215,6 +215,14 @@ export default function Footer() {
               </li>
               <li>
                 <Link
+                  href="/privacy-policy"
+                  className="hover:text-amber-300 transition"
+                >
+                  Privacy Policy (গোপনীয়তা নীতি)
+                </Link>
+              </li>
+              <li>
+                <Link
                   href="/checkout"
                   className="hover:text-amber-300 transition"
                 >
@@ -258,9 +266,31 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="border-t border-emerald-900/90 bg-emerald-950/60 py-5 text-center text-xs text-emerald-300/70">
-          © {new Date().getFullYear()} Sadyer Bazar (সাধ্যের বাজার). Built with
-          Next.js, TypeScript & Supabase for Cloudflare Pages.
+        <div className="border-t border-emerald-900/90 bg-emerald-950/60 py-5 px-4 text-center text-xs text-emerald-300/70 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <span>
+            © {new Date().getFullYear()} Sadyer Bazar (সাধ্যের বাজার). All rights reserved.
+          </span>
+          <span className="hidden sm:inline">•</span>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/privacy-policy"
+              className="text-emerald-200 hover:text-white underline"
+            >
+              Privacy Policy (গোপনীয়তা নীতি)
+            </Link>
+            <Link
+              href="/about"
+              className="text-emerald-200 hover:text-white hover:underline"
+            >
+              About Us
+            </Link>
+            <Link
+              href="/contact"
+              className="text-emerald-200 hover:text-white hover:underline"
+            >
+              Contact
+            </Link>
+          </div>
         </div>
       </footer>
 
