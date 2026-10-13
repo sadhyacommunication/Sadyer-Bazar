@@ -14,6 +14,7 @@ import {
   Lock,
   ShoppingBag,
   ArrowRight,
+  Banknote,
 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 
@@ -176,6 +177,7 @@ export default function Footer() {
             </ul>
           </div>
 
+          {/* Column 3: Customer Care & Quick Services */}
           <div>
             <h4 className="text-sm font-bold text-white uppercase tracking-wider mb-4">
               Customer Care
@@ -186,7 +188,7 @@ export default function Footer() {
                   href="/track-order"
                   className="hover:text-amber-300 transition font-semibold text-amber-200"
                 >
-                  Track Your Order by ID
+                  Track Your Order by ID (অর্ডার ট্র্যাকিং)
                 </Link>
               </li>
               <li>
@@ -194,9 +196,42 @@ export default function Footer() {
                   href="/pre-orders"
                   className="hover:text-amber-300 transition"
                 >
-                  Live Pre-Order Schedule
+                  Live Pre-Order Schedule (প্রি-অর্ডার)
                 </Link>
               </li>
+              <li>
+                <Link
+                  href="/shop"
+                  className="hover:text-amber-300 transition"
+                >
+                  All Fresh Groceries (সব পণ্য ক্যাটালগ)
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/checkout"
+                  className="hover:text-amber-300 transition"
+                >
+                  1-Click Express Checkout (দ্রুত চেকআউট)
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/admin"
+                  className="hover:text-amber-300 transition text-emerald-300/70 hover:text-emerald-200"
+                >
+                  Merchant Management Portal (অ্যাডমিন)
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Column 4: Company & Policies (Replaces square redmark section) */}
+          <div>
+            <h4 className="text-sm font-bold text-white uppercase tracking-wider mb-4">
+              Company & Policies
+            </h4>
+            <ul className="space-y-2.5 text-xs text-emerald-100/85">
               <li>
                 <Link
                   href="/about"
@@ -211,14 +246,6 @@ export default function Footer() {
                   className="hover:text-amber-300 transition"
                 >
                   Contact & Support (যোগাযোগ ও সহায়তা)
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/privacy-policy"
-                  className="hover:text-amber-300 transition"
-                >
-                  Privacy Policy (গোপনীয়তা নীতি)
                 </Link>
               </li>
               <li>
@@ -239,85 +266,225 @@ export default function Footer() {
               </li>
               <li>
                 <Link
-                  href="/checkout"
+                  href="/privacy-policy"
                   className="hover:text-amber-300 transition"
                 >
-                  1-Click Express Checkout
-                </Link>
-              </li>
-              <li>
-                <Link href="/admin" className="hover:text-amber-300 transition">
-                  Merchant Management Portal
+                  Privacy Policy (গোপনীয়তা নীতি)
                 </Link>
               </li>
             </ul>
           </div>
+        </div>
 
-          <div>
-            <h4 className="text-sm font-bold text-white uppercase tracking-wider mb-4">
-              Verified Payment & Security
-            </h4>
-            <p className="text-xs text-emerald-100/80 mb-3">
-              256-Bit SSL Encrypted Checkout powered by automated bKash &
-              SSLCommerz Gateway.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <span className="px-3 py-1.5 rounded-xl bg-pink-600 text-white text-xs font-extrabold">
-                bKash AutoPay
-              </span>
-              <span className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-extrabold">
-                SSLCommerz
-              </span>
-              <span className="px-3 py-1.5 rounded-xl bg-orange-600 text-white text-xs font-extrabold">
-                Nagad / Rocket
-              </span>
-              <span className="px-3 py-1.5 rounded-xl bg-emerald-800 border border-emerald-600 text-emerald-100 text-xs font-bold">
-                Cash on Delivery
-              </span>
+        {/* Payment Partners & Security Showcase in Blank Redmark Area */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-10">
+          <div className="pt-8 border-t border-emerald-800/60 flex flex-col lg:flex-row items-center justify-between gap-5">
+            {/* Left Security Note */}
+            <div className="flex items-center gap-3.5 text-center sm:text-left">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-800/80 border border-emerald-700/60 text-amber-300 flex items-center justify-center shrink-0 shadow-xs">
+                <Lock className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-white uppercase tracking-wider">
+                  100% Secured Payment Gateways
+                </p>
+                <p className="text-[11px] text-emerald-200/80 mt-0.5">
+                  নিরাপদ ও সহজ পেমেন্ট — বিকাশ, নগদ, ভিসা কার্ড, মাস্টারকার্ড ও ক্যাশ অন ডেলিভারি
+                </p>
+              </div>
             </div>
-            <div className="mt-4 p-3 rounded-xl bg-emerald-950/70 border border-emerald-800/80 flex items-center gap-2 text-[11px] text-emerald-200">
-              <Lock className="w-4 h-4 text-amber-400 shrink-0" />
-              Protected by Supabase RLS & Cloudflare Edge WAF
+
+            {/* Payment Method Badges */}
+            <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3">
+              {/* bKash */}
+              <div
+                className="h-9 px-3 bg-white rounded-xl shadow-xs border border-white/20 flex items-center gap-1.5 select-none hover:scale-105 hover:shadow-md transition-all cursor-default"
+                title="bKash (বিকাশ) Payment"
+              >
+                <svg
+                  viewBox="0 0 45 40"
+                  className="h-5 w-auto shrink-0"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-label="bKash"
+                >
+                  <path d="M21.5 2L35 15.5L21.5 29L21.5 2Z" fill="#D12053" />
+                  <path d="M21.5 2L8 15.5L21.5 29L21.5 2Z" fill="#E2136E" />
+                  <path d="M21.5 29L35 15.5L28 37L21.5 29Z" fill="#9E0836" />
+                  <path d="M21.5 29L8 15.5L15 37L21.5 29Z" fill="#C4164B" />
+                  <path d="M35 15.5L43 12.5L38 19L35 15.5Z" fill="#E2136E" />
+                </svg>
+                <span className="text-[#D12053] font-black text-xs tracking-tight">
+                  bKash
+                </span>
+              </div>
+
+              {/* Nagad */}
+              <div
+                className="h-9 px-3 bg-white rounded-xl shadow-xs border border-white/20 flex items-center gap-1.5 select-none hover:scale-105 hover:shadow-md transition-all cursor-default"
+                title="Nagad (নগদ) Payment"
+              >
+                <svg
+                  viewBox="0 0 36 32"
+                  className="h-5 w-auto shrink-0"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-label="Nagad"
+                >
+                  <path
+                    d="M18 2C11 2 5.5 7.5 5.5 14C5.5 21.5 13 27.5 18 30C23 27.5 30.5 21.5 30.5 14C30.5 7.5 25 2 18 2Z"
+                    fill="url(#nagad-grad-footer)"
+                  />
+                  <path
+                    d="M18 8C14.5 8 11.8 10.7 11.8 14C11.8 18.5 18 23.5 18 23.5C18 23.5 24.2 18.5 24.2 14C24.2 10.7 21.5 8 18 8Z"
+                    fill="#FFFFFF"
+                  />
+                  <circle cx="18" cy="14" r="3.8" fill="#ED1C24" />
+                  <defs>
+                    <linearGradient
+                      id="nagad-grad-footer"
+                      x1="5"
+                      y1="2"
+                      x2="30"
+                      y2="30"
+                      gradientUnits="userSpaceOnUse"
+                    >
+                      <stop stopColor="#F7931E" />
+                      <stop offset="1" stopColor="#ED1C24" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+                <span className="text-[#ED1C24] font-black text-xs tracking-tight">
+                  nagad
+                </span>
+              </div>
+
+              {/* Visa Card */}
+              <div
+                className="h-9 px-3.5 bg-white rounded-xl shadow-xs border border-white/20 flex items-center justify-center select-none hover:scale-105 hover:shadow-md transition-all cursor-default"
+                title="Visa Card Payment"
+              >
+                <svg
+                  viewBox="0 0 54 18"
+                  className="h-4 w-auto shrink-0"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-label="Visa"
+                >
+                  <path
+                    d="M21.2 1.2L14.2 16.8H9.9L6.1 3.7C5.8 2.7 5.6 2.3 4.8 1.9C3.4 1.2 1.6 0.6 0 0.3L0.2 0H7.7C8.7 0 9.7 0.7 9.9 1.8L11.8 11.2L16.1 1.2H21.2ZM39.8 10.8C39.8 6.7 34.2 6.4 34.2 4.6C34.2 4 34.8 3.3 36.1 3.1C36.8 3 38.6 2.9 40.4 3.8L41.2 0.7C40.1 0.3 38.7 0 37 0C32.4 0 29.2 2.4 29.2 5.9C29.2 11 36.2 11.3 36.2 13.4C36.2 14.1 35.5 14.8 34.1 14.8C32.4 14.8 30.6 14.3 29.3 13.6L28.5 16.9C30 17.6 32.3 18 34.6 18C39.4 18 42.6 15.6 42.6 12L39.8 10.8ZM51.8 16.8H56.5L52.4 1.2H48.1C47.2 1.2 46.4 1.7 46.1 2.6L39.4 16.8H43.9L44.8 14.3H51.2L51.8 16.8ZM46.1 11L48.8 3.6L50.4 11H46.1ZM28.2 1.2L24.6 16.8H20.4L24 1.2H28.2Z"
+                    fill="#1A1F71"
+                  />
+                  <path
+                    d="M7.7 0H0.2L0 0.3C3 1.1 5.9 2.2 7.7 4.5L9.9 1.8C9.7 0.7 8.7 0 7.7 0Z"
+                    fill="#F7B600"
+                  />
+                </svg>
+              </div>
+
+              {/* Mastercard */}
+              <div
+                className="h-9 px-3 bg-white rounded-xl shadow-xs border border-white/20 flex items-center gap-1.5 select-none hover:scale-105 hover:shadow-md transition-all cursor-default"
+                title="Mastercard Payment"
+              >
+                <svg
+                  viewBox="0 0 36 22"
+                  className="h-4.5 w-auto shrink-0"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-label="Mastercard"
+                >
+                  <circle cx="11" cy="11" r="9" fill="#EB001B" />
+                  <circle cx="25" cy="11" r="9" fill="#F79E1B" />
+                  <path
+                    d="M18 4.2C20.2 5.9 21.6 8.8 21.6 11C21.6 13.2 20.2 16.1 18 17.8C15.8 16.1 14.4 13.2 14.4 11C14.4 8.8 15.8 5.9 18 4.2Z"
+                    fill="#FF5F00"
+                  />
+                </svg>
+                <span className="text-stone-900 font-bold text-[11px] tracking-tight">
+                  mastercard
+                </span>
+              </div>
+
+              {/* Cash on Delivery */}
+              <div
+                className="h-9 px-3 bg-white rounded-xl shadow-xs border border-emerald-600/30 flex items-center gap-2 select-none hover:scale-105 hover:shadow-md transition-all cursor-default"
+                title="Cash on Delivery (ক্যাশ অন ডেলিভারি)"
+              >
+                <div className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                  <Banknote className="w-3.5 h-3.5 text-emerald-700" />
+                </div>
+                <div className="flex flex-col text-left">
+                  <span className="text-stone-900 font-extrabold text-[11px] leading-tight">
+                    Cash on Delivery
+                  </span>
+                  <span className="text-emerald-700 font-semibold text-[9px] leading-none">
+                    ক্যাশ অন ডেলিভারি
+                  </span>
+                </div>
+              </div>
+
+              {/* SSLCommerz Gateway */}
+              <div
+                className="h-9 px-3 bg-white rounded-xl shadow-xs border border-white/20 flex items-center gap-1.5 select-none hover:scale-105 hover:shadow-md transition-all cursor-default"
+                title="SSLCommerz Verified Payment Gateway"
+              >
+                <div className="w-5 h-5 rounded-full bg-[#1A4B8C] text-white flex items-center justify-center font-extrabold text-[9px] shrink-0">
+                  SSL
+                </div>
+                <div className="flex flex-col text-left">
+                  <span className="text-[#1A4B8C] font-black text-[11px] tracking-tight leading-tight">
+                    SSLCommerz
+                  </span>
+                  <span className="text-stone-500 font-semibold text-[8px] leading-none uppercase">
+                    Verified Gateway
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="border-t border-emerald-900/90 bg-emerald-950/60 py-5 px-4 text-center text-xs text-emerald-300/70 flex flex-col sm:flex-row items-center justify-center gap-3">
-          <span>
-            © {new Date().getFullYear()} Sadyer Bazar (সাধ্যের বাজার). All rights reserved.
-          </span>
-          <span className="hidden sm:inline">•</span>
-          <div className="flex flex-wrap items-center justify-center gap-4">
-            <Link
-              href="/privacy-policy"
-              className="text-emerald-200 hover:text-white underline"
-            >
-              Privacy Policy (গোপনীয়তা নীতি)
-            </Link>
-            <Link
-              href="/terms-and-conditions"
-              className="text-emerald-200 hover:text-white underline"
-            >
-              Terms & Conditions (শর্তাবলী)
-            </Link>
-            <Link
-              href="/refund-policy"
-              className="text-emerald-200 hover:text-white underline"
-            >
-              Refund Policy (রিফান্ড নীতি)
-            </Link>
-            <Link
-              href="/about"
-              className="text-emerald-200 hover:text-white hover:underline"
-            >
-              About Us
-            </Link>
-            <Link
-              href="/contact"
-              className="text-emerald-200 hover:text-white hover:underline"
-            >
-              Contact
-            </Link>
+        {/* Bottom Minimal Copyright Bar */}
+        <div className="border-t border-emerald-900/90 bg-emerald-950/70 py-5 px-4 text-center text-xs text-emerald-300/70">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 px-4">
+            <span>
+              © {new Date().getFullYear()} Sadyer Bazar (সাধ্যের বাজার). All rights reserved.
+            </span>
+            <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-emerald-200/80">
+              <Link
+                href="/about"
+                className="hover:text-white transition"
+              >
+                About Us
+              </Link>
+              <span>•</span>
+              <Link
+                href="/contact"
+                className="hover:text-white transition"
+              >
+                Contact
+              </Link>
+              <span>•</span>
+              <Link
+                href="/terms-and-conditions"
+                className="hover:text-white transition"
+              >
+                Terms & Conditions
+              </Link>
+              <span>•</span>
+              <Link
+                href="/refund-policy"
+                className="hover:text-white transition"
+              >
+                Refund Policy
+              </Link>
+              <span>•</span>
+              <Link
+                href="/privacy-policy"
+                className="hover:text-white transition"
+              >
+                Privacy Policy
+              </Link>
+            </div>
           </div>
         </div>
       </footer>
