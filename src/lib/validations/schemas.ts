@@ -40,7 +40,7 @@ export const createOrderSchema = z.object({
     .max(350, "Address is too long"),
   customerNote: z.string().trim().max(300).optional(),
   couponCode: z.string().trim().max(30).optional(),
-  paymentMethod: z.enum(["bkash", "sslcommerz", "cod"]),
+  paymentMethod: z.enum(["bkash", "nagad", "sslcommerz", "cod"]),
   paymentPlan: z.enum(["full", "advance", "cod"]),
   items: z.array(checkoutItemSchema).min(1, "Your cart is empty"),
   // Honeypot anti-bot field (must be empty)
@@ -68,10 +68,19 @@ export const updateSettingsSchema = z.object({
   supportPhone: z.string().trim().min(6).max(40),
   whatsappNumber: z.string().trim().min(6).max(30),
   bkashMerchantNumber: z.string().trim().min(6).max(30),
+  bkashAccountType: z.enum(["merchant", "personal", "agent"]).default("merchant"),
+  nagadNumber: z.string().trim().min(6).max(30).default("01713-477780"),
+  nagadAccountType: z.enum(["merchant", "personal"]).default("personal"),
+  nagadEnabled: z.boolean().default(true),
   announcementEn: z.string().trim().min(5).max(240),
   announcementBn: z.string().trim().min(2).max(240),
   sslcommerzEnabled: z.boolean(),
+  sslcommerzStoreId: z.string().trim().max(100).optional(),
+  sslcommerzStorePassword: z.string().trim().max(100).optional(),
+  sslcommerzIsLive: z.boolean().optional(),
   bkashEnabled: z.boolean(),
+  bkashAppKey: z.string().trim().max(100).optional(),
+  bkashAppSecret: z.string().trim().max(100).optional(),
   codEnabled: z.boolean(),
 });
 

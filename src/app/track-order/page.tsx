@@ -16,10 +16,17 @@ import {
   CreditCard,
   Loader2,
   X,
+  Smartphone,
+  AlertCircle,
 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 import { Order, OrderStatus, PaymentTransaction } from "@/types";
-import { checkRateLimit, maskAddress, maskPhoneNumber } from "@/lib/security";
+import {
+  checkRateLimit,
+  maskAddress,
+  maskPhoneNumber,
+  normalizeBdPhone,
+} from "@/lib/security";
 import { fetchOrderByCodeFromSupabase } from "@/services/supabaseSync";
 
 const STATUS_STEPS: {
@@ -82,11 +89,21 @@ function TrackOrderContent() {
   // Pay Remaining Due Online Modal State
   const [isPayDueModalOpen, setIsPayDueModalOpen] = useState(false);
   const [selectedDueGateway, setSelectedDueGateway] = useState<
-    "bkash" | "sslcommerz"
+    "bkash" | "nagad" | "sslcommerz"
   >("bkash");
-  const [walletPhone, setWalletPhone] = useState("01713477780");
-  const [walletOtp, setWalletOtp] = useState("583920");
+  const [dueSenderPhone, setDueSenderPhone] = useState("");
+  const [dueTrxId, setDueTrxId] = useState("");
+  const [dueTrxError, setDueTrxError] = useState<string | null>(null);
+  const [dueCopiedField, setDueCopiedField] = useState<string | null>(null);
   const [payingDue, setPayingDue] = useState(false);
+
+  const handleDueCopyText = (text: string, field: string) => {
+    try {
+      navigator.clipboard.writeText(text);
+      setDueCopiedField(field);
+      setTimeout(() => setDueCopiedField(null), 2500);
+    } catch {}
+  };
 
   useEffect(() => {
     if (initialCode) {
@@ -149,25 +166,35 @@ function TrackOrderContent() {
   const handlePayRemainingDue = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeOrder || activeOrder.dueAmount <= 0) return;
+    setDueTrxError(null);
+
+    const cleanPhone = normalizeBdPhone(dueSenderPhone);
+    if (!cleanPhone || !/^01[3-9]\d{8}$/.test(cleanPhone)) {
+      setDueTrxError("সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন: 017XXXXXXXX)");
+      return;
+    }
+
+    const cleanTrx = dueTrxId.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (!cleanTrx || cleanTrx.length < 6) {
+      setDueTrxError(
+        "সঠিক Transaction ID (TrxID) দিন (বিকাশ বা নগদ ফিরতি SMS থেকে প্রাপ্ত কমপক্ষে ৬ সংখ্যার কোড, যেমন: BKX8492019)"
+      );
+      return;
+    }
 
     setPayingDue(true);
     try {
-      const generatedTxId =
-        selectedDueGateway === "bkash"
-          ? `BKX${Date.now().toString(36).toUpperCase().slice(-7)}`
-          : `SSL-${Date.now().toString(36).toUpperCase().slice(-8)}`;
-
       const dueTx: PaymentTransaction = {
         id: `tx-${Date.now()}`,
         orderId: activeOrder.id,
         orderCode: activeOrder.orderCode,
         gateway: selectedDueGateway,
-        transactionId: generatedTxId,
-        validationId: walletOtp || "DUE-SETTLEMENT",
+        transactionId: cleanTrx,
+        validationId: `DUE-${selectedDueGateway.toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,
         amount: activeOrder.dueAmount,
         currency: "BDT",
         status: "validated",
-        senderPhone: walletPhone,
+        senderPhone: cleanPhone,
         verifiedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
       };
@@ -177,7 +204,7 @@ function TrackOrderContent() {
         paymentStatus: "paid",
         advancePaid: activeOrder.totalAmount,
         dueAmount: 0,
-        transactionId: generatedTxId,
+        transactionId: cleanTrx,
         updatedAt: new Date().toISOString(),
       };
 
@@ -185,11 +212,15 @@ function TrackOrderContent() {
         activeOrder.id,
         "paid",
         activeOrder.totalAmount,
-        generatedTxId
+        cleanTrx
       );
       registerNewOrder(settledOrder, dueTx);
       setActiveOrder(settledOrder);
       setIsPayDueModalOpen(false);
+    } catch (err) {
+      setDueTrxError(
+        err instanceof Error ? err.message : "পেমেন্ট সংরক্ষণ করতে সমস্যা হয়েছে।"
+      );
     } finally {
       setPayingDue(false);
     }
@@ -377,7 +408,12 @@ function TrackOrderContent() {
             <div className="flex items-center gap-3 no-print">
               {activeOrder.dueAmount > 0 && (
                 <button
-                  onClick={() => setIsPayDueModalOpen(true)}
+                  onClick={() => {
+                    setDueSenderPhone(activeOrder.customerPhone || "");
+                    setDueTrxId("");
+                    setDueTrxError(null);
+                    setIsPayDueModalOpen(true);
+                  }}
                   className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#E2136E] hover:bg-[#c20f5d] text-white text-xs font-extrabold shadow-md transition cursor-pointer"
                 >
                   <CreditCard className="w-4 h-4" />
@@ -691,116 +727,295 @@ function TrackOrderContent() {
         </div>
       )}
 
-      {/* MODAL: PAY REMAINING DUE ONLINE VIA BKASH / SSLCOMMERZ */}
+      {/* MODAL: PAY REMAINING DUE ONLINE VIA BKASH / NAGAD / SSLCOMMERZ */}
       {isPayDueModalOpen && activeOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/70 backdrop-blur-xs no-print">
-          <div className="w-full max-w-md rounded-3xl overflow-hidden shadow-2xl bg-white border border-stone-200">
-            <div
-              className={`p-6 text-white flex items-center justify-between ${
-                selectedDueGateway === "bkash" ? "bg-[#E2136E]" : "bg-[#1A4B8C]"
-              }`}
-            >
-              <div>
-                <span className="text-[11px] uppercase tracking-widest font-bold opacity-90">
-                  Instant Due Settlement
-                </span>
-                <h3 className="text-lg font-extrabold">
-                  Order {activeOrder.orderCode}
-                </h3>
-              </div>
-              <div className="text-right">
-                <span className="text-xs opacity-85 block">Remaining Due</span>
-                <strong className="text-2xl font-black">
-                  ৳{activeOrder.dueAmount.toLocaleString()}
-                </strong>
-              </div>
-            </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/75 backdrop-blur-xs no-print overflow-y-auto">
+          <div className="w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl bg-white border border-stone-200 my-6">
+            {(() => {
+              const isNagad = selectedDueGateway === "nagad";
+              const isBkash = selectedDueGateway === "bkash";
+              const targetAccountNumber = isNagad
+                ? settings.nagadNumber || "01713-477780"
+                : settings.bkashMerchantNumber || "01713-477780";
+              const targetAccountType = isNagad
+                ? settings.nagadAccountType || "personal"
+                : settings.bkashAccountType || "merchant";
 
-            <form onSubmit={handlePayRemainingDue} className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setSelectedDueGateway("bkash")}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-extrabold border-2 cursor-pointer ${
-                    selectedDueGateway === "bkash"
-                      ? "border-[#E2136E] bg-pink-50 text-[#E2136E]"
-                      : "border-stone-200 text-stone-600"
-                  }`}
-                >
-                  bKash AutoPay
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedDueGateway("sslcommerz")}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-extrabold border-2 cursor-pointer ${
-                    selectedDueGateway === "sslcommerz"
-                      ? "border-[#1A4B8C] bg-blue-50 text-[#1A4B8C]"
-                      : "border-stone-200 text-stone-600"
-                  }`}
-                >
-                  SSLCommerz
-                </button>
-              </div>
+              const headerBg = isBkash
+                ? "bg-[#E2136E]"
+                : isNagad
+                ? "bg-[#E35124]"
+                : "bg-[#1A4B8C]";
 
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1">
-                  Your Wallet / Mobile Number
-                </label>
-                <input
-                  type="tel"
-                  required
-                  value={walletPhone}
-                  onChange={(e) => setWalletPhone(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-stone-50 border border-stone-200 text-sm font-mono"
-                />
-              </div>
+              return (
+                <>
+                  <div className={`p-6 text-white ${headerBg}`}>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <span className="text-[11px] uppercase tracking-widest font-black opacity-90 inline-block px-2 py-0.5 rounded bg-white/20 mb-1">
+                          বাকি টাকা পরিশোধ (Due Settlement)
+                        </span>
+                        <h3 className="text-xl sm:text-2xl font-black">
+                          {isBkash
+                            ? "বিকাশের মাধ্যমে বাকি পরিশোধ"
+                            : isNagad
+                            ? "নগদের মাধ্যমে বাকি পরিশোধ"
+                            : "SSLCommerz গেটওয়ে পেমেন্ট"}
+                        </h3>
+                        <p className="text-xs opacity-90 font-mono mt-1">
+                          অর্ডার রেফারেন্স: {activeOrder.orderCode}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsPayDueModalOpen(false)}
+                        className="p-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white cursor-pointer transition"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
 
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1">
-                  Verification OTP (Sandbox Auto-Filled)
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={walletOtp}
-                  onChange={(e) => setWalletOtp(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-stone-50 border border-stone-200 text-sm font-mono tracking-widest"
-                />
-              </div>
+                    <div className="mt-4 p-3.5 rounded-2xl bg-black/20 backdrop-blur-xs flex items-center justify-between">
+                      <div>
+                        <span className="text-[11px] opacity-80 block font-semibold">
+                          পরিশোধযোগ্য বাকি টাকা
+                        </span>
+                        <strong className="text-2xl font-black">
+                          ৳{activeOrder.dueAmount.toLocaleString()}
+                        </strong>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleDueCopyText(
+                            String(activeOrder.dueAmount),
+                            "amount"
+                          )
+                        }
+                        className="px-3 py-1.5 rounded-xl bg-white/25 hover:bg-white/35 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition"
+                      >
+                        {dueCopiedField === "amount" ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" /> কপি হয়েছে!
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" /> টাকার পরিমাণ কপি
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
 
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsPayDueModalOpen(false)}
-                  className="px-4 py-3 rounded-xl bg-stone-100 text-stone-700 text-xs font-bold cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-                <button
-                  type="submit"
-                  disabled={payingDue}
-                  className={`flex-1 py-3 px-5 rounded-xl text-white font-extrabold text-xs flex items-center justify-center gap-2 cursor-pointer ${
-                    selectedDueGateway === "bkash"
-                      ? "bg-[#E2136E] hover:bg-[#c20f5d]"
-                      : "bg-[#1A4B8C] hover:bg-[#123564]"
-                  }`}
-                >
-                  {payingDue ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Verifying...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Lock className="w-4 h-4" />
-                      <span>
-                        Authorize ৳{activeOrder.dueAmount.toLocaleString()} Now
-                      </span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
+                  <form
+                    onSubmit={handlePayRemainingDue}
+                    className="p-6 space-y-4 text-xs"
+                  >
+                    {/* Method Selector */}
+                    <div>
+                      <label className="block font-bold text-stone-700 mb-1.5">
+                        পেমেন্ট মাধ্যম বেছে নিন:
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDueGateway("bkash")}
+                          className={`py-2.5 px-3 rounded-xl font-bold border-2 transition cursor-pointer flex flex-col items-center gap-0.5 ${
+                            selectedDueGateway === "bkash"
+                              ? "border-[#E2136E] bg-pink-50 text-[#E2136E]"
+                              : "border-stone-200 text-stone-600 hover:border-stone-300"
+                          }`}
+                        >
+                          <Smartphone className="w-4 h-4" />
+                          <span className="text-xs">bKash (বিকাশ)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDueGateway("nagad")}
+                          className={`py-2.5 px-3 rounded-xl font-bold border-2 transition cursor-pointer flex flex-col items-center gap-0.5 ${
+                            selectedDueGateway === "nagad"
+                              ? "border-orange-500 bg-orange-50 text-orange-700"
+                              : "border-stone-200 text-stone-600 hover:border-stone-300"
+                          }`}
+                        >
+                          <Smartphone className="w-4 h-4" />
+                          <span className="text-xs">Nagad (নগদ)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDueGateway("sslcommerz")}
+                          className={`py-2.5 px-3 rounded-xl font-bold border-2 transition cursor-pointer flex flex-col items-center gap-0.5 ${
+                            selectedDueGateway === "sslcommerz"
+                              ? "border-blue-600 bg-blue-50 text-blue-700"
+                              : "border-stone-200 text-stone-600 hover:border-stone-300"
+                          }`}
+                        >
+                          <CreditCard className="w-4 h-4" />
+                          <span className="text-xs">SSLCommerz</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Number Box with Copy */}
+                    <div className="p-3.5 rounded-2xl bg-stone-50 border border-stone-200 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-[11px] font-bold text-stone-500 uppercase block">
+                            আমাদের {isNagad ? "নগদ" : "বিকাশ"} নম্বর (
+                            {targetAccountType === "merchant"
+                              ? "মার্চেন্ট পেমেন্ট"
+                              : "পার্সোনাল সেন্ড মানি"}
+                            )
+                          </span>
+                          <span className="text-base font-black text-stone-900 font-mono">
+                            {targetAccountNumber}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleDueCopyText(targetAccountNumber, "number")
+                          }
+                          className="px-2.5 py-1.5 rounded-lg bg-[#0F3D2E] text-white font-bold flex items-center gap-1 cursor-pointer hover:bg-[#155440] transition"
+                        >
+                          {dueCopiedField === "number" ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-300" /> কপি
+                              হয়েছে
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" /> নম্বর কপি
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      <div className="pt-2 border-t border-stone-200/80 flex items-center justify-between">
+                        <div>
+                          <span className="text-[11px] font-bold text-stone-500 block">
+                            রেফারেন্স কোড (Reference)
+                          </span>
+                          <span className="text-sm font-black text-[#0F3D2E] font-mono">
+                            {activeOrder.orderCode}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleDueCopyText(activeOrder.orderCode, "ref")
+                          }
+                          className="px-2 py-1 rounded-md bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold flex items-center gap-1 cursor-pointer transition text-[11px]"
+                        >
+                          {dueCopiedField === "ref" ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-700" /> কপি
+                              হয়েছে
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" /> কোড কপি
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Step-by-Step Instructions */}
+                    <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 text-amber-950 space-y-1.5 text-[11px]">
+                      <p className="font-extrabold text-amber-900 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                        পেমেন্ট করার নিয়ম:
+                      </p>
+                      <p className="leading-relaxed text-stone-700">
+                        {isNagad ? "নগদ" : "বিকাশ"} অ্যাপে গিয়ে{" "}
+                        <strong>{targetAccountNumber}</strong> নম্বরে{" "}
+                        <strong>৳{activeOrder.dueAmount}</strong>{" "}
+                        {targetAccountType === "merchant"
+                          ? "পেমেন্ট"
+                          : "সেন্ড মানি"}{" "}
+                        করুন এবং রেফারেন্সে <strong>{activeOrder.orderCode}</strong>{" "}
+                        লিখুন। এরপর প্রাপ্ত Transaction ID (TrxID) নিচে দিন।
+                      </p>
+                    </div>
+
+                    {/* Form Inputs */}
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block font-bold text-stone-700 mb-1">
+                          আপনার প্রেরক মোবাইল নম্বর *
+                        </label>
+                        <input
+                          type="tel"
+                          required
+                          value={dueSenderPhone}
+                          onChange={(e) => setDueSenderPhone(e.target.value)}
+                          placeholder="e.g., 017XXXXXXXX"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-mono focus:outline-none focus:border-[#0F3D2E]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-stone-700 mb-1">
+                          Transaction ID (TrxID) *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={dueTrxId}
+                          onChange={(e) => setDueTrxId(e.target.value)}
+                          placeholder="e.g., BKX8492019 বা 7GC89021"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-mono uppercase tracking-wider focus:outline-none focus:border-[#0F3D2E]"
+                        />
+                      </div>
+                    </div>
+
+                    {dueTrxError && (
+                      <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-bold flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                        <span>{dueTrxError}</span>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setIsPayDueModalOpen(false)}
+                        className="px-4 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold cursor-pointer"
+                      >
+                        বাতিল
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={payingDue}
+                        className={`flex-1 py-3 px-5 rounded-xl text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg cursor-pointer transition ${
+                          isBkash
+                            ? "bg-[#E2136E] hover:bg-[#c20f5d]"
+                            : isNagad
+                            ? "bg-[#E35124] hover:bg-[#c44119]"
+                            : "bg-[#1A4B8C] hover:bg-[#123564]"
+                        }`}
+                      >
+                        {payingDue ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>ভেরিফাই হচ্ছে...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-4 h-4" />
+                            <span>
+                              বাকি ৳{activeOrder.dueAmount.toLocaleString()} পরিশোধ
+                              কনফার্ম করুন
+                            </span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}

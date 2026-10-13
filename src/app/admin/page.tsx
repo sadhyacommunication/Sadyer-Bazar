@@ -26,6 +26,9 @@ import {
   Scale,
   Tag,
   Download,
+  Smartphone,
+  Copy,
+  Check,
 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 import { checkRateLimit } from "@/lib/security";
@@ -68,6 +71,7 @@ export default function AdminDashboardPage() {
     updateSiteSettings,
     supabaseStatus,
     syncDatabaseWithSupabase,
+    showToast,
   } = useStore();
 
   // Admin Passkey Gate (Locked by Default + Session Token Persistence)
@@ -134,6 +138,15 @@ export default function AdminDashboardPage() {
 
   // Settings Form State (Synced live with Supabase settings)
   const [settingsForm, setSettingsForm] = useState<SiteSettings>(settings);
+  const [copiedTrxId, setCopiedTrxId] = useState<string | null>(null);
+
+  const handleCopyTrx = (trxId: string) => {
+    try {
+      navigator.clipboard.writeText(trxId);
+      setCopiedTrxId(trxId);
+      setTimeout(() => setCopiedTrxId(null), 2000);
+    } catch {}
+  };
 
   useEffect(() => {
     setSettingsForm(settings);
@@ -1458,64 +1471,145 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* TAB 6: PAYMENTS & BKASH / SSLCOMMERZ LEDGER */}
+        {/* TAB 6: PAYMENTS & BKASH / NAGAD / SSLCOMMERZ LEDGER */}
         {activeTab === "payments" && (
           <div className="bg-white rounded-3xl border border-stone-200/90 p-6 space-y-6">
-            <div>
-              <h2 className="text-lg font-extrabold text-stone-900">
-                Automated bKash & SSLCommerz Transaction Logs
-              </h2>
-              <p className="text-xs text-stone-500">
-                Every online full or advance payment verified by our
-                server-to-server IPN webhook is logged below.
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-extrabold text-stone-900">
+                  Automated bKash, Nagad & SSLCommerz Transaction Ledger
+                </h2>
+                <p className="text-xs text-stone-500">
+                  Every online payment TrxID submitted by customers or verified by gateways is recorded live below.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold">
+                  Total Transactions: {transactions.length}
+                </span>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-stone-200 text-stone-500 uppercase">
-                    <th className="py-3 pr-4">Transaction ID</th>
-                    <th className="py-3 px-4">Order ID</th>
-                    <th className="py-3 px-4">Gateway</th>
+                    <th className="py-3 pr-4">Transaction ID (TrxID)</th>
+                    <th className="py-3 px-4">Order Code</th>
+                    <th className="py-3 px-4">Gateway / MFS</th>
                     <th className="py-3 px-4">Sender Phone</th>
-                    <th className="py-3 px-4">Verified Amount</th>
-                    <th className="py-3 pl-4">Status</th>
+                    <th className="py-3 px-4">Paid Amount</th>
+                    <th className="py-3 px-4">Order Payment Status</th>
+                    <th className="py-3 pl-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
-                  {transactions.map((trx) => (
-                    <tr key={trx.id} className="hover:bg-stone-50">
-                      <td className="py-3.5 pr-4 font-mono font-bold text-stone-900">
-                        {trx.transactionId}
-                      </td>
-                      <td className="py-3.5 px-4 font-mono font-bold text-[#0F3D2E]">
-                        {trx.orderCode}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span
-                          className={`px-2.5 py-1 rounded-md text-white font-extrabold uppercase text-[10px] ${
-                            trx.gateway === "bkash"
-                              ? "bg-pink-600"
-                              : "bg-blue-600"
-                          }`}
-                        >
-                          {trx.gateway}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 font-mono text-stone-600">
-                        {trx.senderPhone || "Verified Wallet"}
-                      </td>
-                      <td className="py-3.5 px-4 font-extrabold text-sm text-[#0F3D2E]">
-                        ৳{trx.amount.toLocaleString()}
-                      </td>
-                      <td className="py-3.5 pl-4">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
-                          <CheckCircle2 className="w-3 h-3" /> {trx.status}
-                        </span>
+                  {transactions.map((trx) => {
+                    const linkedOrder = orders.find(
+                      (o) => o.id === trx.orderId || o.orderCode === trx.orderCode
+                    );
+                    const isFullyPaid =
+                      linkedOrder?.paymentStatus === "paid" ||
+                      linkedOrder?.dueAmount === 0;
+
+                    return (
+                      <tr key={trx.id} className="hover:bg-stone-50 transition">
+                        <td className="py-3.5 pr-4">
+                          <div className="flex items-center gap-1.5 font-mono font-black text-stone-900">
+                            <span>{trx.transactionId}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyTrx(trx.transactionId)}
+                              className="p-1 rounded hover:bg-stone-200 text-stone-500 cursor-pointer"
+                              title="Copy TrxID"
+                            >
+                              {copiedTrxId === trx.transactionId ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 font-mono font-bold text-[#0F3D2E]">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOrderSearch(trx.orderCode);
+                              setActiveTab("orders");
+                            }}
+                            className="hover:underline cursor-pointer"
+                            title="View this order"
+                          >
+                            {trx.orderCode}
+                          </button>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`px-2.5 py-1 rounded-md text-white font-extrabold uppercase text-[10px] ${
+                              trx.gateway === "bkash"
+                                ? "bg-[#E2136E]"
+                                : trx.gateway === "nagad"
+                                ? "bg-[#E35124]"
+                                : trx.gateway === "sslcommerz"
+                                ? "bg-[#1A4B8C]"
+                                : "bg-purple-600"
+                            }`}
+                          >
+                            {trx.gateway}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 font-mono text-stone-600">
+                          {trx.senderPhone || "Verified Wallet"}
+                        </td>
+                        <td className="py-3.5 px-4 font-extrabold text-sm text-[#0F3D2E]">
+                          ৳{trx.amount.toLocaleString()}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
+                              isFullyPaid
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-amber-100 text-amber-800"
+                            }`}
+                          >
+                            <CheckCircle2 className="w-3 h-3" />
+                            {linkedOrder
+                              ? linkedOrder.paymentStatus.toUpperCase()
+                              : trx.status.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="py-3.5 pl-4 text-right">
+                          {linkedOrder && !isFullyPaid && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateOrderPaymentStatus(
+                                  linkedOrder.id,
+                                  "paid",
+                                  linkedOrder.totalAmount,
+                                  trx.transactionId
+                                );
+                                showToast(
+                                  `Order ${linkedOrder.orderCode} marked as Fully Paid!`
+                                );
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg bg-[#0F3D2E] hover:bg-[#165a44] text-white font-bold text-[11px] cursor-pointer transition shadow-2xs"
+                            >
+                              Verify & Mark Paid
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {transactions.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-stone-400">
+                        No transactions recorded yet.
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1526,155 +1620,403 @@ export default function AdminDashboardPage() {
         {activeTab === "settings" && (
           <form
             onSubmit={handleSaveDeliverySettings}
-            className="bg-white rounded-3xl border border-stone-200/90 p-6 sm:p-8 space-y-6 max-w-3xl"
+            className="bg-white rounded-3xl border border-stone-200/90 p-6 sm:p-8 space-y-8 max-w-4xl"
           >
-            <div className="border-b border-stone-200 pb-4">
-              <span className="text-xs font-extrabold uppercase tracking-wider text-[#0F3D2E]">
-                Dynamic Store Configuration
-              </span>
-              <h2 className="text-xl font-extrabold text-stone-900 mt-0.5">
-                Update Inside Dhaka & Outside Dhaka Delivery Charges
-              </h2>
-              <p className="text-xs text-stone-500">
-                Changes saved here immediately update the Storefront top bar,
-                Slide Cart, Product pages, and Server-Side Checkout calculator.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200">
-                <label className="block text-xs font-extrabold uppercase text-[#0F3D2E] mb-1.5">
-                  Inside Dhaka Delivery Charge (৳ BDT) *
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  required
-                  value={settingsForm.insideDhakaFee}
-                  onChange={(e) =>
-                    setSettingsForm({
-                      ...settingsForm,
-                      insideDhakaFee: Number(e.target.value),
-                    })
-                  }
-                  className="w-full px-4 py-3 rounded-xl bg-white border border-emerald-300 text-lg font-extrabold text-stone-900"
-                />
-              </div>
-
-              <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200">
-                <label className="block text-xs font-extrabold uppercase text-amber-900 mb-1.5">
-                  Outside Dhaka / Nationwide Charge (৳ BDT) *
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  required
-                  value={settingsForm.outsideDhakaFee}
-                  onChange={(e) =>
-                    setSettingsForm({
-                      ...settingsForm,
-                      outsideDhakaFee: Number(e.target.value),
-                    })
-                  }
-                  className="w-full px-4 py-3 rounded-xl bg-white border border-amber-300 text-lg font-extrabold text-stone-900"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  Free Home Delivery Threshold (৳ BDT)
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  value={settingsForm.freeDeliveryThreshold}
-                  onChange={(e) =>
-                    setSettingsForm({
-                      ...settingsForm,
-                      freeDeliveryThreshold: Number(e.target.value),
-                    })
-                  }
-                  className="w-full px-4 py-3 rounded-xl bg-stone-50 border border-stone-200 text-sm font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  Pre-Order Advance Payment Percentage (%)
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={settingsForm.preorderAdvancePercent}
-                  onChange={(e) =>
-                    setSettingsForm({
-                      ...settingsForm,
-                      preorderAdvancePercent: Number(e.target.value),
-                    })
-                  }
-                  className="w-full px-4 py-3 rounded-xl bg-stone-50 border border-stone-200 text-sm font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  Customer Hotline Number
-                </label>
-                <input
-                  type="text"
-                  value={settingsForm.supportPhone}
-                  onChange={(e) =>
-                    setSettingsForm({
-                      ...settingsForm,
-                      supportPhone: e.target.value,
-                    })
-                  }
-                  className="w-full px-4 py-3 rounded-xl bg-stone-50 border border-stone-200 text-sm font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  bKash Merchant Account Number
-                </label>
-                <input
-                  type="text"
-                  value={settingsForm.bkashMerchantNumber}
-                  onChange={(e) =>
-                    setSettingsForm({
-                      ...settingsForm,
-                      bkashMerchantNumber: e.target.value,
-                    })
-                  }
-                  className="w-full px-4 py-3 rounded-xl bg-stone-50 border border-stone-200 text-sm font-bold"
-                />
-              </div>
-            </div>
-
+            {/* Delivery Fees & Policies */}
             <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                Top Bar Live Announcement Banner (English)
-              </label>
-              <input
-                type="text"
-                value={settingsForm.announcementEn}
-                onChange={(e) =>
-                  setSettingsForm({
-                    ...settingsForm,
-                    announcementEn: e.target.value,
-                  })
-                }
-                className="w-full px-4 py-3 rounded-xl bg-stone-50 border border-stone-200 text-sm"
-              />
+              <div className="border-b border-stone-200 pb-3 mb-4">
+                <span className="text-xs font-extrabold uppercase tracking-wider text-[#0F3D2E]">
+                  1. Delivery Charges & Thresholds
+                </span>
+                <h2 className="text-lg font-extrabold text-stone-900 mt-0.5">
+                  হোম ডেলিভারি চার্জ ও ফ্রি ডেলিভারি শর্ত
+                </h2>
+                <p className="text-xs text-stone-500">
+                  এখানে পরিবর্তন করলে তাৎক্ষণিকভাবে স্টোরফ্রন্ট, কার্ট ও চেকআউটে আপডেট হবে।
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200">
+                  <label className="block text-xs font-extrabold uppercase text-[#0F3D2E] mb-1.5">
+                    Inside Dhaka Delivery Charge (৳ BDT) *
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    required
+                    value={settingsForm.insideDhakaFee}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        insideDhakaFee: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-4 py-2.5 rounded-xl bg-white border border-emerald-300 text-lg font-extrabold text-stone-900"
+                  />
+                </div>
+
+                <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200">
+                  <label className="block text-xs font-extrabold uppercase text-amber-900 mb-1.5">
+                    Outside Dhaka Nationwide Charge (৳ BDT) *
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    required
+                    value={settingsForm.outsideDhakaFee}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        outsideDhakaFee: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-4 py-2.5 rounded-xl bg-white border border-amber-300 text-lg font-extrabold text-stone-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                    Free Home Delivery Threshold (৳ BDT)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={settingsForm.freeDeliveryThreshold}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        freeDeliveryThreshold: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                    Pre-Order Advance Percentage (%)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={settingsForm.preorderAdvancePercent}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        preorderAdvancePercent: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-bold"
+                  />
+                </div>
+              </div>
             </div>
 
-            <button
-              type="submit"
-              className="px-6 py-3.5 rounded-2xl bg-[#0F3D2E] hover:bg-[#165b44] text-white font-extrabold text-sm shadow-lg transition cursor-pointer"
-            >
-              Save Delivery Charges & Settings
-            </button>
+            {/* bKash MFS Gateway Configuration */}
+            <div>
+              <div className="border-b border-pink-200 pb-3 mb-4">
+                <span className="text-xs font-extrabold uppercase tracking-wider text-[#E2136E]">
+                  2. bKash Configuration (বিকাশ পেমেন্ট সেটিংস)
+                </span>
+                <h3 className="text-lg font-extrabold text-stone-900 mt-0.5">
+                  বিকাশ অ্যাকাউন্ট ও গেটওয়ে সেটিংস
+                </h3>
+                <p className="text-xs text-stone-500">
+                  চেকআউটে গ্রাহকদের এই নম্বরটি প্রদর্শিত হবে এবং ১-ক্লিকে কপি করতে পারবে।
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                    bKash Account Number (বিকাশ নম্বর) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.bkashMerchantNumber}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        bkashMerchantNumber: e.target.value,
+                      })
+                    }
+                    placeholder="e.g. 01713-477780"
+                    className="w-full px-4 py-2.5 rounded-xl bg-pink-50/50 border border-pink-200 text-sm font-mono font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                    bKash Account Type (অ্যাকাউন্টের ধরন)
+                  </label>
+                  <select
+                    value={settingsForm.bkashAccountType || "merchant"}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        bkashAccountType: e.target.value as "merchant" | "personal",
+                      })
+                    }
+                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-bold cursor-pointer"
+                  >
+                    <option value="merchant">
+                      Merchant Account (গ্রাহক “Make Payment” করবেন)
+                    </option>
+                    <option value="personal">
+                      Personal Account (গ্রাহক “Send Money” করবেন)
+                    </option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                    bKash PGW App Key (ঐচ্ছিক / Tokenized Gateway)
+                  </label>
+                  <input
+                    type="password"
+                    value={settingsForm.bkashAppKey || ""}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        bkashAppKey: e.target.value,
+                      })
+                    }
+                    placeholder="bKash App Key"
+                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                    bKash PGW App Secret (ঐচ্ছিক)
+                  </label>
+                  <input
+                    type="password"
+                    value={settingsForm.bkashAppSecret || ""}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        bkashAppSecret: e.target.value,
+                      })
+                    }
+                    placeholder="bKash App Secret"
+                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Nagad MFS Gateway Configuration */}
+            <div>
+              <div className="border-b border-orange-200 pb-3 mb-4">
+                <span className="text-xs font-extrabold uppercase tracking-wider text-[#E35124]">
+                  3. Nagad Configuration (নগদ পেমেন্ট সেটিংস)
+                </span>
+                <h3 className="text-lg font-extrabold text-stone-900 mt-0.5">
+                  নগদ অ্যাকাউন্ট ও TrxID সেটিংস
+                </h3>
+                <p className="text-xs text-stone-500">
+                  গ্রাহকরা সরাসরি এই নম্বরে নগদ পেমেন্ট/সেন্ড মানি করে TrxID দিয়ে অর্ডার কনফার্ম করতে পারবে।
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                    Nagad Account Number (নগদ নম্বর) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.nagadNumber || "01713-477780"}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        nagadNumber: e.target.value,
+                      })
+                    }
+                    placeholder="e.g. 01713-477780"
+                    className="w-full px-4 py-2.5 rounded-xl bg-orange-50/50 border border-orange-200 text-sm font-mono font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                    Nagad Account Type (অ্যাকাউন্টের ধরন)
+                  </label>
+                  <select
+                    value={settingsForm.nagadAccountType || "personal"}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        nagadAccountType: e.target.value as "merchant" | "personal",
+                      })
+                    }
+                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-bold cursor-pointer"
+                  >
+                    <option value="personal">
+                      Personal Account (গ্রাহক “Send Money” করবেন)
+                    </option>
+                    <option value="merchant">
+                      Merchant Account (গ্রাহক “Merchant Pay” করবেন)
+                    </option>
+                  </select>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-stone-50 border border-stone-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settingsForm.nagadEnabled ?? true}
+                      onChange={(e) =>
+                        setSettingsForm({
+                          ...settingsForm,
+                          nagadEnabled: e.target.checked,
+                        })
+                      }
+                      className="w-4 h-4 accent-[#E35124]"
+                    />
+                    <span className="text-xs font-bold text-stone-800">
+                      Enable Nagad in Checkout (চেকআউট পেজে নগদ পেমেন্ট অপশন চালু রাখুন)
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* SSLCommerz Gateway Configuration */}
+            <div>
+              <div className="border-b border-blue-200 pb-3 mb-4">
+                <span className="text-xs font-extrabold uppercase tracking-wider text-[#1A4B8C]">
+                  4. SSLCommerz Official Gateway (কার্ড ও নেট ব্যাংকিং)
+                </span>
+                <h3 className="text-lg font-extrabold text-stone-900 mt-0.5">
+                  SSLCommerz API ক্রেডেনশিয়াল
+                </h3>
+                <p className="text-xs text-stone-500">
+                  ভিসা, মাস্টারকার্ড ও অন্যান্য গেটওয়ে পেমেন্টের জন্য স্টোর আইডি ও পাসওয়ার্ড।
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                    SSLCommerz Store ID
+                  </label>
+                  <input
+                    type="text"
+                    value={settingsForm.sslcommerzStoreId || ""}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        sslcommerzStoreId: e.target.value,
+                      })
+                    }
+                    placeholder="e.g. sadyerbazar001live"
+                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-mono font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                    SSLCommerz Store Password / Secret
+                  </label>
+                  <input
+                    type="password"
+                    value={settingsForm.sslcommerzStorePassword || ""}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        sslcommerzStorePassword: e.target.value,
+                      })
+                    }
+                    placeholder="Store Password"
+                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-mono"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-stone-50 border border-stone-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settingsForm.sslcommerzIsLive ?? false}
+                      onChange={(e) =>
+                        setSettingsForm({
+                          ...settingsForm,
+                          sslcommerzIsLive: e.target.checked,
+                        })
+                      }
+                      className="w-4 h-4 accent-[#1A4B8C]"
+                    />
+                    <span className="text-xs font-bold text-stone-800">
+                      Live Production Mode (টিক দিলে আসল পেমেন্ট প্রসেসিং হবে, আনচেক থাকলে স্যান্ডবক্স টেস্ট মোড)
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Store Contact & Banner */}
+            <div>
+              <div className="border-b border-stone-200 pb-3 mb-4">
+                <span className="text-xs font-extrabold uppercase tracking-wider text-[#0F3D2E]">
+                  5. Customer Support & Announcement
+                </span>
+                <h3 className="text-lg font-extrabold text-stone-900 mt-0.5">
+                  সাপোর্ট ফোন নম্বর ও অ্যানাউন্সমেন্ট ব্যানার
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                    Customer Hotline / Support Number *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.supportPhone}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        supportPhone: e.target.value,
+                      })
+                    }
+                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-bold font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                    Top Bar Live Announcement Banner
+                  </label>
+                  <input
+                    type="text"
+                    value={settingsForm.announcementEn}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        announcementEn: e.target.value,
+                      })
+                    }
+                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-stone-200">
+              <button
+                type="submit"
+                className="px-8 py-4 rounded-2xl bg-[#0F3D2E] hover:bg-[#165b44] text-white font-black text-sm shadow-xl transition cursor-pointer flex items-center gap-2"
+              >
+                <CheckCircle2 className="w-5 h-5" />
+                <span>Save All Store & Payment Settings</span>
+              </button>
+            </div>
           </form>
         )}
       </div>

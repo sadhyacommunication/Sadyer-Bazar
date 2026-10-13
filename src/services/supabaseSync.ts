@@ -36,6 +36,12 @@ function mapSettingsFromRow(row: Record<string, unknown>): SiteSettings {
     supportPhone: String(row.support_phone || "01713477780-81"),
     whatsappNumber: String(row.whatsapp_number || "8801713477780"),
     bkashMerchantNumber: String(row.bkash_merchant_number || "01713-477780"),
+    bkashAccountType:
+      (row.bkash_account_type as SiteSettings["bkashAccountType"]) || "merchant",
+    nagadNumber: String(row.nagad_number || "01713-477780"),
+    nagadAccountType:
+      (row.nagad_account_type as SiteSettings["nagadAccountType"]) || "personal",
+    nagadEnabled: Boolean(row.nagad_enabled ?? true),
     announcementEn: String(
       row.announcement_en || INITIAL_SITE_SETTINGS.announcementEn
     ),
@@ -43,7 +49,18 @@ function mapSettingsFromRow(row: Record<string, unknown>): SiteSettings {
       row.announcement_bn || INITIAL_SITE_SETTINGS.announcementBn
     ),
     sslcommerzEnabled: Boolean(row.sslcommerz_enabled ?? true),
+    sslcommerzStoreId: row.sslcommerz_store_id
+      ? String(row.sslcommerz_store_id)
+      : undefined,
+    sslcommerzStorePassword: row.sslcommerz_store_password
+      ? String(row.sslcommerz_store_password)
+      : undefined,
+    sslcommerzIsLive: Boolean(row.sslcommerz_is_live ?? false),
     bkashEnabled: Boolean(row.bkash_enabled ?? true),
+    bkashAppKey: row.bkash_app_key ? String(row.bkash_app_key) : undefined,
+    bkashAppSecret: row.bkash_app_secret
+      ? String(row.bkash_app_secret)
+      : undefined,
     codEnabled: Boolean(row.cod_enabled ?? true),
     updatedAt: String(row.updated_at || new Date().toISOString()),
   };
@@ -191,7 +208,42 @@ export async function upsertSettingsToSupabase(
   const supabase = getSupabaseClient();
   if (!supabase) return false;
 
-  const { error } = await supabase.from("site_settings").upsert({
+  // Try upserting full payment configuration
+  const fullPayload: Record<string, unknown> = {
+    id: 1,
+    inside_dhaka_fee: settings.insideDhakaFee,
+    outside_dhaka_fee: settings.outsideDhakaFee,
+    free_delivery_threshold: settings.freeDeliveryThreshold,
+    enable_free_delivery: settings.enableFreeDelivery,
+    preorder_advance_percent: settings.preorderAdvancePercent,
+    support_phone: settings.supportPhone,
+    whatsapp_number: settings.whatsappNumber,
+    bkash_merchant_number: settings.bkashMerchantNumber,
+    bkash_account_type: settings.bkashAccountType || "merchant",
+    nagad_number: settings.nagadNumber || "01713-477780",
+    nagad_account_type: settings.nagadAccountType || "personal",
+    nagad_enabled: settings.nagadEnabled ?? true,
+    announcement_en: settings.announcementEn,
+    announcement_bn: settings.announcementBn,
+    sslcommerz_enabled: settings.sslcommerzEnabled,
+    sslcommerz_store_id: settings.sslcommerzStoreId || null,
+    sslcommerz_store_password: settings.sslcommerzStorePassword || null,
+    sslcommerz_is_live: settings.sslcommerzIsLive ?? false,
+    bkash_enabled: settings.bkashEnabled,
+    bkash_app_key: settings.bkashAppKey || null,
+    bkash_app_secret: settings.bkashAppSecret || null,
+    cod_enabled: settings.codEnabled,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error: fullError } = await supabase
+    .from("site_settings")
+    .upsert(fullPayload);
+
+  if (!fullError) return true;
+
+  // Graceful fallback to baseline columns if schema migration hasn't been executed
+  const { error: fallbackError } = await supabase.from("site_settings").upsert({
     id: 1,
     inside_dhaka_fee: settings.insideDhakaFee,
     outside_dhaka_fee: settings.outsideDhakaFee,
@@ -208,7 +260,8 @@ export async function upsertSettingsToSupabase(
     cod_enabled: settings.codEnabled,
     updated_at: new Date().toISOString(),
   });
-  return !error;
+
+  return !fallbackError;
 }
 
 export async function upsertProductToSupabase(
@@ -287,7 +340,7 @@ export async function upsertOrderToSupabase(
   const supabase = getSupabaseClient();
   if (!supabase) return false;
 
-  const { error } = await supabase.from("orders").upsert({
+  const orderPayload = {
     id: order.id,
     order_code: order.orderCode,
     customer_name: order.customerName,
@@ -318,7 +371,22 @@ export async function upsertOrderToSupabase(
     items: order.items,
     created_at: order.createdAt,
     updated_at: order.updatedAt || new Date().toISOString(),
-  });
+  };
+
+  let { error } = await supabase.from("orders").upsert(orderPayload);
+
+  // If check constraint fails on 'nagad', retry with fallback method
+  if (error && order.paymentMethod === "nagad") {
+    const fallbackPayload = {
+      ...orderPayload,
+      payment_method: "bkash",
+      weight_adjustment_note:
+        (order.weightAdjustmentNote ? order.weightAdjustmentNote + " | " : "") +
+        "Paid via Nagad",
+    };
+    const retry = await supabase.from("orders").upsert(fallbackPayload);
+    error = retry.error;
+  }
 
   if (order.items.length > 0) {
     await supabase.from("order_items").upsert(
@@ -341,7 +409,7 @@ export async function upsertOrderToSupabase(
   }
 
   if (transaction) {
-    await supabase.from("payment_transactions").upsert({
+    const txPayload = {
       id: transaction.id,
       order_id: transaction.orderId,
       order_code: transaction.orderCode,
@@ -354,7 +422,20 @@ export async function upsertOrderToSupabase(
       sender_phone: transaction.senderPhone || null,
       verified_at: transaction.verifiedAt || null,
       created_at: transaction.createdAt,
-    });
+    };
+
+    let { error: txError } = await supabase
+      .from("payment_transactions")
+      .upsert(txPayload);
+
+    // If constraint fails on nagad gateway, fallback to manual_verify
+    if (txError && transaction.gateway === "nagad") {
+      await supabase.from("payment_transactions").upsert({
+        ...txPayload,
+        gateway: "manual_verify",
+        validation_id: "NAGAD-" + (transaction.validationId || "DIRECT"),
+      });
+    }
   }
 
   return !error;

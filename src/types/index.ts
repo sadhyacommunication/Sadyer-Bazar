@@ -1,6 +1,6 @@
 export type DeliveryZone = "inside_dhaka" | "outside_dhaka";
 
-export type PaymentMethod = "bkash" | "sslcommerz" | "cod";
+export type PaymentMethod = "bkash" | "nagad" | "sslcommerz" | "cod";
 
 export type PaymentPlan = "full" | "advance" | "cod";
 
@@ -29,10 +29,19 @@ export interface SiteSettings {
   supportPhone: string;
   whatsappNumber: string;
   bkashMerchantNumber: string;
+  bkashAccountType: "merchant" | "personal" | "agent";
+  nagadNumber: string;
+  nagadAccountType: "merchant" | "personal";
+  nagadEnabled: boolean;
   announcementEn: string;
   announcementBn: string;
   sslcommerzEnabled: boolean;
+  sslcommerzStoreId?: string;
+  sslcommerzStorePassword?: string;
+  sslcommerzIsLive?: boolean;
   bkashEnabled: boolean;
+  bkashAppKey?: string;
+  bkashAppSecret?: string;
   codEnabled: boolean;
   updatedAt: string;
 }
@@ -186,7 +195,7 @@ export interface PaymentTransaction {
   id: string;
   orderId: string;
   orderCode: string;
-  gateway: "bkash" | "sslcommerz" | "manual_verify";
+  gateway: "bkash" | "nagad" | "sslcommerz" | "manual_verify";
   transactionId: string;
   validationId?: string;
   amount: number;

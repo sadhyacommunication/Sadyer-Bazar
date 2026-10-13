@@ -15,10 +15,19 @@ CREATE TABLE IF NOT EXISTS public.site_settings (
     support_phone TEXT NOT NULL DEFAULT '01713477780-81',
     whatsapp_number TEXT NOT NULL DEFAULT '8801713477780',
     bkash_merchant_number TEXT NOT NULL DEFAULT '01713-477780',
+    bkash_account_type TEXT NOT NULL DEFAULT 'merchant',
+    nagad_number TEXT NOT NULL DEFAULT '01713-477780',
+    nagad_account_type TEXT NOT NULL DEFAULT 'personal',
+    nagad_enabled BOOLEAN NOT NULL DEFAULT true,
     announcement_en TEXT NOT NULL DEFAULT 'Pre-Order Live: Fresh Jamuna River Fish & Authentic Bogura Shahi Doi — Nationwide Home Delivery!',
     announcement_bn TEXT NOT NULL DEFAULT 'যমুনা নদীর তাজা মাছ ও বগুড়ার শাহী দইয়ের প্রি-অর্ডার চলছে!',
     sslcommerz_enabled BOOLEAN NOT NULL DEFAULT true,
+    sslcommerz_store_id TEXT DEFAULT '',
+    sslcommerz_store_password TEXT DEFAULT '',
+    sslcommerz_is_live BOOLEAN NOT NULL DEFAULT false,
     bkash_enabled BOOLEAN NOT NULL DEFAULT true,
+    bkash_app_key TEXT DEFAULT '',
+    bkash_app_secret TEXT DEFAULT '',
     cod_enabled BOOLEAN NOT NULL DEFAULT true,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -119,7 +128,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
     total_amount NUMERIC(10, 2) NOT NULL CHECK (total_amount >= 0),
     advance_paid NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (advance_paid >= 0),
     due_amount NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (due_amount >= 0),
-    payment_method TEXT NOT NULL CHECK (payment_method IN ('bkash', 'sslcommerz', 'cod')),
+    payment_method TEXT NOT NULL CHECK (payment_method IN ('bkash', 'nagad', 'sslcommerz', 'cod')),
     payment_plan TEXT NOT NULL CHECK (payment_plan IN ('full', 'advance', 'cod')),
     payment_status TEXT NOT NULL DEFAULT 'pending' CHECK (payment_status IN ('pending', 'advance_paid', 'paid', 'failed', 'refunded')),
     order_status TEXT NOT NULL DEFAULT 'pending' CHECK (order_status IN ('pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled')),
@@ -151,12 +160,12 @@ CREATE TABLE IF NOT EXISTS public.order_items (
     line_total NUMERIC(10, 2) NOT NULL CHECK (line_total >= 0)
 );
 
--- 8. PAYMENT TRANSACTIONS TABLE (Audit Trail for bKash & SSLCommerz)
+-- 8. PAYMENT TRANSACTIONS TABLE (Audit Trail for bKash, Nagad & SSLCommerz)
 CREATE TABLE IF NOT EXISTS public.payment_transactions (
     id TEXT PRIMARY KEY,
     order_id TEXT NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
     order_code TEXT NOT NULL,
-    gateway TEXT NOT NULL CHECK (gateway IN ('bkash', 'sslcommerz', 'manual_verify')),
+    gateway TEXT NOT NULL CHECK (gateway IN ('bkash', 'nagad', 'sslcommerz', 'manual_verify')),
     transaction_id TEXT NOT NULL,
     validation_id TEXT,
     amount NUMERIC(10, 2) NOT NULL CHECK (amount >= 0),
