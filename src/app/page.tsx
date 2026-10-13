@@ -17,6 +17,7 @@ import {
   PackageSearch,
   Star,
   Compass,
+  Leaf,
 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 import ProductCard from "@/components/storefront/ProductCard";
@@ -95,79 +96,67 @@ export default function HomePage() {
 
   return (
     <div className="space-y-16 sm:space-y-24 pb-20">
-      {/* 1. HERO SECTION: Compact Value Intent + Interactive 4-Banner Natural Slider */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-[#0F3D2E] via-[#124635] to-[#0b2e22] text-white pt-8 pb-14 lg:py-14">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
-            {/* Left Column: High-Converting Value Copy & Quick CTAs */}
-            <div className="lg:col-span-6 space-y-5">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/15 backdrop-blur-md text-amber-300 text-xs font-bold tracking-wide">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>১০০% ফরমালিনমুক্ত ও কেমিক্যালহীন • হোম ডেলিভারি</span>
+      {/* 1. HERO SECTION: Full-Width 4-Banner Natural Photography Slider */}
+      <section className="relative overflow-hidden bg-[#0F3D2E] text-white pt-4 pb-8 sm:py-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
+          <HeroSlider />
+
+          {/* Quick Natural Organic Trust Highlights */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3.5 text-xs">
+            <div className="bg-emerald-950/60 border border-emerald-800/50 rounded-2xl p-3 sm:px-4 sm:py-3.5 flex items-center gap-3 shadow-xs">
+              <div className="w-9 h-9 rounded-xl bg-emerald-800/80 text-amber-300 flex items-center justify-center shrink-0">
+                <Leaf className="w-4 h-4 text-emerald-300" />
               </div>
-
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-[1.14] text-white">
-                যমুনার তাজা মাছ ও{" "}
-                <span className="text-amber-300 underline decoration-[#C83E2B] decoration-4 underline-offset-4">
-                  খাঁটি গ্রাম্য অর্গানিক
-                </span>{" "}
-                পণ্য।
-              </h1>
-
-              <p className="text-sm sm:text-base text-emerald-100/90 leading-relaxed max-w-xl">
-                অর্ডার কনফার্মেশনের পর ভোরবেলা নদী ও খামার থেকে সংগ্রহ করে নিজস্ব থার্মাল বক্সে পৌঁছে দেওয়া হয়। কোনো প্রিজারভেটিভ বা হিমায়িত রাসায়নিক ছাড়া আসল প্রাকৃতিক স্বাদ।
-              </p>
-
-              {/* CTA Buttons */}
-              <div className="flex flex-wrap items-center gap-3 pt-1">
-                <Link
-                  href="#dept-jamuna-fish"
-                  className="px-5 sm:px-6 py-3 sm:py-3.5 rounded-2xl bg-[#C83E2B] hover:bg-[#b23321] text-white font-bold text-sm shadow-xl shadow-black/20 inline-flex items-center gap-2 transition"
-                >
-                  <span>পণ্যসমূহ দেখুন</span>
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-                <Link
-                  href="/pre-orders"
-                  className="px-5 sm:px-6 py-3 sm:py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-sm inline-flex items-center gap-2 transition"
-                >
-                  <Flame className="w-4 h-4 text-amber-400 fill-current" />
-                  <span>লাইভ ক্যাচ প্রি-অর্ডার</span>
-                </Link>
-              </div>
-
-              {/* Live Delivery & Payment Trust Pills */}
-              <div className="pt-3 border-t border-emerald-800/80 grid grid-cols-3 gap-2.5 sm:gap-3 text-xs">
-                <div className="bg-emerald-950/50 p-2.5 sm:p-3 rounded-2xl border border-emerald-800/60">
-                  <span className="text-emerald-300 block font-medium text-[11px] sm:text-xs">
-                    ঢাকা সিটি
-                  </span>
-                  <strong className="text-sm sm:text-base text-white font-extrabold">
-                    ৳{settings.insideDhakaFee} ডেলিভারি
-                  </strong>
-                </div>
-                <div className="bg-emerald-950/50 p-2.5 sm:p-3 rounded-2xl border border-emerald-800/60">
-                  <span className="text-emerald-300 block font-medium text-[11px] sm:text-xs">
-                    সারা বাংলাদেশ
-                  </span>
-                  <strong className="text-sm sm:text-base text-white font-extrabold">
-                    ৳{settings.outsideDhakaFee} হোম ডেলিভারি
-                  </strong>
-                </div>
-                <div className="bg-emerald-950/50 p-2.5 sm:p-3 rounded-2xl border border-emerald-800/60">
-                  <span className="text-emerald-300 block font-medium text-[11px] sm:text-xs">
-                    নিরাপদ পেমেন্ট
-                  </span>
-                  <strong className="text-xs sm:text-sm text-amber-300 font-extrabold">
-                    বিকাশ ও ক্যাশ
-                  </strong>
-                </div>
+              <div>
+                <strong className="text-white block font-bold text-xs sm:text-sm">
+                  ১০০% ফরমালিনমুক্ত
+                </strong>
+                <span className="text-emerald-200/80 text-[11px] block">
+                  যমুনা নদী ও গ্রাম্য খামার
+                </span>
               </div>
             </div>
 
-            {/* Right Column: Interactive 4-Slide Natural Photography Showcase */}
-            <div className="lg:col-span-6 w-full">
-              <HeroSlider />
+            <div className="bg-emerald-950/60 border border-emerald-800/50 rounded-2xl p-3 sm:px-4 sm:py-3.5 flex items-center gap-3 shadow-xs">
+              <div className="w-9 h-9 rounded-xl bg-emerald-800/80 text-amber-300 flex items-center justify-center shrink-0">
+                <Truck className="w-4 h-4 text-amber-300" />
+              </div>
+              <div>
+                <strong className="text-white block font-bold text-xs sm:text-sm">
+                  থার্মাল হোম ডেলিভারি
+                </strong>
+                <span className="text-emerald-200/80 text-[11px] block">
+                  ঢাকা ৳{settings.insideDhakaFee} • সারা দেশ ৳{settings.outsideDhakaFee}
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-emerald-950/60 border border-emerald-800/50 rounded-2xl p-3 sm:px-4 sm:py-3.5 flex items-center gap-3 shadow-xs">
+              <div className="w-9 h-9 rounded-xl bg-emerald-800/80 text-amber-300 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-4 h-4 text-emerald-300" />
+              </div>
+              <div>
+                <strong className="text-white block font-bold text-xs sm:text-sm">
+                  নিরাপদ পেমেন্ট
+                </strong>
+                <span className="text-emerald-200/80 text-[11px] block">
+                  বিকাশ, কার্ড ও ক্যাশ অন ডেলিভারি
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-emerald-950/60 border border-emerald-800/50 rounded-2xl p-3 sm:px-4 sm:py-3.5 flex items-center gap-3 shadow-xs">
+              <div className="w-9 h-9 rounded-xl bg-emerald-800/80 text-amber-300 flex items-center justify-center shrink-0">
+                <Clock className="w-4 h-4 text-amber-300" />
+              </div>
+              <div>
+                <strong className="text-white block font-bold text-xs sm:text-sm">
+                  লাইভ অর্ডার ট্র্যাকিং
+                </strong>
+                <span className="text-emerald-200/80 text-[11px] block">
+                  ইউনিক অর্ডার আইডি দিয়ে ট্র্যাক
+                </span>
+              </div>
             </div>
           </div>
         </div>
