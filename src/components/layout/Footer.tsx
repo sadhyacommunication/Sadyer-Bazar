@@ -223,6 +223,14 @@ export default function Footer() {
               </li>
               <li>
                 <Link
+                  href="/terms-and-conditions"
+                  className="hover:text-amber-300 transition"
+                >
+                  Terms & Conditions (শর্তাবলী)
+                </Link>
+              </li>
+              <li>
+                <Link
                   href="/checkout"
                   className="hover:text-amber-300 transition"
                 >
@@ -271,12 +279,18 @@ export default function Footer() {
             © {new Date().getFullYear()} Sadyer Bazar (সাধ্যের বাজার). All rights reserved.
           </span>
           <span className="hidden sm:inline">•</span>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-center gap-4">
             <Link
               href="/privacy-policy"
               className="text-emerald-200 hover:text-white underline"
             >
               Privacy Policy (গোপনীয়তা নীতি)
+            </Link>
+            <Link
+              href="/terms-and-conditions"
+              className="text-emerald-200 hover:text-white underline"
+            >
+              Terms & Conditions (শর্তাবলী)
             </Link>
             <Link
               href="/about"
