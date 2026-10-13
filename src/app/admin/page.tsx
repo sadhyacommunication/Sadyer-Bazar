@@ -29,10 +29,15 @@ import {
   Smartphone,
   Copy,
   Check,
+  MessageSquare,
+  Phone,
+  Mail,
 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 import { checkRateLimit } from "@/lib/security";
 import {
+  ContactMessage,
+  ContactMessageStatus,
   Coupon,
   Order,
   OrderStatus,
@@ -47,6 +52,7 @@ type AdminTab =
   | "products"
   | "coupons"
   | "payments"
+  | "messages"
   | "settings";
 
 export default function AdminDashboardPage() {
@@ -58,6 +64,10 @@ export default function AdminDashboardPage() {
     transactions,
     settings,
     procurementSummary,
+    messages,
+    unreadMessageCount,
+    updateMessageStatus,
+    deleteContactMessage,
     updateOrderStatus,
     updateOrderPaymentStatus,
     adjustOrderWeightAndBill,
@@ -92,6 +102,12 @@ export default function AdminDashboardPage() {
   const [orderSearch, setOrderSearch] = useState("");
   const [selectedInvoiceOrder, setSelectedInvoiceOrder] =
     useState<Order | null>(null);
+
+  // Messages Inbox State
+  const [messageSearch, setMessageSearch] = useState("");
+  const [messageStatusFilter, setMessageStatusFilter] = useState<string>("all");
+  const [selectedMessage, setSelectedMessage] = useState<ContactMessage | null>(null);
+  const [replyText, setReplyText] = useState("");
 
   // Scale Weight Adjustment Modal State (Step 1)
   const [scaleOrder, setScaleOrder] = useState<Order | null>(null);
@@ -195,6 +211,25 @@ export default function AdminDashboardPage() {
       return true;
     });
   }, [orders, orderStatusFilter, orderSearch]);
+
+  const filteredMessages = useMemo(() => {
+    return messages.filter((m) => {
+      if (messageStatusFilter !== "all" && m.status !== messageStatusFilter) {
+        return false;
+      }
+      if (messageSearch.trim()) {
+        const q = messageSearch.toLowerCase();
+        return (
+          m.name.toLowerCase().includes(q) ||
+          m.phone.toLowerCase().includes(q) ||
+          (m.email && m.email.toLowerCase().includes(q)) ||
+          m.subject.toLowerCase().includes(q) ||
+          m.message.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [messages, messageStatusFilter, messageSearch]);
 
   // Step 6: 1-Click CSV Export Helper (Courier Bulk Upload & Accounting)
   const downloadCsv = (filename: string, rows: string[][]) => {
@@ -576,6 +611,12 @@ export default function AdminDashboardPage() {
                 icon: CreditCard,
               },
               {
+                id: "messages",
+                label: `Messages & Helpdesk (${messages.length})`,
+                icon: MessageSquare,
+                badge: unreadMessageCount > 0 ? unreadMessageCount : null,
+              },
+              {
                 id: "settings",
                 label: "Delivery Fees & Config",
                 icon: Settings,
@@ -590,14 +631,21 @@ export default function AdminDashboardPage() {
                     setActiveTab(item.id as AdminTab);
                     if (item.id === "settings") setSettingsForm(settings);
                   }}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-xs sm:text-sm font-bold transition cursor-pointer text-left ${
+                  className={`flex items-center justify-between px-4 py-3 rounded-2xl text-xs sm:text-sm font-bold transition cursor-pointer text-left ${
                     active
                       ? "bg-amber-400 text-stone-950 shadow-md"
                       : "text-emerald-100/85 hover:bg-white/10"
                   }`}
                 >
-                  <IconComp className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{item.label}</span>
+                  <div className="flex items-center gap-3 truncate">
+                    <IconComp className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                  </div>
+                  {item.badge ? (
+                    <span className="ml-1.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white animate-pulse">
+                      {item.badge}
+                    </span>
+                  ) : null}
                 </button>
               );
             })}
@@ -1616,6 +1664,313 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
+        {/* TAB: CUSTOMER INQUIRIES & HELPDESK MESSAGES */}
+        {activeTab === "messages" && (
+          <div className="space-y-6">
+            {/* Header & Stats Banner */}
+            <div className="bg-white rounded-3xl border border-stone-200/90 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-[#0F3D2E]">
+                    কাস্টমার ইনবক্স ও অনুসন্ধান
+                  </span>
+                  {unreadMessageCount > 0 ? (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-rose-500 text-white">
+                      {unreadMessageCount}টি নতুন অপঠিত
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                      সব বার্তা পর্যালোচিত
+                    </span>
+                  )}
+                </div>
+                <h2 className="text-xl font-black text-stone-900">
+                  Customer Messages & Inquiries
+                </h2>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  ওয়েবসাইটের কন্টাক্ট পেজ থেকে আসা বার্তা, নদীর মাছ কাটিং ও বাল্ক অর্ডারের জিজ্ঞাসা।
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/contact"
+                  target="_blank"
+                  className="px-4 py-2.5 rounded-xl border border-stone-200 text-xs font-bold text-stone-700 hover:bg-stone-50 transition flex items-center gap-1.5"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>লাইভ কন্টাক্ট পেজ</span>
+                </Link>
+              </div>
+            </div>
+
+            {/* Quick Stats Pills */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-white p-4 rounded-2xl border border-stone-200/80">
+                <span className="text-[11px] font-bold text-stone-400 block uppercase">
+                  মোট বার্তা
+                </span>
+                <span className="text-2xl font-black text-stone-900 mt-1 block">
+                  {messages.length}
+                </span>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-amber-200/80 bg-amber-50/20">
+                <span className="text-[11px] font-bold text-amber-700 block uppercase">
+                  অপঠিত / অপেক্ষমাণ
+                </span>
+                <span className="text-2xl font-black text-amber-900 mt-1 block">
+                  {unreadMessageCount}
+                </span>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-emerald-200/80 bg-emerald-50/20">
+                <span className="text-[11px] font-bold text-emerald-700 block uppercase">
+                  উত্তর দেওয়া হয়েছে
+                </span>
+                <span className="text-2xl font-black text-emerald-900 mt-1 block">
+                  {messages.filter((m) => m.status === "replied").length}
+                </span>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-blue-200/80 bg-blue-50/20">
+                <span className="text-[11px] font-bold text-blue-700 block uppercase">
+                  পঠিত বার্তা
+                </span>
+                <span className="text-2xl font-black text-blue-900 mt-1 block">
+                  {messages.filter((m) => m.status === "read").length}
+                </span>
+              </div>
+            </div>
+
+            {/* Search & Status Filter Controls */}
+            <div className="bg-white rounded-3xl border border-stone-200/90 p-4 sm:p-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+              <div className="relative flex-1 max-w-md">
+                <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={messageSearch}
+                  onChange={(e) => setMessageSearch(e.target.value)}
+                  placeholder="নাম, ফোন, বিষয় বা মেসেজ দিয়ে খুঁজুন..."
+                  className="w-full pl-9 pr-4 py-2 rounded-xl bg-stone-50 border border-stone-200 text-xs focus:outline-none focus:border-[#0F3D2E]"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+                {[
+                  { id: "all", label: `সব (${messages.length})` },
+                  { id: "unread", label: `অপঠিত (${unreadMessageCount})` },
+                  {
+                    id: "read",
+                    label: `পঠিত (${
+                      messages.filter((m) => m.status === "read").length
+                    })`,
+                  },
+                  {
+                    id: "replied",
+                    label: `উত্তর দেওয়া (${
+                      messages.filter((m) => m.status === "replied").length
+                    })`,
+                  },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setMessageStatusFilter(f.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                      messageStatusFilter === f.id
+                        ? "bg-[#0F3D2E] text-white shadow-xs"
+                        : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Messages Table */}
+            <div className="bg-white rounded-3xl border border-stone-200/90 overflow-hidden shadow-xs">
+              {filteredMessages.length === 0 ? (
+                <div className="p-12 text-center text-stone-400">
+                  <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm font-bold text-stone-600">
+                    কোনো মেসেজ পাওয়া যায়নি
+                  </p>
+                  <p className="text-xs text-stone-400 mt-1">
+                    সার্চ বা ফিল্টার পরিবর্তন করে পুনরায় চেষ্টা করুন।
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-stone-50 border-b border-stone-200 text-stone-500 font-bold uppercase text-[10px] tracking-wider">
+                      <tr>
+                        <th className="py-3 px-4">তারিখ ও সময়</th>
+                        <th className="py-3 px-4">প্রেরক (নাম ও ফোন)</th>
+                        <th className="py-3 px-4">বিষয়</th>
+                        <th className="py-3 px-4">বার্তার বিবরণ</th>
+                        <th className="py-3 px-4">স্ট্যাটাস</th>
+                        <th className="py-3 px-4 text-right">অ্যাকশন</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-100 font-medium text-stone-800">
+                      {filteredMessages.map((msg) => {
+                        const cleanP = msg.phone.replace(/[^0-9]/g, "");
+                        return (
+                          <tr
+                            key={msg.id}
+                            className={`hover:bg-stone-50/80 transition ${
+                              msg.status === "unread"
+                                ? "bg-amber-50/20 font-semibold"
+                                : ""
+                            }`}
+                          >
+                            <td className="py-3.5 px-4 whitespace-nowrap text-stone-500 text-[11px]">
+                              {new Date(msg.createdAt).toLocaleDateString(
+                                "bn-BD",
+                                {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                }
+                              )}
+                              <span className="block text-[10px] text-stone-400">
+                                {new Date(msg.createdAt).toLocaleTimeString(
+                                  "en-US",
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  }
+                                )}
+                              </span>
+                            </td>
+
+                            <td className="py-3.5 px-4">
+                              <span className="font-bold text-stone-900 block">
+                                {msg.name}
+                              </span>
+                              <a
+                                href={`tel:${cleanP}`}
+                                className="text-emerald-700 font-mono text-[11px] hover:underline inline-flex items-center gap-1"
+                              >
+                                <Phone className="w-3 h-3 inline" />
+                                {msg.phone}
+                              </a>
+                              {msg.email && (
+                                <span className="block text-[10px] text-stone-400">
+                                  {msg.email}
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-3.5 px-4">
+                              <span className="inline-block px-2 py-0.5 rounded-md text-[11px] font-semibold bg-stone-100 text-stone-700">
+                                {msg.subject}
+                              </span>
+                            </td>
+
+                            <td className="py-3.5 px-4 max-w-xs sm:max-w-md">
+                              <p className="line-clamp-2 text-stone-700 text-xs">
+                                {msg.message}
+                              </p>
+                              {msg.adminReply && (
+                                <p className="text-[11px] text-emerald-800 mt-1 line-clamp-1 italic bg-emerald-50 px-2 py-0.5 rounded">
+                                  রিপ্লাই: {msg.adminReply}
+                                </p>
+                              )}
+                            </td>
+
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              {msg.status === "unread" && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                                  নতুন অপঠিত
+                                </span>
+                              )}
+                              {msg.status === "read" && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800">
+                                  পঠিত
+                                </span>
+                              )}
+                              {msg.status === "replied" && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
+                                  <Check className="w-3 h-3" />
+                                  উত্তর সম্পন্ন
+                                </span>
+                              )}
+                              {msg.status === "archived" && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-stone-100 text-stone-600">
+                                  আর্কাইভ
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                              <div className="inline-flex items-center gap-1.5">
+                                {/* 1-Click WhatsApp Reply */}
+                                <a
+                                  href={`https://wa.me/${cleanP}?text=${encodeURIComponent(
+                                    `আসসালামু আলাইকুম ${msg.name},\nসাধ্যের বাজার কাস্টমার কেয়ার থেকে আপনার বার্তার প্রেক্ষিতে জানাচ্ছি...`
+                                  )}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition"
+                                  title="WhatsApp-এ রিপ্লাই দিন"
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5" />
+                                </a>
+
+                                {/* Direct Call */}
+                                <a
+                                  href={`tel:${cleanP}`}
+                                  className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition"
+                                  title="সরাসরি কল দিন"
+                                >
+                                  <Phone className="w-3.5 h-3.5" />
+                                </a>
+
+                                {/* View & Reply Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedMessage(msg);
+                                    setReplyText(msg.adminReply || "");
+                                    if (msg.status === "unread") {
+                                      updateMessageStatus(msg.id, "read");
+                                    }
+                                  }}
+                                  className="px-2.5 py-1.5 rounded-lg bg-[#0F3D2E] text-white hover:bg-emerald-950 font-bold text-[11px] transition cursor-pointer"
+                                >
+                                  পড়ুন
+                                </button>
+
+                                {/* Delete Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (
+                                      confirm(
+                                        `আপনি কি নিশ্চিত যে "${msg.name}" এর বার্তাটি মুছে ফেলতে চান?`
+                                      )
+                                    ) {
+                                      deleteContactMessage(msg.id);
+                                    }
+                                  }}
+                                  className="p-1.5 rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer"
+                                  title="বার্তা ডিলিট করুন"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* TAB 7: DYNAMIC INSIDE / OUTSIDE DHAKA DELIVERY FEES & SETTINGS */}
         {activeTab === "settings" && (
           <form
@@ -2548,6 +2903,162 @@ export default function AdminDashboardPage() {
               >
                 <Printer className="w-4 h-4" /> Print Label
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: MESSAGE DETAIL & REPLIER */}
+      {selectedMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/65 backdrop-blur-xs no-print">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-[#0F3D2E]" />
+                <h3 className="text-base font-extrabold text-stone-900">
+                  গ্রাহক বার্তা ও ফলো-আপ
+                </h3>
+              </div>
+              <button
+                onClick={() => setSelectedMessage(null)}
+                className="p-1 rounded-full hover:bg-stone-100 text-stone-500 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Sender Details Box */}
+            <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200/80 space-y-2 text-xs">
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-stone-400 block text-[10px] uppercase font-bold">
+                    প্রেরকের নাম
+                  </span>
+                  <span className="text-sm font-extrabold text-stone-900">
+                    {selectedMessage.name}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-stone-400 block text-[10px] uppercase font-bold">
+                    তারিখ ও সময়
+                  </span>
+                  <span className="text-stone-600 font-mono text-[11px]">
+                    {new Date(selectedMessage.createdAt).toLocaleString("bn-BD")}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-stone-200/60">
+                <div>
+                  <span className="text-stone-400 block text-[10px] uppercase font-bold">
+                    মোবাইল নম্বর
+                  </span>
+                  <a
+                    href={`tel:${selectedMessage.phone.replace(/[^0-9]/g, "")}`}
+                    className="text-emerald-700 font-mono font-bold hover:underline inline-flex items-center gap-1"
+                  >
+                    <Phone className="w-3 h-3 inline" />
+                    {selectedMessage.phone}
+                  </a>
+                </div>
+                <div>
+                  <span className="text-stone-400 block text-[10px] uppercase font-bold">
+                    ইমেইল
+                  </span>
+                  <span className="text-stone-700 font-mono">
+                    {selectedMessage.email || "উল্লেখ নেই"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Inquiry Content */}
+            <div>
+              <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider block mb-1">
+                বার্তার বিষয়: <span className="text-stone-800">{selectedMessage.subject}</span>
+              </span>
+              <div className="p-4 rounded-2xl bg-amber-50/40 border border-amber-200/60 text-xs text-stone-800 leading-relaxed whitespace-pre-wrap">
+                {selectedMessage.message}
+              </div>
+            </div>
+
+            {/* Quick Action Channels */}
+            <div className="flex flex-wrap gap-2 pt-1">
+              <a
+                href={`https://wa.me/${selectedMessage.phone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
+                  `আসসালামু আলাইকুম ${selectedMessage.name},\nসাধ্যের বাজার কাস্টমার কেয়ার থেকে আপনার বার্তার প্রেক্ষিতে জানাচ্ছি...`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 py-2.5 px-3 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>WhatsApp-এ সরাসরি রিপ্লাই</span>
+              </a>
+
+              <a
+                href={`tel:${selectedMessage.phone.replace(/[^0-9]/g, "")}`}
+                className="py-2.5 px-3 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
+              >
+                <Phone className="w-3.5 h-3.5" />
+                <span>সরাসরি কল</span>
+              </a>
+            </div>
+
+            {/* Admin Reply & Internal Notes */}
+            <div className="space-y-2 pt-2 border-t border-stone-200">
+              <label className="block text-xs font-bold text-stone-700">
+                অ্যাডমিন নোট / দেওয়া উত্তরের বিবরণ (Internal Log & Status)
+              </label>
+              <textarea
+                rows={3}
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder="গ্রাহকের সাথে ফোনে বা হোয়াটসঅ্যাপে কী কথা হয়েছে বা উত্তর কী দেওয়া হয়েছে তা লিখে রাখুন..."
+                className="w-full px-3 py-2 rounded-xl bg-stone-50 border border-stone-200 text-xs focus:outline-none focus:border-[#0F3D2E] resize-none"
+              />
+              <div className="flex justify-between items-center gap-2 pt-1">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await updateMessageStatus(
+                        selectedMessage.id,
+                        "replied",
+                        replyText
+                      );
+                      setSelectedMessage(null);
+                    }}
+                    className="px-4 py-2 bg-[#0F3D2E] text-white rounded-xl text-xs font-bold hover:bg-emerald-950 transition cursor-pointer"
+                  >
+                    উত্তর সম্পন্ন মার্ক করুন
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await updateMessageStatus(selectedMessage.id, "unread");
+                      setSelectedMessage(null);
+                    }}
+                    className="px-3 py-2 bg-stone-100 text-stone-700 rounded-xl text-xs font-semibold hover:bg-stone-200 transition cursor-pointer"
+                  >
+                    অপঠিত রাখুন
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (confirm("বার্তাটি সম্পূর্ণরূপে মুছে ফেলতে চান?")) {
+                      await deleteContactMessage(selectedMessage.id);
+                      setSelectedMessage(null);
+                    }
+                  }}
+                  className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition cursor-pointer"
+                  title="ডিলিট করুন"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>

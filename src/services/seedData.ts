@@ -1,5 +1,6 @@
 import {
   Category,
+  ContactMessage,
   Coupon,
   Order,
   PaymentTransaction,
@@ -1523,5 +1524,30 @@ export const INITIAL_REVIEWS: ProductReview[] = [
       "Thick caramelized malai layer on top and authentic earthen clay sora straight from Bogura. My whole family loved it!",
     isVerifiedPurchase: true,
     createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+  },
+];
+
+export const INITIAL_CONTACT_MESSAGES: ContactMessage[] = [
+  {
+    id: "msg-1",
+    name: "Mahmudul Hasan",
+    phone: "01712345678",
+    email: "mahmudul.hasan@gmail.com",
+    subject: "যমুনা নদীর বড় বোয়াল ও রুই মাছের বাল্ক অর্ডার (পারিবারিক অনুষ্ঠান)",
+    message: "আসসালামু আলাইকুম, আগামী শুক্রবার আমাদের একটি পারিবারিক গেট-টুগেদার আছে। ৫-৬ কেজি ওজনের যমুনা নদীর বড় তাজা বোয়াল ও রুই মাছ একসাথে প্রি-অর্ডার করতে চাই। সকালের মধ্যে ধানমন্ডিতে হোম ডেলিভারি নিশ্চিত করা যাবে কি?",
+    status: "unread",
+    createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+  },
+  {
+    id: "msg-2",
+    name: "Dr. Rehana Parveen",
+    phone: "01819876543",
+    email: "rehana.p@yahoo.com",
+    subject: "খাঁটি গাওয়া ঘি ও বগুড়ার দই নিয়মিত সাপ্লাই",
+    message: "আপনাদের সিরাজগঞ্জের গাওয়া ঘি ও বগুড়ার শাহী দই প্রতি মাসে নিয়মিত ১ কেজি করে সংগ্রহ করতে চাই। মানসম্মত প্যাকিং ও নিয়মিত ডেলিভারির কোনো মাসিক সুবিধা আছে কি?",
+    status: "replied",
+    adminReply: "আসসালামু আলাইকুম আপা, ধন্যবাদ আপনার আগ্রহের জন্য। আমাদের প্রতি শুক্রবার ও মঙ্গলবার ফ্রেশ ব্যাচ ডেলিভারি হয়। আপনি অর্ডার দিলে প্রতি মাসে নিশ্চিত ফ্রেশ ব্যাচ পৌঁছে দেব ইনশাআল্লাহ।",
+    repliedAt: new Date(Date.now() - 3600000 * 12).toISOString(),
+    createdAt: new Date(Date.now() - 86400000).toISOString(),
   },
 ];

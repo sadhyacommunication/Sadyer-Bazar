@@ -235,6 +235,16 @@ export default function Navbar() {
               Track Order
             </Link>
             <Link
+              href="/contact"
+              className={`px-3.5 py-2 rounded-full text-sm font-semibold transition ${
+                pathname === "/contact"
+                  ? "bg-[#0F3D2E] text-white"
+                  : "text-stone-700 hover:bg-stone-200/60"
+              }`}
+            >
+              Contact Us
+            </Link>
+            <Link
               href="/admin"
               className="px-3 py-2 rounded-full text-xs font-semibold text-stone-600 hover:text-[#0F3D2E] hover:bg-stone-200/60 flex items-center gap-1 transition"
               title="Merchant Admin Dashboard"
@@ -319,6 +329,13 @@ export default function Navbar() {
                 className="px-3.5 py-2.5 rounded-xl bg-emerald-50 text-[#0F3D2E] font-semibold text-sm flex items-center gap-1.5"
               >
                 <PackageSearch className="w-4 h-4" /> Track Order
+              </Link>
+              <Link
+                href="/contact"
+                onClick={() => setMobileMenuOpen(false)}
+                className="col-span-2 px-3.5 py-2.5 rounded-xl bg-stone-100 text-stone-800 font-semibold text-sm flex items-center justify-center gap-1.5"
+              >
+                যোগাযোগ ও হেল্পডেস্ক (Contact Us)
               </Link>
               <Link
                 href="/admin"

@@ -217,3 +217,18 @@ export interface ProcurementSummaryItem {
   totalQuantity: number;
   orderCount: number;
 }
+
+export type ContactMessageStatus = "unread" | "read" | "replied" | "archived";
+
+export interface ContactMessage {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  subject: string;
+  message: string;
+  status: ContactMessageStatus;
+  adminReply?: string;
+  repliedAt?: string;
+  createdAt: string;
+}

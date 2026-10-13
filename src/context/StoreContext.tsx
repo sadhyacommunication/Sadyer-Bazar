@@ -10,6 +10,8 @@ import React, {
 import {
   CartItem,
   Category,
+  ContactMessage,
+  ContactMessageStatus,
   Coupon,
   Order,
   OrderStatus,
@@ -23,6 +25,7 @@ import {
 } from "@/types";
 import {
   INITIAL_CATEGORIES,
+  INITIAL_CONTACT_MESSAGES,
   INITIAL_COUPONS,
   INITIAL_ORDERS,
   INITIAL_PRODUCTS,
@@ -31,6 +34,7 @@ import {
   INITIAL_TRANSACTIONS,
 } from "@/services/seedData";
 import {
+  deleteContactMessageFromSupabase,
   deleteCouponFromSupabase,
   deleteProductFromSupabase,
   fetchLiveStoreFromSupabase,
@@ -38,6 +42,7 @@ import {
   seedFullDatabaseToSupabase,
   subscribeToRealtimeStore,
   SupabaseConnectionState,
+  upsertContactMessageToSupabase,
   upsertCouponToSupabase,
   upsertOrderToSupabase,
   upsertProductToSupabase,
@@ -115,6 +120,19 @@ interface StoreContextValue {
   // Admin Settings Actions (Inside/Outside Dhaka Delivery Fees, etc.)
   updateSiteSettings: (nextSettings: SiteSettings) => Promise<void>;
 
+  // Customer Helpdesk & Inquiries
+  messages: ContactMessage[];
+  unreadMessageCount: number;
+  addContactMessage: (
+    input: Omit<ContactMessage, "id" | "status" | "createdAt">
+  ) => Promise<ContactMessage>;
+  updateMessageStatus: (
+    id: string,
+    status: ContactMessageStatus,
+    adminReply?: string
+  ) => Promise<void>;
+  deleteContactMessage: (id: string) => Promise<void>;
+
   // Batch Procurement Summary
   procurementSummary: ProcurementSummaryItem[];
 }
@@ -129,6 +147,7 @@ const STORAGE_KEYS = {
   ORDERS: "sb_orders_v2",
   TRANSACTIONS: "sb_transactions_v2",
   SETTINGS: "sb_settings_v2",
+  CONTACT_MESSAGES: "sb_contact_messages_v1",
 };
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
@@ -140,6 +159,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [transactions, setTransactions] =
     useState<PaymentTransaction[]>(INITIAL_TRANSACTIONS);
   const [settings, setSettings] = useState<SiteSettings>(INITIAL_SITE_SETTINGS);
+  const [messages, setMessages] =
+    useState<ContactMessage[]>(INITIAL_CONTACT_MESSAGES);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -183,6 +204,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
       const savedSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
       if (savedSettings) setSettings(JSON.parse(savedSettings));
+
+      const savedMessages = localStorage.getItem(STORAGE_KEYS.CONTACT_MESSAGES);
+      if (savedMessages) setMessages(JSON.parse(savedMessages));
     } catch {
       // Ignore storage parse issues
     }
@@ -200,6 +224,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           if (live.transactions && live.transactions.length > 0)
             setTransactions(live.transactions);
           if (live.reviews && live.reviews.length > 0) setReviews(live.reviews);
+          if (live.messages && live.messages.length > 0)
+            setMessages(live.messages);
         }
       });
     };
@@ -225,7 +251,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       coupons,
       reviews,
       transactions,
-      settings
+      settings,
+      messages
     );
     if (res.ok) {
       setSupabaseStatus("connected_live");
@@ -287,6 +314,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
     } catch {}
   }, [settings, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      localStorage.setItem(
+        STORAGE_KEYS.CONTACT_MESSAGES,
+        JSON.stringify(messages)
+      );
+    } catch {}
+  }, [messages, hydrated]);
 
   const addToCart = (
     product: Product,
@@ -599,6 +636,57 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     showToast("Delivery charges & site settings saved to Supabase!");
   };
 
+  const unreadMessageCount = useMemo(() => {
+    return messages.filter((m) => m.status === "unread").length;
+  }, [messages]);
+
+  const addContactMessage = async (
+    input: Omit<ContactMessage, "id" | "status" | "createdAt">
+  ): Promise<ContactMessage> => {
+    const newMsg: ContactMessage = {
+      ...input,
+      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      status: "unread",
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [newMsg, ...prev]);
+    showToast("আপনার বার্তা সফলভাবে গৃহীত হয়েছে! শীঘ্রই আমাদের প্রতিনিধি যোগাযোগ করবেন।");
+    await upsertContactMessageToSupabase(newMsg);
+    return newMsg;
+  };
+
+  const updateMessageStatus = async (
+    id: string,
+    status: ContactMessageStatus,
+    adminReply?: string
+  ) => {
+    let target: ContactMessage | null = null;
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id === id) {
+          const updated: ContactMessage = {
+            ...m,
+            status,
+            ...(adminReply !== undefined ? { adminReply } : {}),
+            repliedAt: status === "replied" ? new Date().toISOString() : m.repliedAt,
+          };
+          target = updated;
+          return updated;
+        }
+        return m;
+      })
+    );
+    if (target) {
+      await upsertContactMessageToSupabase(target);
+    }
+  };
+
+  const deleteContactMessage = async (id: string) => {
+    setMessages((prev) => prev.filter((m) => m.id !== id));
+    await deleteContactMessageFromSupabase(id);
+    showToast("বার্তা তালিকা থেকে মুছে ফেলা হয়েছে।");
+  };
+
   const procurementSummary = useMemo<ProcurementSummaryItem[]>(() => {
     const map = new Map<string, ProcurementSummaryItem>();
     const activeOrders = orders.filter(
@@ -672,6 +760,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         deleteCoupon,
         addProductReview,
         updateSiteSettings,
+        messages,
+        unreadMessageCount,
+        addContactMessage,
+        updateMessageStatus,
+        deleteContactMessage,
         procurementSummary,
       }}
     >

@@ -1,5 +1,6 @@
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
+  ContactMessage,
   Coupon,
   Order,
   OrderItem,
@@ -10,6 +11,7 @@ import {
 } from "@/types";
 import {
   INITIAL_CATEGORIES,
+  INITIAL_CONTACT_MESSAGES,
   INITIAL_COUPONS,
   INITIAL_ORDERS,
   INITIAL_PRODUCTS,
@@ -198,6 +200,21 @@ function mapTxFromRow(row: Record<string, unknown>): PaymentTransaction {
     status: (row.status as PaymentTransaction["status"]) || "validated",
     senderPhone: row.sender_phone ? String(row.sender_phone) : undefined,
     verifiedAt: row.verified_at ? String(row.verified_at) : undefined,
+    createdAt: String(row.created_at || new Date().toISOString()),
+  };
+}
+
+function mapContactMessageFromRow(row: Record<string, unknown>): ContactMessage {
+  return {
+    id: String(row.id),
+    name: String(row.name || ""),
+    phone: String(row.phone || ""),
+    email: row.email ? String(row.email) : undefined,
+    subject: String(row.subject || ""),
+    message: String(row.message || ""),
+    status: (row.status as ContactMessage["status"]) || "unread",
+    adminReply: row.admin_reply ? String(row.admin_reply) : undefined,
+    repliedAt: row.replied_at ? String(row.replied_at) : undefined,
     createdAt: String(row.created_at || new Date().toISOString()),
   };
 }
@@ -488,13 +505,51 @@ export async function insertReviewToSupabase(
   return !error;
 }
 
+export async function upsertContactMessageToSupabase(
+  msg: ContactMessage
+): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from("contact_messages").upsert({
+      id: msg.id,
+      name: msg.name,
+      phone: msg.phone,
+      email: msg.email || null,
+      subject: msg.subject,
+      message: msg.message,
+      status: msg.status,
+      admin_reply: msg.adminReply || null,
+      replied_at: msg.repliedAt || null,
+      created_at: msg.createdAt,
+    });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteContactMessageFromSupabase(
+  id: string
+): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from("contact_messages").delete().eq("id", id);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 export async function seedFullDatabaseToSupabase(
   currentProducts: Product[] = INITIAL_PRODUCTS,
   currentOrders: Order[] = INITIAL_ORDERS,
   currentCoupons: Coupon[] = INITIAL_COUPONS,
   currentReviews: ProductReview[] = INITIAL_REVIEWS,
   currentTransactions: PaymentTransaction[] = INITIAL_TRANSACTIONS,
-  currentSettings: SiteSettings = INITIAL_SITE_SETTINGS
+  currentSettings: SiteSettings = INITIAL_SITE_SETTINGS,
+  currentMessages: ContactMessage[] = INITIAL_CONTACT_MESSAGES
 ): Promise<{ ok: boolean; message: string }> {
   const supabase = getSupabaseClient();
   if (!supabase) {
@@ -578,6 +633,11 @@ export async function seedFullDatabaseToSupabase(
     await insertReviewToSupabase(rev);
   }
 
+  // 7. Upsert contact inquiries
+  for (const msg of currentMessages) {
+    await upsertContactMessageToSupabase(msg);
+  }
+
   return {
     ok: true,
     message: `Synced ${currentProducts.length} products, ${currentOrders.length} orders, ${currentCoupons.length} coupons & settings to Supabase!`,
@@ -592,6 +652,7 @@ export async function fetchLiveStoreFromSupabase(): Promise<{
   orders?: Order[];
   transactions?: PaymentTransaction[];
   reviews?: ProductReview[];
+  messages?: ContactMessage[];
 }> {
   const supabase = getSupabaseClient();
   if (!supabase) {
@@ -615,7 +676,7 @@ export async function fetchLiveStoreFromSupabase(): Promise<{
       return { status: "offline" };
     }
 
-    const [prodRes, cpnRes, ordRes, txRes, revRes] = await Promise.all([
+    const [prodRes, cpnRes, ordRes, txRes, revRes, msgRes] = await Promise.all([
       supabase
         .from("products")
         .select("*")
@@ -633,6 +694,10 @@ export async function fetchLiveStoreFromSupabase(): Promise<{
         .from("product_reviews")
         .select("*")
         .order("created_at", { ascending: false }),
+      supabase
+        .from("contact_messages")
+        .select("*")
+        .order("created_at", { ascending: false }),
     ]);
 
     // If tables exist in Supabase but products table is completely empty, auto-seed initial catalog!
@@ -646,6 +711,7 @@ export async function fetchLiveStoreFromSupabase(): Promise<{
         orders: INITIAL_ORDERS,
         transactions: INITIAL_TRANSACTIONS,
         reviews: INITIAL_REVIEWS,
+        messages: INITIAL_CONTACT_MESSAGES,
       };
     }
 
@@ -685,6 +751,11 @@ export async function fetchLiveStoreFromSupabase(): Promise<{
         : undefined,
       reviews: revRes.data
         ? revRes.data.map((r) => mapReviewFromRow(r as Record<string, unknown>))
+        : undefined,
+      messages: msgRes.data
+        ? msgRes.data.map((r) =>
+            mapContactMessageFromRow(r as Record<string, unknown>)
+          )
         : undefined,
     };
   } catch {
@@ -743,6 +814,11 @@ export function subscribeToRealtimeStore(onUpdate: () => void): () => void {
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "product_reviews" },
+      () => onUpdate()
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "contact_messages" },
       () => onUpdate()
     )
     .subscribe();

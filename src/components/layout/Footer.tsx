@@ -199,6 +199,14 @@ export default function Footer() {
               </li>
               <li>
                 <Link
+                  href="/contact"
+                  className="hover:text-amber-300 transition"
+                >
+                  Contact & Support (যোগাযোগ ও সহায়তা)
+                </Link>
+              </li>
+              <li>
+                <Link
                   href="/checkout"
                   className="hover:text-amber-300 transition"
                 >

@@ -84,5 +84,18 @@ export const updateSettingsSchema = z.object({
   codEnabled: z.boolean(),
 });
 
+export const createContactMessageSchema = z.object({
+  name: z.string().trim().min(2, "Name must be at least 2 characters").max(100),
+  phone: z
+    .string()
+    .trim()
+    .regex(/^(\+8801|8801|01)[3-9]\d{8}$/, "Valid 11-digit Bangladeshi mobile number required"),
+  email: z.string().trim().email("Invalid email address").optional().or(z.literal("")),
+  subject: z.string().trim().min(2, "Subject is required").max(150),
+  message: z.string().trim().min(5, "Message must be at least 5 characters").max(2000),
+  websiteHoneypot: z.string().max(0, "Bot detected").optional().default(""),
+});
+
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
+export type CreateContactMessageInput = z.infer<typeof createContactMessageSchema>;

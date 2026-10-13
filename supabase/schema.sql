@@ -190,6 +190,22 @@ CREATE TABLE IF NOT EXISTS public.product_reviews (
 );
 
 -- ============================================================================
+-- 10. CONTACT INQUIRIES & HELPDESK MESSAGES
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.contact_messages (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  email TEXT,
+  subject TEXT NOT NULL,
+  message TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'unread' CHECK (status IN ('unread', 'read', 'replied', 'archived')),
+  admin_reply TEXT,
+  replied_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+-- ============================================================================
 -- PERFORMANCE INDEXES
 -- ============================================================================
 CREATE INDEX IF NOT EXISTS idx_products_slug ON public.products(slug);
@@ -200,6 +216,7 @@ CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(order_status);
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON public.order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_coupons_code ON public.coupons(code);
 CREATE INDEX IF NOT EXISTS idx_reviews_product ON public.product_reviews(product_id);
+CREATE INDEX IF NOT EXISTS idx_contact_messages_status ON public.contact_messages(status);
 
 -- ============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES FOR STOREFRONT & ADMIN SYNC
@@ -213,6 +230,7 @@ ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.order_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payment_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.product_reviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.contact_messages ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Allow all operations on site_settings" ON public.site_settings;
 CREATE POLICY "Allow all operations on site_settings" ON public.site_settings FOR ALL USING (true) WITH CHECK (true);
@@ -240,6 +258,9 @@ CREATE POLICY "Allow all operations on payment_transactions" ON public.payment_t
 
 DROP POLICY IF EXISTS "Allow all operations on product_reviews" ON public.product_reviews;
 CREATE POLICY "Allow all operations on product_reviews" ON public.product_reviews FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all operations on contact_messages" ON public.contact_messages;
+CREATE POLICY "Allow all operations on contact_messages" ON public.contact_messages FOR ALL USING (true) WITH CHECK (true);
 
 -- Initialize Default Site Settings
 INSERT INTO public.site_settings (id, inside_dhaka_fee, outside_dhaka_fee, free_delivery_threshold, preorder_advance_percent)
