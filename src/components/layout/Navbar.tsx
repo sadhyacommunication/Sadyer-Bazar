@@ -235,6 +235,16 @@ export default function Navbar() {
               Track Order
             </Link>
             <Link
+              href="/about"
+              className={`px-3.5 py-2 rounded-full text-sm font-semibold transition ${
+                pathname === "/about"
+                  ? "bg-[#0F3D2E] text-white"
+                  : "text-stone-700 hover:bg-stone-200/60"
+              }`}
+            >
+              About Us
+            </Link>
+            <Link
               href="/contact"
               className={`px-3.5 py-2 rounded-full text-sm font-semibold transition ${
                 pathname === "/contact"
@@ -329,6 +339,13 @@ export default function Navbar() {
                 className="px-3.5 py-2.5 rounded-xl bg-emerald-50 text-[#0F3D2E] font-semibold text-sm flex items-center gap-1.5"
               >
                 <PackageSearch className="w-4 h-4" /> Track Order
+              </Link>
+              <Link
+                href="/about"
+                onClick={() => setMobileMenuOpen(false)}
+                className="col-span-2 px-3.5 py-2.5 rounded-xl bg-stone-100 text-stone-800 font-semibold text-sm flex items-center justify-center gap-1.5"
+              >
+                আমাদের সম্পর্কে (About Us)
               </Link>
               <Link
                 href="/contact"

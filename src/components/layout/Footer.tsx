@@ -199,6 +199,14 @@ export default function Footer() {
               </li>
               <li>
                 <Link
+                  href="/about"
+                  className="hover:text-amber-300 transition"
+                >
+                  About Our Story (আমাদের গল্প ও পরিচয়)
+                </Link>
+              </li>
+              <li>
+                <Link
                   href="/contact"
                   className="hover:text-amber-300 transition"
                 >
