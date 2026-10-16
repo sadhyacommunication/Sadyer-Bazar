@@ -592,34 +592,34 @@ export default function CheckoutPage() {
               Select Payment Method
             </h2>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
               <button
                 type="button"
                 onClick={() => {
                   setPaymentMethod("bkash");
                   if (paymentPlan === "cod") setPaymentPlan("full");
                 }}
-                className={`p-4 rounded-2xl border-2 text-left transition cursor-pointer space-y-1.5 ${
+                className={`p-2.5 sm:p-4 rounded-2xl border-2 text-left transition cursor-pointer space-y-1 sm:space-y-1.5 ${
                   paymentMethod === "bkash"
                     ? "border-pink-600 bg-pink-50/60 shadow-xs"
                     : "border-stone-200 hover:border-stone-300"
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="px-2 py-0.5 rounded-md bg-[#E2136E] text-white text-[10px] font-extrabold uppercase">
+                  <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-[#E2136E] text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
                     {settings.bkashAccountType === "merchant"
-                      ? "Merchant Pay"
+                      ? "Merchant"
                       : "Send Money"}
                   </span>
-                  <Smartphone className="w-4 h-4 text-[#E2136E]" />
+                  <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#E2136E]" />
                 </div>
                 <p className="text-xs font-bold text-stone-900">
                   bKash (বিকাশ)
                 </p>
-                <p className="text-[11px] text-stone-600 font-mono">
+                <p className="text-[10px] sm:text-[11px] text-stone-600 font-mono truncate">
                   {settings.bkashMerchantNumber || "01713-477780"}
                 </p>
-                <p className="text-[10px] text-stone-400">
+                <p className="text-[9px] sm:text-[10px] text-stone-400 truncate">
                   ইনস্ট্যান্ট TrxID ভেরিফিকেশন
                 </p>
               </button>
@@ -630,27 +630,27 @@ export default function CheckoutPage() {
                   setPaymentMethod("nagad");
                   if (paymentPlan === "cod") setPaymentPlan("full");
                 }}
-                className={`p-4 rounded-2xl border-2 text-left transition cursor-pointer space-y-1.5 ${
+                className={`p-2.5 sm:p-4 rounded-2xl border-2 text-left transition cursor-pointer space-y-1 sm:space-y-1.5 ${
                   paymentMethod === "nagad"
                     ? "border-orange-500 bg-orange-50/60 shadow-xs"
                     : "border-stone-200 hover:border-stone-300"
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="px-2 py-0.5 rounded-md bg-[#F7931E] text-white text-[10px] font-extrabold uppercase">
+                  <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-[#F7931E] text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
                     {settings.nagadAccountType === "merchant"
-                      ? "Merchant Pay"
+                      ? "Merchant"
                       : "Send Money"}
                   </span>
-                  <Smartphone className="w-4 h-4 text-[#F7931E]" />
+                  <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F7931E]" />
                 </div>
                 <p className="text-xs font-bold text-stone-900">
                   Nagad (নগদ)
                 </p>
-                <p className="text-[11px] text-stone-600 font-mono">
+                <p className="text-[10px] sm:text-[11px] text-stone-600 font-mono truncate">
                   {settings.nagadNumber || "01713-477780"}
                 </p>
-                <p className="text-[10px] text-stone-400">
+                <p className="text-[9px] sm:text-[10px] text-stone-400 truncate">
                   ইনস্ট্যান্ট TrxID ভেরিফিকেশন
                 </p>
               </button>
@@ -661,26 +661,26 @@ export default function CheckoutPage() {
                   setPaymentMethod("sslcommerz");
                   if (paymentPlan === "cod") setPaymentPlan("full");
                 }}
-                className={`p-4 rounded-2xl border-2 text-left transition cursor-pointer space-y-1.5 ${
+                className={`p-2.5 sm:p-4 rounded-2xl border-2 text-left transition cursor-pointer space-y-1 sm:space-y-1.5 ${
                   paymentMethod === "sslcommerz"
                     ? "border-blue-600 bg-blue-50/60 shadow-xs"
                     : "border-stone-200 hover:border-stone-300"
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="px-2 py-0.5 rounded-md bg-[#1A4B8C] text-white text-[10px] font-extrabold uppercase">
-                    Gateway
+                  <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-[#1A4B8C] text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
+                    Cards
                   </span>
-                  <CreditCard className="w-4 h-4 text-[#1A4B8C]" />
+                  <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#1A4B8C]" />
                 </div>
                 <p className="text-xs font-bold text-stone-900">
                   SSLCommerz
                 </p>
-                <p className="text-[11px] text-stone-500">
+                <p className="text-[10px] sm:text-[11px] text-stone-500 truncate">
                   Visa, Master & Cards
                 </p>
-                <p className="text-[10px] text-stone-400">
-                  অল-ইন-ওয়ান অনলাইন গেটওয়ে
+                <p className="text-[9px] sm:text-[10px] text-stone-400 truncate">
+                  অনলাইন গেটওয়ে
                 </p>
               </button>
 
@@ -690,26 +690,26 @@ export default function CheckoutPage() {
                   setPaymentMethod("cod");
                   setPaymentPlan("cod");
                 }}
-                className={`p-4 rounded-2xl border-2 text-left transition cursor-pointer space-y-1.5 ${
+                className={`p-2.5 sm:p-4 rounded-2xl border-2 text-left transition cursor-pointer space-y-1 sm:space-y-1.5 ${
                   paymentMethod === "cod"
                     ? "border-[#0F3D2E] bg-emerald-50/60 shadow-xs"
                     : "border-stone-200 hover:border-stone-300"
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="px-2 py-0.5 rounded-md bg-[#0F3D2E] text-white text-[10px] font-extrabold uppercase">
+                  <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-[#0F3D2E] text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
                     COD
                   </span>
-                  <Banknote className="w-4 h-4 text-[#0F3D2E]" />
+                  <Banknote className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#0F3D2E]" />
                 </div>
                 <p className="text-xs font-bold text-stone-900">
                   Cash on Delivery
                 </p>
-                <p className="text-[11px] text-stone-500">
+                <p className="text-[10px] sm:text-[11px] text-stone-500 truncate">
                   ডেলিভারিতে ক্যাশ
                 </p>
-                <p className="text-[10px] text-stone-400">
-                  পণ্য বুঝে পেয়ে মূল্য দিন
+                <p className="text-[9px] sm:text-[10px] text-stone-400 truncate">
+                  পণ্য বুঝে পেয়ে মূল্য
                 </p>
               </button>
             </div>

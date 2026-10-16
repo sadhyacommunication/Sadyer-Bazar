@@ -99,28 +99,28 @@ export default function Navbar() {
 
       {/* Main Sticky Glass Header */}
       <header className="sticky top-0 z-40 bg-[#FAF8F5]/95 backdrop-blur-md border-b border-stone-200/80 shadow-xs no-print">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-3 sm:gap-4">
           {/* Brand Logo (Matches the exact সাধ্যের বাজার circular logo identity) */}
-          <Link href="/" className="flex items-center gap-3 group shrink-0">
-            <div className="w-12 h-12 rounded-full bg-white border-2 border-[#0F3D2E] shadow-xs flex flex-col items-center justify-center relative overflow-hidden group-hover:scale-105 transition-transform">
-              <Leaf className="w-3.5 h-3.5 text-emerald-600 -mb-0.5" />
-              <span className="text-[11px] font-extrabold text-[#0F3D2E] leading-none tracking-tight">
+          <Link href="/" className="flex items-center gap-2.5 sm:gap-3 group shrink-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white border-2 border-[#0F3D2E] shadow-xs flex flex-col items-center justify-center relative overflow-hidden group-hover:scale-105 transition-transform">
+              <Leaf className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600 -mb-0.5" />
+              <span className="text-[9px] sm:text-[11px] font-extrabold text-[#0F3D2E] leading-none tracking-tight">
                 সাধ্যের
               </span>
-              <span className="text-[10px] font-bold text-[#C83E2B] leading-tight">
+              <span className="text-[8px] sm:text-[10px] font-bold text-[#C83E2B] leading-tight">
                 বাজার
               </span>
             </div>
             <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xl sm:text-2xl font-extrabold tracking-tight text-[#0F3D2E]">
+              <div className="flex items-center gap-1 sm:gap-1.5">
+                <span className="text-lg sm:text-2xl font-extrabold tracking-tight text-[#0F3D2E]">
                   Sadyer
                 </span>
-                <span className="text-xl sm:text-2xl font-extrabold tracking-tight text-[#C83E2B]">
+                <span className="text-lg sm:text-2xl font-extrabold tracking-tight text-[#C83E2B]">
                   Bazar
                 </span>
               </div>
-              <p className="text-[11px] text-stone-500 font-medium tracking-wide">
+              <p className="text-[10px] sm:text-[11px] text-stone-500 font-medium tracking-wide leading-none">
                 Pure Jamuna Fish & Organic Food
               </p>
             </div>

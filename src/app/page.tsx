@@ -207,7 +207,7 @@ export default function HomePage() {
           </div>
 
           {/* Pre-Order Spotlight Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-6 pt-4 sm:pt-6">
             {preorderProducts.slice(0, 4).map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
@@ -232,31 +232,31 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 overflow-x-auto pb-1 md:pb-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 overflow-x-auto pb-2 md:pb-0 -mx-1 px-1">
             <a
               href="#dept-jamuna-fish"
-              className="px-3.5 py-2.5 rounded-2xl bg-emerald-50 hover:bg-[#0F3D2E] text-[#0F3D2E] hover:text-white border border-emerald-200 text-xs font-extrabold whitespace-nowrap transition flex items-center gap-1.5"
+              className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl sm:rounded-2xl bg-emerald-50 hover:bg-[#0F3D2E] text-[#0F3D2E] hover:text-white border border-emerald-200 text-[11px] sm:text-xs font-extrabold whitespace-nowrap transition flex items-center gap-1.5 shrink-0"
             >
               <span>🐟 Fresh Jamuna Fish</span>
               <span className="opacity-75">(যমুনার মাছ)</span>
             </a>
             <a
               href="#dept-village-chicken"
-              className="px-3.5 py-2.5 rounded-2xl bg-amber-50 hover:bg-[#0F3D2E] text-amber-950 hover:text-white border border-amber-200 text-xs font-extrabold whitespace-nowrap transition flex items-center gap-1.5"
+              className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl sm:rounded-2xl bg-amber-50 hover:bg-[#0F3D2E] text-amber-950 hover:text-white border border-amber-200 text-[11px] sm:text-xs font-extrabold whitespace-nowrap transition flex items-center gap-1.5 shrink-0"
             >
               <span>🐓 Village Deshi Chicken</span>
               <span className="opacity-75">(দেশি মুরগি ও ডিম)</span>
             </a>
             <a
               href="#dept-heritage-rice"
-              className="px-3.5 py-2.5 rounded-2xl bg-emerald-50 hover:bg-[#0F3D2E] text-[#0F3D2E] hover:text-white border border-emerald-200 text-xs font-extrabold whitespace-nowrap transition flex items-center gap-1.5"
+              className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl sm:rounded-2xl bg-emerald-50 hover:bg-[#0F3D2E] text-[#0F3D2E] hover:text-white border border-emerald-200 text-[11px] sm:text-xs font-extrabold whitespace-nowrap transition flex items-center gap-1.5 shrink-0"
             >
               <span>🌾 Kataribhog, Basmati & Red Rice</span>
               <span className="opacity-75">(চাল)</span>
             </a>
             <a
               href="#dept-ghee-doi"
-              className="px-3.5 py-2.5 rounded-2xl bg-rose-50 hover:bg-[#C83E2B] text-[#C83E2B] hover:text-white border border-rose-200 text-xs font-extrabold whitespace-nowrap transition flex items-center gap-1.5"
+              className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl sm:rounded-2xl bg-rose-50 hover:bg-[#C83E2B] text-[#C83E2B] hover:text-white border border-rose-200 text-[11px] sm:text-xs font-extrabold whitespace-nowrap transition flex items-center gap-1.5 shrink-0"
             >
               <span>🏺 Gawa Ghee & Bogura Doi</span>
               <span className="opacity-75">(ঘি ও দই)</span>
@@ -433,7 +433,7 @@ export default function HomePage() {
         </div>
 
         {/* Product Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-6">
           {filteredProducts.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}

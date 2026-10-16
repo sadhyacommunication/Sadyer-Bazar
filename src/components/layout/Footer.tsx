@@ -15,6 +15,10 @@ import {
   ShoppingBag,
   ArrowRight,
   Banknote,
+  Home,
+  Store,
+  Flame,
+  PackageSearch,
 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 
@@ -496,32 +500,97 @@ export default function Footer() {
         )}`}
         target="_blank"
         rel="noopener noreferrer"
-        className={`fixed left-4 z-40 inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-xl border border-white/20 transition no-print ${
-          cartCount > 0 && pathname !== "/checkout"
-            ? "bottom-20 sm:bottom-5"
+        className={`fixed left-4 z-40 inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-xl border border-white/20 transition no-print ${
+          pathname !== "/checkout"
+            ? "bottom-18 sm:bottom-5"
             : "bottom-5"
         }`}
       >
         <MessageCircle className="w-4 h-4 fill-current" />
-        <span>WhatsApp: {settings.supportPhone}</span>
+        <span className="hidden xs:inline">WhatsApp:</span>
+        <span>{settings.supportPhone}</span>
       </a>
 
-      {/* Mobile Sticky Bottom Basket & Express 1-Click Checkout Ribbon */}
+      {/* Mobile Sticky Bottom Thumb Navigation Dock (When Cart is Empty & not on checkout or PDP) */}
+      {cartCount === 0 &&
+        pathname !== "/checkout" &&
+        !pathname?.startsWith("/product") && (
+          <div className="fixed bottom-0 inset-x-0 z-40 sm:hidden bg-white/95 backdrop-blur-md border-t border-stone-200/90 px-2 py-1.5 shadow-2xl flex items-center justify-around no-print">
+            <Link
+              href="/"
+              className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition ${
+                pathname === "/"
+                  ? "text-[#0F3D2E] font-bold"
+                  : "text-stone-500 hover:text-stone-800"
+              }`}
+            >
+              <Home className="w-5 h-5" />
+              <span className="text-[10px]">হোম</span>
+            </Link>
+
+            <Link
+              href="/shop"
+              className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition ${
+                pathname === "/shop"
+                  ? "text-[#0F3D2E] font-bold"
+                  : "text-stone-500 hover:text-stone-800"
+              }`}
+            >
+              <Store className="w-5 h-5" />
+              <span className="text-[10px]">সব পণ্য</span>
+            </Link>
+
+            <Link
+              href="/pre-orders"
+              className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition ${
+                pathname === "/pre-orders"
+                  ? "text-[#C83E2B] font-bold"
+                  : "text-stone-500 hover:text-stone-800"
+              }`}
+            >
+              <Flame className="w-5 h-5 text-[#C83E2B]" />
+              <span className="text-[10px]">প্রি-অর্ডার</span>
+            </Link>
+
+            <Link
+              href="/track-order"
+              className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition ${
+                pathname === "/track-order"
+                  ? "text-[#0F3D2E] font-bold"
+                  : "text-stone-500 hover:text-stone-800"
+              }`}
+            >
+              <PackageSearch className="w-5 h-5" />
+              <span className="text-[10px]">ট্র্যাকিং</span>
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => setIsCartOpen(true)}
+              className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl text-stone-500 hover:text-stone-800 cursor-pointer"
+            >
+              <ShoppingBag className="w-5 h-5" />
+              <span className="text-[10px]">ব্যাগ</span>
+            </button>
+          </div>
+        )}
+
+      {/* Mobile Sticky Bottom Basket & Express 1-Click Checkout Ribbon (When Cart Has Items) */}
       {cartCount > 0 && pathname !== "/checkout" && (
-        <div className="fixed bottom-0 inset-x-0 z-40 sm:hidden bg-[#0F3D2E] text-white border-t border-emerald-700/80 px-4 py-3 shadow-2xl flex items-center justify-between gap-3 no-print">
+        <div className="fixed bottom-0 inset-x-0 z-40 sm:hidden bg-[#0F3D2E] text-white border-t border-emerald-700/80 px-4 py-2.5 shadow-2xl flex items-center justify-between gap-3 no-print">
           <button
             type="button"
             onClick={() => setIsCartOpen(true)}
             className="flex items-center gap-2.5 text-left cursor-pointer"
           >
-            <div className="relative w-10 h-10 rounded-xl bg-amber-400 text-stone-950 flex items-center justify-center font-extrabold">
-              <ShoppingBag className="w-5 h-5" />
-              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[#C83E2B] text-white text-[10px] font-extrabold flex items-center justify-center">
+            <div className="relative w-9 h-9 rounded-xl bg-amber-400 text-stone-950 flex items-center justify-center font-extrabold">
+              <ShoppingBag className="w-4 h-4" />
+              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-[#C83E2B] text-white text-[9px] font-extrabold flex items-center justify-center">
                 {cartCount}
               </span>
             </div>
             <div>
-              <span className="text-[11px] text-emerald-200 block leading-none">
+              <span className="text-[10px] text-emerald-200 block leading-none">
                 Your Organic Basket
               </span>
               <strong className="text-sm font-extrabold text-white">
@@ -532,7 +601,7 @@ export default function Footer() {
 
           <Link
             href="/checkout"
-            className="px-4 py-2.5 rounded-xl bg-[#C83E2B] hover:bg-[#b03221] text-white text-xs font-extrabold inline-flex items-center gap-1.5 shadow-lg"
+            className="px-3.5 py-2 rounded-xl bg-[#C83E2B] hover:bg-[#b03221] text-white text-xs font-extrabold inline-flex items-center gap-1.5 shadow-lg active:scale-95 transition"
           >
             <span>1-Click Checkout</span>
             <ArrowRight className="w-3.5 h-3.5" />

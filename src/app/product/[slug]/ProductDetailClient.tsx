@@ -200,7 +200,7 @@ export default function ProductDetailClient({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-16">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 pb-28 sm:pb-16 space-y-16">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
@@ -653,13 +653,62 @@ export default function ProductDetailClient({
 
       {/* Related Products */}
       <div className="space-y-6 pt-8 border-t border-stone-200">
-        <h2 className="text-2xl font-extrabold text-stone-900">
+        <h2 className="text-xl sm:text-2xl font-extrabold text-stone-900">
           Customers Also Ordered With This
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-6">
           {relatedProducts.map((item) => (
             <ProductCard key={item.id} product={item} />
           ))}
+        </div>
+      </div>
+
+      {/* Mobile Sticky Bottom Quick-Buy Bar */}
+      <div className="fixed bottom-0 inset-x-0 z-40 sm:hidden bg-white/95 backdrop-blur-md border-t border-stone-200/90 px-3.5 py-2.5 shadow-2xl flex items-center justify-between gap-2.5 no-print">
+        <div className="min-w-0 flex items-center gap-2">
+          <img
+            src={product.primaryImage}
+            alt={product.title}
+            className="w-10 h-10 rounded-xl object-contain bg-stone-950 p-0.5 border border-stone-200 shrink-0"
+          />
+          <div className="min-w-0">
+            <span className="text-[10px] font-bold text-stone-500 block truncate">
+              {activeVariant?.label}
+            </span>
+            <span className="text-base font-extrabold text-[#0F3D2E] block leading-tight">
+              ৳{((activeVariant?.price || 0) * quantity).toLocaleString()}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={() =>
+              activeVariant &&
+              addToCart(
+                product,
+                activeVariant,
+                quantity,
+                selectedCutting || undefined,
+                true
+              )
+            }
+            className="p-2.5 rounded-xl bg-emerald-50 text-[#0F3D2E] border border-emerald-200 active:scale-95 transition cursor-pointer"
+            title="Add to Basket"
+            aria-label="Add to Basket"
+          >
+            <ShoppingBag className="w-4 h-4" />
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDirectOrder}
+            className="py-2.5 px-3.5 rounded-xl bg-[#C83E2B] hover:bg-[#b03221] text-white font-extrabold text-xs shadow-md flex items-center gap-1 active:scale-95 transition cursor-pointer"
+          >
+            <Zap className="w-3.5 h-3.5 fill-current" />
+            <span>{product.isPreorder ? "প্রি-অর্ডার" : "১-ক্লিক অর্ডার"}</span>
+          </button>
         </div>
       </div>
     </div>
