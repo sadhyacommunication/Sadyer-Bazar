@@ -150,6 +150,15 @@ export default function RootLayout({
       availableLanguage: ["bn", "en"],
       areaServed: "BD",
     },
+    brand: {
+      "@type": "Brand",
+      name: "Sadyer Bazar (সাধ্যের বাজার)",
+      alternateName: "সাধ্যের বাজার",
+    },
+    sameAs: [
+      "https://facebook.com/sadyerbazar",
+      "https://wa.me/8801713477780",
+    ],
   };
 
   return (

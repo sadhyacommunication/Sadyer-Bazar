@@ -35,10 +35,63 @@ export const metadata: Metadata = {
   },
 };
 
+import { INITIAL_PRODUCTS } from "@/services/seedData";
+
 export default function ShopLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  const baseUrl = "https://sadyer-bazar.sadhyacommunication.workers.dev";
+
+  const itemListSchema = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "সাধ্যের বাজার অর্গানিক খাদ্যপণ্য ও তাজা মাছের ক্যাটালগ",
+    description:
+      "১০০% কেমিক্যাল ও ফরমালিনমুক্ত যমুনার মাছ, খাঁটি ঘি, বগুড়ার দই ও আদি শস্যের অনলাইন সংগ্রহ।",
+    numberOfItems: INITIAL_PRODUCTS.length,
+    itemListElement: INITIAL_PRODUCTS.map((product, idx) => ({
+      "@type": "ListItem",
+      position: idx + 1,
+      name: `${product.title} (${product.titleBn})`,
+      url: `${baseUrl}/product/${product.slug}`,
+      image: product.primaryImage.startsWith("http")
+        ? product.primaryImage
+        : `${baseUrl}${product.primaryImage}`,
+    })),
+  };
+
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "হোম (Home)",
+        item: baseUrl,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "সকল পণ্য (All Products)",
+        item: `${baseUrl}/shop`,
+      },
+    ],
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      {children}
+    </>
+  );
 }

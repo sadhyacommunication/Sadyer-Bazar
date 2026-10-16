@@ -25,5 +25,33 @@ export default function TrackOrderLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  const baseUrl = "https://sadyer-bazar.sadhyacommunication.workers.dev";
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "হোম (Home)",
+        item: baseUrl,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "অর্ডার ট্র্যাকিং (Track Order)",
+        item: `${baseUrl}/track-order`,
+      },
+    ],
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      {children}
+    </>
+  );
 }

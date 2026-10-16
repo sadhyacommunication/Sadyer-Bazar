@@ -36,5 +36,52 @@ export default function AboutLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  const baseUrl = "https://sadyer-bazar.sadhyacommunication.workers.dev";
+
+  const aboutSchema = {
+    "@context": "https://schema.org",
+    "@type": "AboutPage",
+    name: "আমাদের গল্প — নদী ও খামার থেকে খাঁটি খাদ্য | সাধ্যের বাজার",
+    description:
+      "সাধ্যের বাজারের শুরুর কথা, যমুনা নদীর জেলে ও বগুড়ার খামারিদের থেকে সরাসরি সংগ্রহের গল্প।",
+    mainEntity: {
+      "@type": "Organization",
+      name: "সাধ্যের বাজার (Sadyer Bazar)",
+      url: baseUrl,
+      logo: `${baseUrl}/images/hero-banner-bn.jpg`,
+    },
+  };
+
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "হোম (Home)",
+        item: baseUrl,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "আমাদের গল্প (About Us)",
+        item: `${baseUrl}/about`,
+      },
+    ],
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(aboutSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      {children}
+    </>
+  );
 }

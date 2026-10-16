@@ -98,7 +98,17 @@ export default function HomePage() {
     <div className="space-y-16 sm:space-y-24 pb-20">
       {/* 1. HERO SECTION: Full-Width 4-Banner Natural Photography Slider */}
       <section className="relative overflow-hidden bg-[#0F3D2E] text-white pt-4 pb-8 sm:py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-3 sm:space-y-4">
+          {/* High-Impact Semantic SEO H1 Headline Header */}
+          <div className="text-center space-y-1 pt-1 pb-1">
+            <h1 className="text-lg sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight drop-shadow-md">
+              সাধ্যের বাজার — যমুনা নদীর তাজা দেশি মাছ, খাঁটি গাওয়া ঘি ও বগুড়ার দই
+            </h1>
+            <p className="text-xs sm:text-sm text-emerald-200/90 font-medium max-w-3xl mx-auto">
+              ১০০% কেমিক্যাল ও ফরমালিনমুক্ত • নদী ও প্রান্তিক খামার থেকে সরাসরি নিজস্ব কোল্ড-চেইনে হোম ডেলিভারি
+            </p>
+          </div>
+
           <HeroSlider />
 
           {/* Quick Natural Organic Trust Highlights */}
