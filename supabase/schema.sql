@@ -232,35 +232,46 @@ ALTER TABLE public.payment_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.product_reviews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.contact_messages ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Allow all operations on site_settings" ON public.site_settings;
-CREATE POLICY "Allow all operations on site_settings" ON public.site_settings FOR ALL USING (true) WITH CHECK (true);
+-- Hardened Zero-Trust RLS Policies:
+-- Public (anon) can read catalog & submit orders, but cannot dump orders, delete, or alter pricing
+CREATE POLICY "public_read_site_settings" ON public.site_settings FOR SELECT TO public USING (true);
+CREATE POLICY "service_role_all_site_settings" ON public.site_settings FOR ALL TO service_role USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Allow all operations on categories" ON public.categories;
-CREATE POLICY "Allow all operations on categories" ON public.categories FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "public_read_categories" ON public.categories FOR SELECT TO public USING (is_active = true);
+CREATE POLICY "service_role_all_categories" ON public.categories FOR ALL TO service_role USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Allow all operations on products" ON public.products;
-CREATE POLICY "Allow all operations on products" ON public.products FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "public_read_products" ON public.products FOR SELECT TO public USING (is_active = true);
+CREATE POLICY "service_role_all_products" ON public.products FOR ALL TO service_role USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Allow all operations on product_variants" ON public.product_variants;
-CREATE POLICY "Allow all operations on product_variants" ON public.product_variants FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "public_read_product_variants" ON public.product_variants FOR SELECT TO public USING (true);
+CREATE POLICY "service_role_all_product_variants" ON public.product_variants FOR ALL TO service_role USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Allow all operations on coupons" ON public.coupons;
-CREATE POLICY "Allow all operations on coupons" ON public.coupons FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "public_read_coupons" ON public.coupons FOR SELECT TO public USING (is_active = true);
+CREATE POLICY "service_role_all_coupons" ON public.coupons FOR ALL TO service_role USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Allow all operations on orders" ON public.orders;
-CREATE POLICY "Allow all operations on orders" ON public.orders FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "public_read_reviews" ON public.product_reviews FOR SELECT TO public USING (true);
+CREATE POLICY "public_insert_reviews" ON public.product_reviews FOR INSERT TO public WITH CHECK (rating BETWEEN 1 AND 5);
+CREATE POLICY "service_role_all_reviews" ON public.product_reviews FOR ALL TO service_role USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Allow all operations on order_items" ON public.order_items;
-CREATE POLICY "Allow all operations on order_items" ON public.order_items FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "public_insert_contact_messages" ON public.contact_messages FOR INSERT TO public WITH CHECK (length(name) > 0 AND length(phone) >= 11);
+CREATE POLICY "service_role_all_contact_messages" ON public.contact_messages FOR ALL TO service_role USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Allow all operations on payment_transactions" ON public.payment_transactions;
-CREATE POLICY "Allow all operations on payment_transactions" ON public.payment_transactions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "public_insert_transactions" ON public.payment_transactions FOR INSERT TO public WITH CHECK (amount >= 0);
+CREATE POLICY "service_role_all_transactions" ON public.payment_transactions FOR ALL TO service_role USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Allow all operations on product_reviews" ON public.product_reviews;
-CREATE POLICY "Allow all operations on product_reviews" ON public.product_reviews FOR ALL USING (true) WITH CHECK (true);
+-- Zero-Trust Orders Policy: Public can only insert orders; mass SELECT * is blocked
+CREATE POLICY "public_insert_orders" ON public.orders FOR INSERT TO public WITH CHECK (total_amount >= 0 AND length(customer_phone) >= 11);
+CREATE POLICY "service_role_all_orders" ON public.orders FOR ALL TO service_role USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Allow all operations on contact_messages" ON public.contact_messages;
-CREATE POLICY "Allow all operations on contact_messages" ON public.contact_messages FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "public_insert_order_items" ON public.order_items FOR INSERT TO public WITH CHECK (quantity > 0 AND unit_price >= 0);
+CREATE POLICY "service_role_all_order_items" ON public.order_items FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+-- Secure single-order lookup RPC (prevents customer database dumping)
+CREATE OR REPLACE FUNCTION public.get_order_by_code(p_order_code TEXT)
+RETURNS SETOF public.orders LANGUAGE sql SECURITY DEFINER SET search_path = public STABLE AS $$
+  SELECT * FROM public.orders WHERE UPPER(TRIM(order_code)) = UPPER(TRIM(p_order_code)) LIMIT 1;
+$$;
+GRANT EXECUTE ON FUNCTION public.get_order_by_code(TEXT) TO anon, authenticated, service_role;
 
 -- Initialize Default Site Settings
 INSERT INTO public.site_settings (id, inside_dhaka_fee, outside_dhaka_fee, free_delivery_threshold, preorder_advance_percent)

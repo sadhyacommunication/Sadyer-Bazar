@@ -254,9 +254,9 @@ function TrackOrderContent() {
             Track Your Order by Order ID
           </h1>
           <p className="text-xs sm:text-sm text-emerald-100/85 max-w-2xl">
-            Enter your non-guessable Order ID (e.g.,{" "}
+            Enter your non-guessable Order ID (format:{" "}
             <code className="px-2 py-0.5 rounded bg-white/15 font-mono text-amber-300">
-              SB-2610-5P9R7
+              SB-YYMM-XXXXX
             </code>
             ) to check live harvest, digital scale weight verification, courier
             rider info, and payment ledger.
@@ -271,7 +271,7 @@ function TrackOrderContent() {
             type="text"
             value={orderCodeInput}
             onChange={(e) => setOrderCodeInput(e.target.value.toUpperCase())}
-            placeholder="Order ID (e.g. SB-2610-5P9R7)"
+            placeholder="Order ID (e.g. SB-2610-XXXXX)"
             className="sm:col-span-6 px-4 py-3.5 rounded-2xl bg-white text-stone-900 text-sm font-mono uppercase focus:outline-none"
           />
           <input
@@ -279,7 +279,7 @@ function TrackOrderContent() {
             maxLength={4}
             value={phoneLast4}
             onChange={(e) => setPhoneLast4(e.target.value.replace(/\D/g, ""))}
-            placeholder="Last 4 digits of Phone (Optional for full address)"
+            placeholder="Last 4 digits of Phone (Required for full address)"
             className="sm:col-span-4 px-4 py-3.5 rounded-2xl bg-white/95 text-stone-900 text-xs sm:text-sm focus:outline-none"
           />
           <button
@@ -290,26 +290,14 @@ function TrackOrderContent() {
           </button>
         </form>
 
-        {/* Demo Quick Links */}
-        <div className="flex flex-wrap items-center gap-2 text-xs text-emerald-200">
-          <span>Quick Demo Order IDs:</span>
-          {["SB-2610-8K4M2", "SB-2610-5P9R7", "SB-2610-3W7H4"].map((code) => (
-            <button
-              key={code}
-              type="button"
-              onClick={() => {
-                setOrderCodeInput(code);
-                const found = findOrderByCode(code);
-                if (found) {
-                  setActiveOrder(found);
-                  setNotFound(false);
-                }
-              }}
-              className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 font-mono text-amber-300 font-bold transition cursor-pointer"
-            >
-              {code}
-            </button>
-          ))}
+        {/* Security & Anti-Harvesting Privacy Notice */}
+        <div className="flex flex-wrap items-center gap-2 text-xs text-emerald-200/90 pt-1">
+          <span className="inline-flex items-center gap-1.5 font-medium">
+            <Lock className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+            <span>
+              Customer Privacy Protected: Order IDs are unique and confidential. Please check your SMS or invoice receipt.
+            </span>
+          </span>
         </div>
       </div>
 

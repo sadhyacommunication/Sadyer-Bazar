@@ -1,7 +1,22 @@
 /*
+  # 1. Content Security Policy (Anti-XSS, Anti-Data Exfiltration, Anti-Clickjacking)
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://*.supabase.co https://images.unsplash.com https://sadyer-bazar.sadhyacommunication.workers.dev; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://fonts.googleapis.com https://fonts.gstatic.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self' https://*.bkash.com https://*.sslcommerz.com; upgrade-insecure-requests;
+
+  # 2. Clickjacking Defense
   X-Frame-Options: DENY
+
+  # 3. MIME Sniffing Defense
   X-Content-Type-Options: nosniff
-  Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: camera=(), microphone=(), geolocation=()
-  X-DNS-Prefetch-Control: on
+
+  # 4. Strict Transport Security (HSTS - 2 Years with Preload)
   Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+
+  # 5. Cross-Origin Isolation & Cross-Domain Security
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+  X-Permitted-Cross-Domain-Policies: none
+
+  # 6. Privacy & Hardware Device Restrictions
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(self)
+  X-DNS-Prefetch-Control: on

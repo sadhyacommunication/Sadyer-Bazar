@@ -135,6 +135,12 @@ interface StoreContextValue {
 
   // Batch Procurement Summary
   procurementSummary: ProcurementSummaryItem[];
+
+  // Secure Admin Record Hydration
+  hydrateAdminRecords: (
+    adminOrders: Order[],
+    adminMessages: ContactMessage[]
+  ) => void;
 }
 
 const StoreContext = createContext<StoreContextValue | undefined>(undefined);
@@ -723,6 +729,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     );
   }, [orders]);
 
+  const hydrateAdminRecords = (
+    adminOrders: Order[],
+    adminMessages: ContactMessage[]
+  ) => {
+    if (adminOrders.length > 0) {
+      setOrders(adminOrders);
+    }
+    if (adminMessages.length > 0) {
+      setMessages(adminMessages);
+    }
+  };
+
   return (
     <StoreContext.Provider
       value={{
@@ -766,6 +784,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         updateMessageStatus,
         deleteContactMessage,
         procurementSummary,
+        hydrateAdminRecords,
       }}
     >
       {children}

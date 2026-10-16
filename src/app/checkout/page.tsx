@@ -35,6 +35,7 @@ import {
   generateSecureOrderCode,
   normalizeBdPhone,
   sanitizeText,
+  validateSubmissionVelocity,
 } from "@/lib/security";
 import { createOrderSchema } from "@/lib/validations/schemas";
 
@@ -60,6 +61,7 @@ export default function CheckoutPage() {
   const [customerAddress, setCustomerAddress] = useState("");
   const [customerNote, setCustomerNote] = useState("");
   const [websiteHoneypot, setWebsiteHoneypot] = useState("");
+  const [renderedAt] = useState(() => Date.now());
 
   // Promo / Coupon Code State
   const [couponInput, setCouponInput] = useState("");
@@ -184,6 +186,14 @@ export default function CheckoutPage() {
     if (!rl.allowed) {
       setErrorMsg(
         "Too many order requests in a short window. Please wait a moment and try again."
+      );
+      return;
+    }
+
+    const velocity = validateSubmissionVelocity(renderedAt, 2.0);
+    if (!velocity.valid) {
+      setErrorMsg(
+        "Automated rapid checkout detected. Please take a moment to verify your order details before confirming."
       );
       return;
     }

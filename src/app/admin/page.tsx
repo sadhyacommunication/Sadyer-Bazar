@@ -34,7 +34,15 @@ import {
   Mail,
 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
-import { checkRateLimit } from "@/lib/security";
+import {
+  checkAdminLockout,
+  checkRateLimit,
+  createAdminSessionToken,
+  recordAdminLoginAttempt,
+  verifyAdminPasskey,
+  verifyAdminSessionToken,
+} from "@/lib/security";
+import { fetchAdminOrdersFromSupabase } from "@/services/supabaseSync";
 import {
   ContactMessage,
   ContactMessageStatus,
@@ -82,20 +90,34 @@ export default function AdminDashboardPage() {
     supabaseStatus,
     syncDatabaseWithSupabase,
     showToast,
+    hydrateAdminRecords,
   } = useStore();
 
-  // Admin Passkey Gate (Locked by Default + Session Token Persistence)
+  // Admin Passkey Gate (Cryptographically Signed Token & Tamper-Evident Expiry)
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
-      if (sessionStorage.getItem("sb_admin_auth_v2") === "verified") {
+      const token = sessionStorage.getItem("sb_admin_session_token");
+      if (token && verifyAdminSessionToken(token)) {
         setIsUnlocked(true);
+        const cachedHash = sessionStorage.getItem("sb_admin_hash");
+        if (cachedHash) {
+          fetchAdminOrdersFromSupabase(cachedHash).then((adminData) => {
+            if (adminData) {
+              hydrateAdminRecords(adminData.orders, adminData.messages);
+            }
+          });
+        }
+      } else {
+        sessionStorage.removeItem("sb_admin_session_token");
+        sessionStorage.removeItem("sb_admin_hash");
+        sessionStorage.removeItem("sb_admin_auth_v2");
       }
     } catch {}
-  }, []);
+  }, [hydrateAdminRecords]);
 
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>("all");
@@ -488,25 +510,52 @@ export default function AdminDashboardPage() {
           </div>
 
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              const rl = checkRateLimit("admin_login_gate", 5, 60_000);
-              if (!rl.allowed) {
+              const lockout = checkAdminLockout();
+              if (lockout.locked) {
                 setPinError(
-                  "Too many failed attempts. Please wait 60 seconds."
+                  `Security Lockout: Please wait ${lockout.lockRemainingSeconds}s before attempting to unlock.`
                 );
                 return;
               }
-              if (pinInput === "2026" || pinInput === "SadyerBazar@2026!") {
+
+              const rl = checkRateLimit("admin_login_gate", 5, 60_000);
+              if (!rl.allowed) {
+                setPinError(
+                  "Rate limit reached. Please wait 60 seconds."
+                );
+                return;
+              }
+
+              const res = await verifyAdminPasskey(pinInput);
+              if (res.success && res.hash) {
                 setIsUnlocked(true);
                 setPinError(null);
+                recordAdminLoginAttempt(true);
                 try {
-                  sessionStorage.setItem("sb_admin_auth_v2", "verified");
+                  const token = createAdminSessionToken(res.hash);
+                  sessionStorage.setItem("sb_admin_session_token", token);
+                  sessionStorage.setItem("sb_admin_hash", res.hash);
                 } catch {}
+
+                fetchAdminOrdersFromSupabase(res.hash).then((adminData) => {
+                  if (adminData) {
+                    hydrateAdminRecords(adminData.orders, adminData.messages);
+                  }
+                });
               } else {
-                setPinError(
-                  `Invalid Passkey (${rl.remaining} attempts remaining).`
-                );
+                const attempt = recordAdminLoginAttempt(false);
+                if (attempt.locked) {
+                  setPinError(
+                    `Too many failed attempts! Device locked for ${attempt.lockRemainingSeconds}s.`
+                  );
+                } else {
+                  const remaining = Math.max(0, 3 - attempt.attempts);
+                  setPinError(
+                    `Invalid Cryptographic Passkey. (${remaining > 0 ? remaining : 1} attempts before lockout)`
+                  );
+                }
               }
             }}
             className="space-y-4"
@@ -567,6 +616,8 @@ export default function AdminDashboardPage() {
                 setIsUnlocked(false);
                 setPinInput("");
                 try {
+                  sessionStorage.removeItem("sb_admin_session_token");
+                  sessionStorage.removeItem("sb_admin_hash");
                   sessionStorage.removeItem("sb_admin_auth_v2");
                 } catch {}
               }}

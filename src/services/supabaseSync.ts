@@ -772,6 +772,20 @@ export async function fetchOrderByCodeFromSupabase(
   if (!clean) return null;
 
   try {
+    // 1. Secure RPC lookup first (hardened against table dump enumeration)
+    const { data: rpcData, error: rpcErr } = await supabase.rpc(
+      "get_order_by_code",
+      { p_order_code: clean }
+    );
+
+    if (!rpcErr && rpcData) {
+      const singleRow = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+      if (singleRow) {
+        return mapOrderFromRow(singleRow as Record<string, unknown>);
+      }
+    }
+
+    // 2. Direct filtered query fallback
     const { data, error } = await supabase
       .from("orders")
       .select("*")
@@ -784,6 +798,63 @@ export async function fetchOrderByCodeFromSupabase(
     return null;
   }
 }
+
+/**
+ * Cryptographically Authenticated Admin Order & Inbox Fetcher.
+ * Uses SHA-256 passkey hash to query admin RPC functions or direct fallback.
+ */
+export async function fetchAdminOrdersFromSupabase(
+  passkeyHash: string
+): Promise<{ orders: Order[]; messages: ContactMessage[] } | null> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return null;
+
+  try {
+    const [ordersRes, msgsRes] = await Promise.all([
+      supabase.rpc("get_admin_orders", { p_passkey_hash: passkeyHash }),
+      supabase.rpc("get_admin_messages", { p_passkey_hash: passkeyHash }),
+    ]);
+
+    let orders: Order[] = [];
+    if (!ordersRes.error && Array.isArray(ordersRes.data)) {
+      orders = ordersRes.data.map((r: Record<string, unknown>) =>
+        mapOrderFromRow(r)
+      );
+    } else {
+      const fallbackOrd = await supabase
+        .from("orders")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (fallbackOrd.data) {
+        orders = fallbackOrd.data.map((r: Record<string, unknown>) =>
+          mapOrderFromRow(r)
+        );
+      }
+    }
+
+    let messages: ContactMessage[] = [];
+    if (!msgsRes.error && Array.isArray(msgsRes.data)) {
+      messages = msgsRes.data.map((r: Record<string, unknown>) =>
+        mapContactMessageFromRow(r)
+      );
+    } else {
+      const fallbackMsg = await supabase
+        .from("contact_messages")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (fallbackMsg.data) {
+        messages = fallbackMsg.data.map((r: Record<string, unknown>) =>
+          mapContactMessageFromRow(r)
+        );
+      }
+    }
+
+    return { orders, messages };
+  } catch {
+    return null;
+  }
+}
+
 
 export function subscribeToRealtimeStore(onUpdate: () => void): () => void {
   const supabase = getSupabaseClient();
