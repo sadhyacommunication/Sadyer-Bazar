@@ -28,11 +28,9 @@ export const INITIAL_SITE_SETTINGS: SiteSettings = {
   announcementBn: "যমুনা নদীর তাজা মাছ ও বগুড়ার শাহী দইয়ের প্রি-অর্ডার চলছে!",
   sslcommerzEnabled: true,
   sslcommerzStoreId: "",
-  sslcommerzStorePassword: "",
   sslcommerzIsLive: false,
   bkashEnabled: true,
   bkashAppKey: "",
-  bkashAppSecret: "",
   codEnabled: true,
   updatedAt: new Date().toISOString(),
 };

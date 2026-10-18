@@ -23,14 +23,16 @@ CREATE TABLE IF NOT EXISTS public.site_settings (
     announcement_bn TEXT NOT NULL DEFAULT 'যমুনা নদীর তাজা মাছ ও বগুড়ার শাহী দইয়ের প্রি-অর্ডার চলছে!',
     sslcommerz_enabled BOOLEAN NOT NULL DEFAULT true,
     sslcommerz_store_id TEXT DEFAULT '',
-    sslcommerz_store_password TEXT DEFAULT '',
     sslcommerz_is_live BOOLEAN NOT NULL DEFAULT false,
     bkash_enabled BOOLEAN NOT NULL DEFAULT true,
     bkash_app_key TEXT DEFAULT '',
-    bkash_app_secret TEXT DEFAULT '',
     cod_enabled BOOLEAN NOT NULL DEFAULT true,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Safely purge secret columns if they exist from prior schema versions
+ALTER TABLE public.site_settings DROP COLUMN IF EXISTS sslcommerz_store_password;
+ALTER TABLE public.site_settings DROP COLUMN IF EXISTS bkash_app_secret;
 
 -- 2. CATEGORIES TABLE
 CREATE TABLE IF NOT EXISTS public.categories (
@@ -139,9 +141,23 @@ CREATE TABLE IF NOT EXISTS public.orders (
     rider_name TEXT,
     rider_phone TEXT,
     items JSONB NOT NULL DEFAULT '[]'::jsonb,
+    fraud_risk_score INT NOT NULL DEFAULT 0,
+    is_suspicious BOOLEAN NOT NULL DEFAULT false,
+    review_reasons JSONB NOT NULL DEFAULT '[]'::jsonb,
+    is_phone_verified BOOLEAN NOT NULL DEFAULT false,
+    verification_method TEXT DEFAULT 'unverified',
+    idempotency_key TEXT UNIQUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Safe migration for existing orders table
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS fraud_risk_score INT NOT NULL DEFAULT 0;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS is_suspicious BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS review_reasons JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS is_phone_verified BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS verification_method TEXT DEFAULT 'unverified';
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS idempotency_key TEXT UNIQUE;
 
 -- 7. ORDER ITEMS TABLE
 CREATE TABLE IF NOT EXISTS public.order_items (
@@ -174,6 +190,19 @@ CREATE TABLE IF NOT EXISTS public.payment_transactions (
     sender_phone TEXT,
     verified_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 9. PROCESSED WEBHOOK EVENTS TABLE (Idempotency Key & Anti-Replay Engine)
+CREATE TABLE IF NOT EXISTS public.processed_webhook_events (
+    id SERIAL PRIMARY KEY,
+    gateway TEXT NOT NULL CHECK (gateway IN ('bkash', 'nagad', 'sslcommerz')),
+    transaction_id TEXT NOT NULL,
+    order_code TEXT NOT NULL,
+    amount NUMERIC(10, 2) NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'BDT',
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_gateway_trx UNIQUE (gateway, transaction_id)
 );
 
 -- 9. VERIFIED PRODUCT REVIEWS TABLE

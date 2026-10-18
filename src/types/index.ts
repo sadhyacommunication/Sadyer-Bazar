@@ -37,11 +37,9 @@ export interface SiteSettings {
   announcementBn: string;
   sslcommerzEnabled: boolean;
   sslcommerzStoreId?: string;
-  sslcommerzStorePassword?: string;
   sslcommerzIsLive?: boolean;
   bkashEnabled: boolean;
   bkashAppKey?: string;
-  bkashAppSecret?: string;
   codEnabled: boolean;
   updatedAt: string;
 }
@@ -186,9 +184,27 @@ export interface Order {
   trackingReference?: string;
   riderName?: string;
   riderPhone?: string;
+  // Security & Anti-Fraud Engine
+  fraudRiskScore?: number;
+  isSuspicious?: boolean;
+  reviewReasons?: string[];
+  isPhoneVerified?: boolean;
+  verificationMethod?: "manual_call" | "sms_otp" | "payment_gateway" | "unverified";
+  idempotencyKey?: string;
   items: OrderItem[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProcessedWebhookEvent {
+  id: string;
+  gateway: "bkash" | "nagad" | "sslcommerz";
+  transactionId: string;
+  orderCode: string;
+  amount: number;
+  currency: "BDT";
+  payload?: Record<string, unknown>;
+  processedAt: string;
 }
 
 export interface PaymentTransaction {

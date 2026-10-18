@@ -103,6 +103,7 @@ interface StoreContextValue {
     riderName: string,
     riderPhone: string
   ) => void;
+  verifyCodOrderPhone: (orderId: string) => void;
 
   // Admin Product Management Actions
   addProduct: (newProduct: Product) => void;
@@ -575,6 +576,24 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     showToast(`Assigned to "${courierName}" & updated tracking info!`);
   };
 
+  const verifyCodOrderPhone = (orderId: string) => {
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (o.id !== orderId) return o;
+        const updated: Order = {
+          ...o,
+          isPhoneVerified: true,
+          verificationMethod: "manual_call",
+          orderStatus: "confirmed",
+          updatedAt: new Date().toISOString(),
+        };
+        upsertOrderToSupabase(updated);
+        return updated;
+      })
+    );
+    showToast(`Phone verified for order! Status changed to CONFIRMED.`);
+  };
+
   const addProduct = (newProduct: Product) => {
     setProducts((prev) => [newProduct, ...prev]);
     upsertProductToSupabase(newProduct);
@@ -770,6 +789,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         updateOrderPaymentStatus,
         adjustOrderWeightAndBill,
         assignOrderLogistics,
+        verifyCodOrderPhone,
         addProduct,
         updateProduct,
         deleteProduct,

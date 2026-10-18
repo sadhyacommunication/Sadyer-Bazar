@@ -43,6 +43,7 @@ export const createOrderSchema = z.object({
   paymentMethod: z.enum(["bkash", "nagad", "sslcommerz", "cod"]),
   paymentPlan: z.enum(["full", "advance", "cod"]),
   items: z.array(checkoutItemSchema).min(1, "Your cart is empty"),
+  idempotencyKey: z.string().trim().max(100).optional(),
   // Honeypot anti-bot field (must be empty)
   websiteHoneypot: z.string().max(0, "Bot detected").optional(),
 });
@@ -76,11 +77,9 @@ export const updateSettingsSchema = z.object({
   announcementBn: z.string().trim().min(2).max(240),
   sslcommerzEnabled: z.boolean(),
   sslcommerzStoreId: z.string().trim().max(100).optional(),
-  sslcommerzStorePassword: z.string().trim().max(100).optional(),
   sslcommerzIsLive: z.boolean().optional(),
   bkashEnabled: z.boolean(),
   bkashAppKey: z.string().trim().max(100).optional(),
-  bkashAppSecret: z.string().trim().max(100).optional(),
   codEnabled: z.boolean(),
 });
 

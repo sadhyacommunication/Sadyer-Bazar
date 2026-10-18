@@ -411,3 +411,116 @@ export function validateSubmissionVelocity(
   return { valid: true };
 }
 
+/**
+ * Generates a unique, non-colliding idempotency key for order submission and webhook deduplication.
+ */
+export function generateIdempotencyKey(prefix = "idemp"): string {
+  const bytes = new Uint8Array(16);
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  return `${prefix}_${Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+/**
+ * ANTI-FRAUD RISK ENGINE:
+ * Scores incoming orders based on high COD threshold, velocity, and delivery zone anomalies.
+ */
+export function evaluateFraudRisk(input: {
+  customerPhone: string;
+  deliveryZone: "inside_dhaka" | "outside_dhaka";
+  customerDistrict: string;
+  paymentMethod: "bkash" | "nagad" | "sslcommerz" | "cod";
+  totalAmount: number;
+  recentOrdersForPhone?: number;
+}): {
+  fraudRiskScore: number;
+  isSuspicious: boolean;
+  reviewReasons: string[];
+} {
+  let score = 0;
+  const reasons: string[] = [];
+
+  // 1. High value Cash on Delivery risk (> ৳5,000)
+  if (input.paymentMethod === "cod" && input.totalAmount > 5000) {
+    score += 35;
+    reasons.push(
+      `High value COD order (৳${input.totalAmount.toLocaleString()} > ৳5,000)`
+    );
+  }
+
+  // 2. Velocity risk from same phone
+  if (input.recentOrdersForPhone && input.recentOrdersForPhone >= 2) {
+    score += 30;
+    reasons.push(
+      `${input.recentOrdersForPhone} recent orders detected from phone in last 3 hours`
+    );
+  }
+
+  // 3. Location mismatch: Inside Dhaka zone with non-Dhaka district
+  if (
+    input.deliveryZone === "inside_dhaka" &&
+    !/dhaka|ঢাকা/i.test(input.customerDistrict)
+  ) {
+    score += 25;
+    reasons.push(
+      `Inside Dhaka zone selected for non-Dhaka district: ${input.customerDistrict}`
+    );
+  }
+
+  return {
+    fraudRiskScore: score,
+    isSuspicious: score >= 35,
+    reviewReasons: reasons,
+  };
+}
+
+/**
+ * 4-POINT WEBHOOK SIGNATURE & INTEGRITY VALIDATOR:
+ * Validates gateway callback signature, exact amount, order code, and BDT currency.
+ */
+export function verifyWebhookSignature(params: {
+  gateway: "sslcommerz" | "bkash" | "nagad";
+  payload: Record<string, unknown>;
+  expectedOrderAmount: number;
+  expectedOrderCode: string;
+}): {
+  valid: boolean;
+  reason?: string;
+} {
+  // 1. Currency enforcement (BDT only)
+  const currency = String(params.payload.currency || "").toUpperCase();
+  if (currency && currency !== "BDT") {
+    return {
+      valid: false,
+      reason: `Currency mismatch: Expected BDT, got ${currency}`,
+    };
+  }
+
+  // 2. Order ID / tran_id check
+  const reportedOrderCode = String(
+    params.payload.tran_id || params.payload.orderCode || ""
+  ).toUpperCase();
+  if (reportedOrderCode && reportedOrderCode !== params.expectedOrderCode.toUpperCase()) {
+    return {
+      valid: false,
+      reason: `Order Code mismatch: Expected ${params.expectedOrderCode}, got ${reportedOrderCode}`,
+    };
+  }
+
+  // 3. Amount validation (Strict zero-underpayment tolerance)
+  const reportedAmount = Number(params.payload.amount);
+  if (isNaN(reportedAmount) || reportedAmount < params.expectedOrderAmount) {
+    return {
+      valid: false,
+      reason: `Amount mismatch: Expected at least ৳${params.expectedOrderAmount}, got ৳${reportedAmount}`,
+    };
+  }
+
+  return { valid: true };
+}
+

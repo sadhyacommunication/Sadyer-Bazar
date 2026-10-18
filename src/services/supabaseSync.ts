@@ -54,15 +54,9 @@ function mapSettingsFromRow(row: Record<string, unknown>): SiteSettings {
     sslcommerzStoreId: row.sslcommerz_store_id
       ? String(row.sslcommerz_store_id)
       : undefined,
-    sslcommerzStorePassword: row.sslcommerz_store_password
-      ? String(row.sslcommerz_store_password)
-      : undefined,
     sslcommerzIsLive: Boolean(row.sslcommerz_is_live ?? false),
     bkashEnabled: Boolean(row.bkash_enabled ?? true),
     bkashAppKey: row.bkash_app_key ? String(row.bkash_app_key) : undefined,
-    bkashAppSecret: row.bkash_app_secret
-      ? String(row.bkash_app_secret)
-      : undefined,
     codEnabled: Boolean(row.cod_enabled ?? true),
     updatedAt: String(row.updated_at || new Date().toISOString()),
   };
@@ -150,6 +144,12 @@ function mapOrderFromRow(row: Record<string, unknown>): Order {
       : undefined,
     riderName: row.rider_name ? String(row.rider_name) : undefined,
     riderPhone: row.rider_phone ? String(row.rider_phone) : undefined,
+    fraudRiskScore: Number(row.fraud_risk_score ?? 0),
+    isSuspicious: Boolean(row.is_suspicious ?? false),
+    reviewReasons: Array.isArray(row.review_reasons) ? (row.review_reasons as string[]) : [],
+    isPhoneVerified: Boolean(row.is_phone_verified ?? false),
+    verificationMethod: (row.verification_method as Order["verificationMethod"]) || "unverified",
+    idempotencyKey: row.idempotency_key ? String(row.idempotency_key) : undefined,
     items: Array.isArray(row.items) ? (row.items as OrderItem[]) : [],
     createdAt: String(row.created_at || new Date().toISOString()),
     updatedAt: String(row.updated_at || new Date().toISOString()),
@@ -244,11 +244,9 @@ export async function upsertSettingsToSupabase(
     announcement_bn: settings.announcementBn,
     sslcommerz_enabled: settings.sslcommerzEnabled,
     sslcommerz_store_id: settings.sslcommerzStoreId || null,
-    sslcommerz_store_password: settings.sslcommerzStorePassword || null,
     sslcommerz_is_live: settings.sslcommerzIsLive ?? false,
     bkash_enabled: settings.bkashEnabled,
     bkash_app_key: settings.bkashAppKey || null,
-    bkash_app_secret: settings.bkashAppSecret || null,
     cod_enabled: settings.codEnabled,
     updated_at: new Date().toISOString(),
   };
@@ -350,6 +348,137 @@ export async function deleteProductFromSupabase(
   return !error;
 }
 
+export interface CreateSecureOrderResult {
+  success: boolean;
+  order?: Order;
+  error?: string;
+  idempotent?: boolean;
+}
+
+/**
+ * Anti-Hacker Zero-Trust Order Creation via Supabase RPC.
+ * Server queries product_variants, site_settings, and coupons directly from database tables.
+ * Client-submitted prices are completely ignored.
+ */
+export async function createSecureOrderInSupabase(input: {
+  customerName: string;
+  customerPhone: string;
+  deliveryZone: Order["deliveryZone"];
+  customerDistrict: string;
+  customerAddress: string;
+  customerNote?: string;
+  couponCode?: string;
+  paymentMethod: Order["paymentMethod"];
+  paymentPlan: Order["paymentPlan"];
+  items: {
+    productId: string;
+    variantId: string;
+    quantity: number;
+    cuttingPreference?: string;
+  }[];
+  idempotencyKey?: string;
+}): Promise<CreateSecureOrderResult> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return { success: false, error: "Database client not initialized" };
+  }
+
+  const { data, error } = await supabase.rpc("create_secure_order", {
+    p_customer_name: input.customerName,
+    p_customer_phone: input.customerPhone,
+    p_delivery_zone: input.deliveryZone,
+    p_customer_district: input.customerDistrict,
+    p_customer_address: input.customerAddress,
+    p_customer_note: input.customerNote || null,
+    p_coupon_code: input.couponCode || null,
+    p_payment_method: input.paymentMethod,
+    p_payment_plan: input.paymentPlan,
+    p_items: input.items,
+    p_idempotency_key: input.idempotencyKey || null,
+  });
+
+  if (error || !data) {
+    return {
+      success: false,
+      error: error?.message || "Failed to create secure order in database",
+    };
+  }
+
+  const createdOrder: Order = {
+    id: data.orderId,
+    orderCode: data.orderCode,
+    customerName: input.customerName,
+    customerPhone: input.customerPhone,
+    deliveryZone: input.deliveryZone,
+    customerDistrict: input.customerDistrict,
+    customerAddress: input.customerAddress,
+    customerNote: input.customerNote,
+    subtotal: Number(data.subtotal),
+    deliveryCharge: Number(data.deliveryCharge),
+    discountAmount: Number(data.discountAmount),
+    couponCode: input.couponCode,
+    weightAdjustmentAmount: 0,
+    totalAmount: Number(data.totalAmount),
+    advancePaid: 0,
+    dueAmount: Number(data.dueAmount ?? data.totalAmount),
+    paymentMethod: input.paymentMethod,
+    paymentPlan: input.paymentPlan,
+    paymentStatus: "pending",
+    orderStatus: "pending",
+    hasPreorderItems: Boolean(
+      data.items?.some((i: { isPreorder?: boolean }) => i.isPreorder)
+    ),
+    fraudRiskScore: Number(data.fraudRiskScore ?? 0),
+    isSuspicious: Boolean(data.isSuspicious ?? false),
+    reviewReasons: Array.isArray(data.reviewReasons) ? data.reviewReasons : [],
+    isPhoneVerified: false,
+    verificationMethod: "unverified",
+    idempotencyKey: input.idempotencyKey,
+    items: Array.isArray(data.items)
+      ? data.items.map(
+          (
+            i: {
+              productId: string;
+              variantId: string;
+              productTitle: string;
+              productTitleBn: string;
+              productImage: string;
+              variantLabel: string;
+              cuttingPreference?: string;
+              isPreorder?: boolean;
+              quantity: number;
+              unitPrice: number;
+              lineTotal: number;
+            },
+            idx: number
+          ) => ({
+            id: `item-${data.orderId}-${idx}`,
+            orderId: data.orderId,
+            productId: i.productId,
+            variantId: i.variantId,
+            productTitle: i.productTitle,
+            productTitleBn: i.productTitleBn,
+            productImage: i.productImage,
+            variantLabel: i.variantLabel,
+            cuttingPreference: i.cuttingPreference,
+            isPreorder: Boolean(i.isPreorder),
+            quantity: Number(i.quantity),
+            unitPrice: Number(i.unitPrice),
+            lineTotal: Number(i.lineTotal),
+          })
+        )
+      : [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  return {
+    success: true,
+    order: createdOrder,
+    idempotent: Boolean(data.idempotent),
+  };
+}
+
 export async function upsertOrderToSupabase(
   order: Order,
   transaction?: PaymentTransaction
@@ -385,6 +514,12 @@ export async function upsertOrderToSupabase(
     tracking_reference: order.trackingReference || null,
     rider_name: order.riderName || null,
     rider_phone: order.riderPhone || null,
+    fraud_risk_score: order.fraudRiskScore || 0,
+    is_suspicious: order.isSuspicious || false,
+    review_reasons: order.reviewReasons || [],
+    is_phone_verified: order.isPhoneVerified || false,
+    verification_method: order.verificationMethod || "unverified",
+    idempotency_key: order.idempotencyKey || null,
     items: order.items,
     created_at: order.createdAt,
     updated_at: order.updatedAt || new Date().toISOString(),

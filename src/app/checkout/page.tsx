@@ -32,12 +32,15 @@ import {
   calculateCouponDiscount,
   calculateVerifiedOrderPricing,
   checkRateLimit,
+  evaluateFraudRisk,
+  generateIdempotencyKey,
   generateSecureOrderCode,
   normalizeBdPhone,
   sanitizeText,
   validateSubmissionVelocity,
 } from "@/lib/security";
 import { createOrderSchema } from "@/lib/validations/schemas";
+import { createSecureOrderInSupabase } from "@/services/supabaseSync";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -229,49 +232,114 @@ export default function CheckoutPage() {
 
     setSubmitting(true);
     try {
-      const pricing = calculateVerifiedOrderPricing(
-        parsed.data,
-        products,
-        settings,
-        coupons
-      );
-      const orderCode = generateSecureOrderCode();
-      const orderId = `ord-${Date.now()}`;
-      const createdOrder: Order = {
-        id: orderId,
-        orderCode,
+      const idempotencyKey = generateIdempotencyKey("ord");
+      const orderPayload = {
         customerName: sanitizeText(parsed.data.customerName),
         customerPhone: normalizeBdPhone(parsed.data.customerPhone),
         deliveryZone: parsed.data.deliveryZone,
-        customerDistrict: sanitizeText(parsed.data.customerDistrict),
+        customerDistrict: sanitizeText(
+          parsed.data.customerDistrict ||
+            (parsed.data.deliveryZone === "inside_dhaka"
+              ? "Dhaka City"
+              : "Outside Dhaka")
+        ),
         customerAddress: sanitizeText(parsed.data.customerAddress),
         customerNote: sanitizeText(parsed.data.customerNote) || undefined,
-        subtotal: pricing.subtotal,
-        deliveryCharge: pricing.deliveryCharge,
-        discountAmount: pricing.discountAmount,
-        couponCode: pricing.couponCode,
-        weightAdjustmentAmount: 0,
-        totalAmount: pricing.totalAmount,
-        advancePaid: 0,
-        dueAmount: pricing.totalAmount,
+        couponCode: appliedCoupon?.code || undefined,
         paymentMethod: parsed.data.paymentMethod,
-        paymentPlan: parsed.data.paymentPlan,
-        paymentStatus: "pending",
-        orderStatus: "pending",
-        hasPreorderItems: pricing.hasPreorderItems,
-        items: pricing.verifiedItems.map((item, idx) => ({
-          id: `item-${Date.now()}-${idx}`,
-          orderId,
-          ...item,
+        paymentPlan: (parsed.data.paymentMethod === "cod"
+          ? "cod"
+          : parsed.data.paymentPlan) as PaymentPlan,
+        items: cart.map((item) => ({
+          productId: item.productId,
+          variantId: item.variantId,
+          quantity: item.quantity,
+          cuttingPreference: item.cuttingPreference,
         })),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        idempotencyKey,
       };
+
+      let createdOrder: Order;
+      let payableNow = 0;
+
+      // 1. Zero-Client-Trust: Execute server-side pricing stored procedure via Supabase
+      const rpcRes = await createSecureOrderInSupabase(orderPayload);
+      if (rpcRes.success && rpcRes.order) {
+        createdOrder = rpcRes.order;
+        payableNow =
+          createdOrder.paymentMethod === "cod"
+            ? 0
+            : createdOrder.paymentPlan === "full"
+            ? createdOrder.totalAmount
+            : Math.max(
+                createdOrder.deliveryCharge,
+                Math.round(
+                  ((createdOrder.subtotal - createdOrder.discountAmount) *
+                    settings.preorderAdvancePercent) /
+                    100
+                )
+              );
+      } else {
+        // Fallback: strict server-side catalog pricing calculation
+        const pricing = calculateVerifiedOrderPricing(
+          parsed.data,
+          products,
+          settings,
+          coupons
+        );
+        const fraud = evaluateFraudRisk({
+          customerPhone: orderPayload.customerPhone,
+          deliveryZone: orderPayload.deliveryZone,
+          customerDistrict: orderPayload.customerDistrict,
+          paymentMethod: orderPayload.paymentMethod,
+          totalAmount: pricing.totalAmount,
+        });
+
+        const orderCode = generateSecureOrderCode();
+        const orderId = `ord-${Date.now()}`;
+        createdOrder = {
+          id: orderId,
+          orderCode,
+          customerName: orderPayload.customerName,
+          customerPhone: orderPayload.customerPhone,
+          deliveryZone: orderPayload.deliveryZone,
+          customerDistrict: orderPayload.customerDistrict,
+          customerAddress: orderPayload.customerAddress,
+          customerNote: orderPayload.customerNote,
+          subtotal: pricing.subtotal,
+          deliveryCharge: pricing.deliveryCharge,
+          discountAmount: pricing.discountAmount,
+          couponCode: pricing.couponCode,
+          weightAdjustmentAmount: 0,
+          totalAmount: pricing.totalAmount,
+          advancePaid: 0,
+          dueAmount: pricing.totalAmount,
+          paymentMethod: orderPayload.paymentMethod,
+          paymentPlan: orderPayload.paymentPlan,
+          paymentStatus: "pending",
+          orderStatus: "pending",
+          hasPreorderItems: pricing.hasPreorderItems,
+          fraudRiskScore: fraud.fraudRiskScore,
+          isSuspicious: fraud.isSuspicious,
+          reviewReasons: fraud.reviewReasons,
+          isPhoneVerified: false,
+          verificationMethod: "unverified",
+          idempotencyKey,
+          items: pricing.verifiedItems.map((item, idx) => ({
+            id: `item-${Date.now()}-${idx}`,
+            orderId,
+            ...item,
+          })),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        payableNow = pricing.payableNow;
+      }
+
       const gatewayRequired =
         parsed.data.paymentMethod === "bkash" ||
         parsed.data.paymentMethod === "nagad" ||
         parsed.data.paymentMethod === "sslcommerz";
-      const payableNow = pricing.payableNow;
 
       if (gatewayRequired && payableNow > 0) {
         setSenderPhone(parsed.data.customerPhone);
@@ -324,43 +392,42 @@ export default function CheckoutPage() {
       const isBkash = pendingGatewayOrder.order.paymentMethod === "bkash";
       const gatewayType = isNagad ? "nagad" : isBkash ? "bkash" : "sslcommerz";
 
-      const verifiedTx: PaymentTransaction = {
+      // Security Guard: Set status to "initiated" (Pending merchant verification), NOT "validated"
+      const pendingTx: PaymentTransaction = {
         id: `tx-${Date.now()}`,
         orderId: pendingGatewayOrder.order.id,
         orderCode: pendingGatewayOrder.order.orderCode,
         gateway: gatewayType,
         transactionId: cleanTrx,
-        validationId: `${gatewayType.toUpperCase()}-DIRECT-${Date.now().toString(36).toUpperCase()}`,
+        validationId: `${gatewayType.toUpperCase()}-INITIATED-${Date.now().toString(36).toUpperCase()}`,
         amount: pendingGatewayOrder.payableNow,
         currency: "BDT",
-        status: "validated",
+        status: "initiated",
         senderPhone: cleanPhone,
-        verifiedAt: new Date().toISOString(),
+        verifiedAt: undefined,
         createdAt: new Date().toISOString(),
       };
 
-      const verifiedOrder: Order = {
+      const submittedOrder: Order = {
         ...pendingGatewayOrder.order,
-        advancePaid: pendingGatewayOrder.payableNow,
-        dueAmount: Math.max(
-          0,
-          pendingGatewayOrder.order.totalAmount - pendingGatewayOrder.payableNow
-        ),
-        paymentStatus:
-          pendingGatewayOrder.payableNow >= pendingGatewayOrder.order.totalAmount
-            ? "paid"
-            : "advance_paid",
-        orderStatus: "confirmed",
+        paymentStatus: "pending",
+        orderStatus: "pending",
         transactionId: cleanTrx,
+        reviewReasons: [
+          ...(pendingGatewayOrder.order.reviewReasons || []),
+          `Customer submitted TrxID: ${cleanTrx} (Pending merchant validation)`,
+        ],
         updatedAt: new Date().toISOString(),
       };
 
-      registerNewOrder(verifiedOrder, verifiedTx);
+      registerNewOrder(submittedOrder, pendingTx);
       clearCart();
-      showToast(`পেমেন্ট সফল! TrxID: ${cleanTrx} রেকর্ড করা হয়েছে।`);
+      showToast(
+        `পেমেন্ট তথ্য সংরক্ষিত হয়েছে! মার্চেন্ট ভেরিফিকেশনের পর অর্ডারটি কনফার্ম হবে।`
+      );
       router.push(
         `/track-order?code=${encodeURIComponent(
-          verifiedOrder.orderCode
+          submittedOrder.orderCode
         )}&justOrdered=1`
       );
     } catch (err) {
