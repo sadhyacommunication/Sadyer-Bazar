@@ -16,13 +16,13 @@ export const metadata: Metadata = {
     "Organic food catalog BD",
   ],
   alternates: {
-    canonical: "https://sadyer-bazar.sadhyacommunication.workers.dev/shop",
+    canonical: "https://sadhyerbazar.com/shop",
   },
   openGraph: {
     title: "সকল অর্গানিক খাদ্যপণ্য ও তাজা মাছের বাজার দর | সাধ্যের বাজার",
     description:
       "১০০% কেমিক্যাল ও ফরমালিনমুক্ত যমুনার মাছ, খাঁটি ঘি, বগুড়ার দই ও আদি শস্যের অনলাইন ক্যাটালগ।",
-    url: "https://sadyer-bazar.sadhyacommunication.workers.dev/shop",
+    url: "https://sadhyerbazar.com/shop",
     siteName: "Sadyer Bazar (সাধ্যের বাজার)",
     images: [
       {
@@ -42,7 +42,7 @@ export default function ShopLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const baseUrl = "https://sadyer-bazar.sadhyacommunication.workers.dev";
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://sadhyerbazar.com";
 
   const itemListSchema = {
     "@context": "https://schema.org",

@@ -139,7 +139,7 @@ export default function TermsAndConditionsPage() {
                   href="/"
                   className="text-[#0F3D2E] font-medium underline"
                 >
-                  https://sadyer-bazar.sadhyacommunication.workers.dev
+                  https://sadhyerbazar.com
                 </Link>
                 ), আমাদের ফোন হটলাইন বা হোয়াটসঅ্যাপ চ্যাটের মাধ্যমে অর্ডার করার সাথে সাথেই আপনি
                 এই শর্তাবলীর সমস্ত ধারার প্রতি আপনার পূর্ণ সম্মতি জ্ঞাপন করছেন।

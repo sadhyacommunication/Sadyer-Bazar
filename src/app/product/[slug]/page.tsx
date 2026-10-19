@@ -18,7 +18,7 @@ export async function generateMetadata({
   const product = INITIAL_PRODUCTS.find((p) => p.slug === slug);
   const baseUrl =
     process.env.NEXT_PUBLIC_SITE_URL ||
-    "https://sadyer-bazar.sadhyacommunication.workers.dev";
+    "https://sadhyerbazar.com";
 
   if (!product) {
     return {
@@ -83,7 +83,7 @@ export default async function ProductDetailPage({
   const product = INITIAL_PRODUCTS.find((p) => p.slug === slug);
   const baseUrl =
     process.env.NEXT_PUBLIC_SITE_URL ||
-    "https://sadyer-bazar.sadhyacommunication.workers.dev";
+    "https://sadhyerbazar.com";
 
   // Google Rich Snippets Schema.org JSON-LD
   const jsonLd = product

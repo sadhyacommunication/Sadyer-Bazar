@@ -7,8 +7,7 @@ import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL ||
-      "https://sadyer-bazar.sadhyacommunication.workers.dev"
+    process.env.NEXT_PUBLIC_SITE_URL || "https://sadhyerbazar.com"
   ),
   title: {
     default:
@@ -54,7 +53,7 @@ export const metadata: Metadata = {
     ],
   },
   alternates: {
-    canonical: "https://sadyer-bazar.sadhyacommunication.workers.dev",
+    canonical: "https://sadhyerbazar.com",
   },
   twitter: {
     card: "summary_large_image",
@@ -86,7 +85,7 @@ export default function RootLayout({
     "@context": "https://schema.org",
     "@type": "WebSite",
     name: "Sadyer Bazar (সাধ্যের বাজার)",
-    url: "https://sadyer-bazar.sadhyacommunication.workers.dev",
+    url: "https://sadhyerbazar.com",
     description:
       "100% formalin-free Jamuna River fish, pure Gawa Ghee, and authentic Bogura Shahi Doi online store in Bangladesh.",
     potentialAction: {
@@ -94,7 +93,7 @@ export default function RootLayout({
       target: {
         "@type": "EntryPoint",
         urlTemplate:
-          "https://sadyer-bazar.sadhyacommunication.workers.dev/shop?q={search_term_string}",
+          "https://sadhyerbazar.com/shop?q={search_term_string}",
       },
       "query-input": "required name=search_term_string",
     },
@@ -108,10 +107,10 @@ export default function RootLayout({
     description:
       "Nationwide pre-order and home delivery of wild Jamuna River fish, pure Gawa Ghee, authentic Bogura Shahi Doi, village Deshi chicken, eggs, and heritage organic rice.",
     telephone: "+8801713477780",
-    url: "https://sadyer-bazar.sadhyacommunication.workers.dev",
+    url: "https://sadhyerbazar.com",
     image:
-      "https://sadyer-bazar.sadhyacommunication.workers.dev/images/hero-banner-bn.jpg",
-    logo: "https://sadyer-bazar.sadhyacommunication.workers.dev/images/hero-banner-bn.jpg",
+      "https://sadhyerbazar.com/images/hero-banner-bn.jpg",
+    logo: "https://sadhyerbazar.com/images/hero-banner-bn.jpg",
     priceRange: "৳৳",
     currenciesAccepted: "BDT",
     paymentAccepted: "bKash, SSLCommerz, Nagad, Cash on Delivery",

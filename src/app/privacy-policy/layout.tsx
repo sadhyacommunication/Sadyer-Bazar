@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   description:
     "সাধ্যের বাজার ডেটা সুরক্ষা ও গোপনীয়তা নীতিমালা। গ্রাহকের ব্যক্তিগত তথ্যের নিরাপত্তা ও PCI-DSS পেমেন্ট এনক্রিপশন স্ট্যান্ডার্ড।",
   alternates: {
-    canonical: "https://sadyer-bazar.sadhyacommunication.workers.dev/privacy-policy",
+    canonical: "https://sadhyerbazar.com/privacy-policy",
   },
   robots: {
     index: true,
@@ -18,7 +18,7 @@ export default function PrivacyPolicyLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const baseUrl = "https://sadyer-bazar.sadhyacommunication.workers.dev";
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://sadhyerbazar.com";
   const breadcrumbSchema = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",

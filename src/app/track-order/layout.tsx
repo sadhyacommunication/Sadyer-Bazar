@@ -10,12 +10,12 @@ export const metadata: Metadata = {
     "Live delivery status BD",
   ],
   alternates: {
-    canonical: "https://sadyer-bazar.sadhyacommunication.workers.dev/track-order",
+    canonical: "https://sadhyerbazar.com/track-order",
   },
   openGraph: {
     title: "লাইভ অর্ডার আইডি ট্র্যাকিং | সাধ্যের বাজার",
     description: "আপনার খাদ্যপণ্যের ডেলিভারি অগ্রগতি সরাসরি ট্র্যাক করুন।",
-    url: "https://sadyer-bazar.sadhyacommunication.workers.dev/track-order",
+    url: "https://sadhyerbazar.com/track-order",
     siteName: "Sadyer Bazar (সাধ্যের বাজার)",
   },
 };
@@ -25,7 +25,7 @@ export default function TrackOrderLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const baseUrl = "https://sadyer-bazar.sadhyacommunication.workers.dev";
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://sadhyerbazar.com";
   const breadcrumbSchema = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",

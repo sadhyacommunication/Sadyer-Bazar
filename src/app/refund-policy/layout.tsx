@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   description:
     "সাধ্যের বাজার ১০০% সন্তুষ্টি গ্যারান্টি, অভিযোগ জানানোর সময়সীমা ও SSLCommerz/bKash মাধ্যমে রিফান্ড নিষ্পত্তির নিয়মাবলী।",
   alternates: {
-    canonical: "https://sadyer-bazar.sadhyacommunication.workers.dev/refund-policy",
+    canonical: "https://sadhyerbazar.com/refund-policy",
   },
   robots: {
     index: true,
@@ -18,7 +18,7 @@ export default function RefundPolicyLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const baseUrl = "https://sadyer-bazar.sadhyacommunication.workers.dev";
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://sadhyerbazar.com";
   const breadcrumbSchema = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",

@@ -13,13 +13,13 @@ export const metadata: Metadata = {
     "Fresh Jamuna fish catch",
   ],
   alternates: {
-    canonical: "https://sadyer-bazar.sadhyacommunication.workers.dev/pre-orders",
+    canonical: "https://sadhyerbazar.com/pre-orders",
   },
   openGraph: {
     title: "ভোরের তাজা নদীর মাছ প্রি-অর্ডার ক্যাচ | সাধ্যের বাজার",
     description:
       "যমুনা নদী থেকে ভোরের বুনো শিকার সরাসরি আপনার রান্নাঘরে। ফরমালিনমুক্ত ও নিজস্ব কোল্ড-চেইনে ডেলিভারি।",
-    url: "https://sadyer-bazar.sadhyacommunication.workers.dev/pre-orders",
+    url: "https://sadhyerbazar.com/pre-orders",
     siteName: "Sadyer Bazar (সাধ্যের বাজার)",
     images: [
       {
@@ -37,7 +37,7 @@ export default function PreOrdersLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const baseUrl = "https://sadyer-bazar.sadhyacommunication.workers.dev";
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://sadhyerbazar.com";
 
   const breadcrumbSchema = {
     "@context": "https://schema.org",

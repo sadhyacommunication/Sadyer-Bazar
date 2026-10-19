@@ -143,7 +143,7 @@ export default function PrivacyPolicyPage() {
                   href="/"
                   className="text-[#0F3D2E] font-medium underline"
                 >
-                  https://sadyer-bazar.sadhyacommunication.workers.dev
+                  https://sadhyerbazar.com
                 </Link>
                 ), মোবাইল ব্রাউজার, হোয়াটসঅ্যাপ হেল্পডেস্ক কিংবা হটলাইনের মাধ্যমে যেসকল গ্রাহক
                 সেবা গ্রহণ করেন, তাদের সকলের ক্ষেত্রে এই গোপনীয়তা নীতিমালা সমভাবে প্রযোজ্য।

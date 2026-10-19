@@ -6,7 +6,7 @@ export const dynamic = "force-static";
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl =
     process.env.NEXT_PUBLIC_SITE_URL ||
-    "https://sadyer-bazar.sadhyacommunication.workers.dev";
+    "https://sadhyerbazar.com";
 
   const staticRoutes: MetadataRoute.Sitemap = [
     {

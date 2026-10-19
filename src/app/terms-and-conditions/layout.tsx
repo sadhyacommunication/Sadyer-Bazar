@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   description:
     "সাধ্যের বাজার প্ল্যাটফর্ম ব্যবহারের নিয়মাবলি, পণ্যের অর্ডার, ডিজিটাল ওজন স্লিপ ও ডেলিভারির আইনি শর্তাবলী।",
   alternates: {
-    canonical: "https://sadyer-bazar.sadhyacommunication.workers.dev/terms-and-conditions",
+    canonical: "https://sadhyerbazar.com/terms-and-conditions",
   },
   robots: {
     index: true,
@@ -18,7 +18,7 @@ export default function TermsLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const baseUrl = "https://sadyer-bazar.sadhyacommunication.workers.dev";
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://sadhyerbazar.com";
   const breadcrumbSchema = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",

@@ -11,13 +11,13 @@ export const metadata: Metadata = {
     "Sadyer Bazar customer support",
   ],
   alternates: {
-    canonical: "https://sadyer-bazar.sadhyacommunication.workers.dev/contact",
+    canonical: "https://sadhyerbazar.com/contact",
   },
   openGraph: {
     title: "যোগাযোগ ও হেল্পডেস্ক | সাধ্যের বাজার (Sadyer Bazar)",
     description:
       "আপনার যেকোনো প্রশ্ন, বাল্ক অর্ডার কিংবা মাছের কাটিং পছন্দের জন্য সরাসরি যোগাযোগ করুন।",
-    url: "https://sadyer-bazar.sadhyacommunication.workers.dev/contact",
+    url: "https://sadhyerbazar.com/contact",
     siteName: "Sadyer Bazar (সাধ্যের বাজার)",
   },
 };
@@ -74,13 +74,13 @@ export default function ContactLayout({
         "@type": "ListItem",
         position: 1,
         name: "হোম (Home)",
-        item: "https://sadyer-bazar.sadhyacommunication.workers.dev",
+        item: "https://sadhyerbazar.com",
       },
       {
         "@type": "ListItem",
         position: 2,
         name: "যোগাযোগ (Contact)",
-        item: "https://sadyer-bazar.sadhyacommunication.workers.dev/contact",
+        item: "https://sadhyerbazar.com/contact",
       },
     ],
   };

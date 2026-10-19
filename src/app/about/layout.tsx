@@ -12,13 +12,13 @@ export const metadata: Metadata = {
     "Direct source food Bangladesh",
   ],
   alternates: {
-    canonical: "https://sadyer-bazar.sadhyacommunication.workers.dev/about",
+    canonical: "https://sadhyerbazar.com/about",
   },
   openGraph: {
     title: "সাধ্যের বাজার — নদী ও প্রান্তিক খামারের খাঁটি আস্থার প্রতীক",
     description:
       "ভেজালমুক্ত খাঁটি খাবারের স্বাদ ফিরিয়ে আনার এক আন্তরিক যাত্রা। আমাদের নিজস্ব ৪টি সোর্সিং হাব ও মান নিয়ন্ত্রণ।",
-    url: "https://sadyer-bazar.sadhyacommunication.workers.dev/about",
+    url: "https://sadhyerbazar.com/about",
     siteName: "Sadyer Bazar (সাধ্যের বাজার)",
     images: [
       {
@@ -36,7 +36,7 @@ export default function AboutLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const baseUrl = "https://sadyer-bazar.sadhyacommunication.workers.dev";
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://sadhyerbazar.com";
 
   const aboutSchema = {
     "@context": "https://schema.org",
