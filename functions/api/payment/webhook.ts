@@ -11,6 +11,16 @@ interface Env {
   BKASH_APP_SECRET?: string;
 }
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export async function onRequestOptions(): Promise<Response> {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
+
 export async function onRequestPost(context: {
   request: Request;
   env: Env;
@@ -51,7 +61,7 @@ export async function onRequestPost(context: {
     if (currency !== "BDT") {
       return new Response(
         JSON.stringify({ error: `Currency mismatch: Expected BDT, got ${currency}` }),
-        { status: 400, headers: { "content-type": "application/json" } }
+        { status: 400, headers: { ...CORS_HEADERS, "content-type": "application/json" } }
       );
     }
 
@@ -59,7 +69,7 @@ export async function onRequestPost(context: {
     if (!orderCode || !transactionId || isNaN(amount) || amount <= 0) {
       return new Response(
         JSON.stringify({ error: "Missing required payment notification parameters" }),
-        { status: 400, headers: { "content-type": "application/json" } }
+        { status: 400, headers: { ...CORS_HEADERS, "content-type": "application/json" } }
       );
     }
 
@@ -70,7 +80,7 @@ export async function onRequestPost(context: {
     if (!supabaseUrl || !serviceRoleKey) {
       return new Response(
         JSON.stringify({ error: "Server credentials not configured" }),
-        { status: 500, headers: { "content-type": "application/json" } }
+        { status: 500, headers: { ...CORS_HEADERS, "content-type": "application/json" } }
       );
     }
 
@@ -97,7 +107,7 @@ export async function onRequestPost(context: {
       const errText = await rpcResponse.text();
       return new Response(
         JSON.stringify({ error: "Failed to record payment in database", details: errText }),
-        { status: 400, headers: { "content-type": "application/json" } }
+        { status: 400, headers: { ...CORS_HEADERS, "content-type": "application/json" } }
       );
     }
 
@@ -109,12 +119,12 @@ export async function onRequestPost(context: {
         message: "Payment successfully verified and recorded with idempotency guard",
         data: rpcData,
       }),
-      { status: 200, headers: { "content-type": "application/json" } }
+      { status: 200, headers: { ...CORS_HEADERS, "content-type": "application/json" } }
     );
   } catch (err) {
     return new Response(
       JSON.stringify({ error: "Internal server error processing payment webhook" }),
-      { status: 500, headers: { "content-type": "application/json" } }
+      { status: 500, headers: { ...CORS_HEADERS, "content-type": "application/json" } }
     );
   }
 }

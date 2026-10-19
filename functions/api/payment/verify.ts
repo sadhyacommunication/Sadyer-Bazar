@@ -15,6 +15,16 @@ interface Env {
   BKASH_APP_SECRET?: string;
 }
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export async function onRequestOptions(): Promise<Response> {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
+
 export async function onRequestPost(context: {
   request: Request;
   env: Env;
@@ -22,13 +32,13 @@ export async function onRequestPost(context: {
   const { request, env } = context;
 
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const { orderCode, gateway, validationId, transactionId } = body;
 
     if (!orderCode || !gateway) {
       return new Response(
         JSON.stringify({ error: "Missing required orderCode or gateway" }),
-        { status: 400, headers: { "content-type": "application/json" } }
+        { status: 400, headers: { ...CORS_HEADERS, "content-type": "application/json" } }
       );
     }
 
@@ -38,7 +48,7 @@ export async function onRequestPost(context: {
     if (!supabaseUrl || !serviceRoleKey) {
       return new Response(
         JSON.stringify({ error: "Server credentials not configured" }),
-        { status: 500, headers: { "content-type": "application/json" } }
+        { status: 500, headers: { ...CORS_HEADERS, "content-type": "application/json" } }
       );
     }
 
@@ -57,7 +67,7 @@ export async function onRequestPost(context: {
     if (!orders || orders.length === 0) {
       return new Response(
         JSON.stringify({ error: "Order not found" }),
-        { status: 404, headers: { "content-type": "application/json" } }
+        { status: 404, headers: { ...CORS_HEADERS, "content-type": "application/json" } }
       );
     }
     const order = orders[0];
@@ -68,13 +78,25 @@ export async function onRequestPost(context: {
       if (!valId) {
         return new Response(
           JSON.stringify({ error: "val_id is required for SSLCommerz verification" }),
-          { status: 400, headers: { "content-type": "application/json" } }
+          { status: 400, headers: { ...CORS_HEADERS, "content-type": "application/json" } }
         );
       }
 
-      const storeId = env.SSLCOMMERZ_STORE_ID || "";
-      const storePasswd = env.SSLCOMMERZ_STORE_PASSWORD || "";
       const isLive = env.SSLCOMMERZ_IS_LIVE === "true";
+      let storeId = env.SSLCOMMERZ_STORE_ID?.trim() || "";
+      let storePasswd = env.SSLCOMMERZ_STORE_PASSWORD?.trim() || "";
+
+      if (!storeId || !storePasswd) {
+        if (!isLive) {
+          storeId = "testbox";
+          storePasswd = "qwerty";
+        } else {
+          return new Response(
+            JSON.stringify({ error: "SSLCommerz credentials not configured on server" }),
+            { status: 500, headers: { ...CORS_HEADERS, "content-type": "application/json" } }
+          );
+        }
+      }
 
       const sslHost = isLive
         ? "https://securepay.sslcommerz.com"
@@ -96,7 +118,7 @@ export async function onRequestPost(context: {
             error: "Payment could not be verified by SSLCommerz",
             gatewayStatus: sslData.status,
           }),
-          { status: 400, headers: { "content-type": "application/json" } }
+          { status: 400, headers: { ...CORS_HEADERS, "content-type": "application/json" } }
         );
       }
 
@@ -107,14 +129,14 @@ export async function onRequestPost(context: {
       if (reportedCurrency !== "BDT") {
         return new Response(
           JSON.stringify({ error: "Currency mismatch: Expected BDT" }),
-          { status: 400, headers: { "content-type": "application/json" } }
+          { status: 400, headers: { ...CORS_HEADERS, "content-type": "application/json" } }
         );
       }
 
       if (sslData.tran_id !== order.order_code) {
         return new Response(
           JSON.stringify({ error: "Transaction order reference mismatch" }),
-          { status: 400, headers: { "content-type": "application/json" } }
+          { status: 400, headers: { ...CORS_HEADERS, "content-type": "application/json" } }
         );
       }
 
@@ -148,18 +170,18 @@ export async function onRequestPost(context: {
           message: "SSLCommerz payment verified and recorded",
           order: rpcResult,
         }),
-        { status: 200, headers: { "content-type": "application/json" } }
+        { status: 200, headers: { ...CORS_HEADERS, "content-type": "application/json" } }
       );
     }
 
     return new Response(
       JSON.stringify({ error: `Verification for gateway ${gateway} is handled via webhook` }),
-      { status: 400, headers: { "content-type": "application/json" } }
+      { status: 400, headers: { ...CORS_HEADERS, "content-type": "application/json" } }
     );
   } catch (err) {
     return new Response(
       JSON.stringify({ error: "Internal server error during payment verification" }),
-      { status: 500, headers: { "content-type": "application/json" } }
+      { status: 500, headers: { ...CORS_HEADERS, "content-type": "application/json" } }
     );
   }
 }

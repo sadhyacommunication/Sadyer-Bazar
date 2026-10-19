@@ -98,6 +98,7 @@ export default function CheckoutPage() {
   const [trxError, setTrxError] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [verifyingPayment, setVerifyingPayment] = useState(false);
+  const [redirectingToGateway, setRedirectingToGateway] = useState(false);
 
   const handleCopyText = (text: string, field: string) => {
     try {
@@ -336,12 +337,55 @@ export default function CheckoutPage() {
         payableNow = pricing.payableNow;
       }
 
-      const gatewayRequired =
-        parsed.data.paymentMethod === "bkash" ||
-        parsed.data.paymentMethod === "nagad" ||
-        parsed.data.paymentMethod === "sslcommerz";
+      if (parsed.data.paymentMethod === "sslcommerz" && payableNow > 0) {
+        // Zero-Client-Trust: Initiate automated SSLCommerz hosted session via Cloudflare Edge Worker
+        setRedirectingToGateway(true);
+        try {
+          const initRes = await fetch("/api/payment/sslcommerz/init", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              orderCode: createdOrder.orderCode,
+              paymentType: createdOrder.paymentPlan,
+            }),
+          });
+          const initData = (await initRes.json()) as {
+            success: boolean;
+            GatewayPageURL?: string;
+            error?: string;
+          };
 
-      if (gatewayRequired && payableNow > 0) {
+          if (initRes.ok && initData.success && initData.GatewayPageURL) {
+            registerNewOrder(createdOrder);
+            clearCart();
+            window.location.href = initData.GatewayPageURL;
+            return;
+          } else {
+            throw new Error(
+              initData.error ||
+                "SSLCommerz গেটওয়ে সেশন তৈরি করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন অথবা ক্যাশ অন ডেলিভারি বেছে নিন।"
+            );
+          }
+        } catch (gatewayErr) {
+          setRedirectingToGateway(false);
+          // If gateway error, register the order as pending so customer does not lose work
+          registerNewOrder(createdOrder);
+          clearCart();
+          showToast(
+            "SSLCommerz গেটওয়ে সংযোগে ত্রুটি। আপনার অর্ডারটি পেন্ডিং হিসেবে সংরক্ষিত হয়েছে।"
+          );
+          router.push(
+            `/track-order?code=${encodeURIComponent(
+              createdOrder.orderCode
+            )}&justOrdered=1&gatewayError=1`
+          );
+          return;
+        }
+      } else if (
+        (parsed.data.paymentMethod === "bkash" ||
+          parsed.data.paymentMethod === "nagad") &&
+        payableNow > 0
+      ) {
         setSenderPhone(parsed.data.customerPhone);
         setTransactionId("");
         setTrxError(null);
@@ -1317,6 +1361,29 @@ export default function CheckoutPage() {
                 </>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* SSLCommerz Hosted Checkout Redirection Overlay */}
+      {redirectingToGateway && (
+        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-7 sm:p-9 max-w-md w-full shadow-2xl text-center space-y-4 border border-stone-200">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-blue-50 text-[#1A4B8C] flex items-center justify-center shadow-inner">
+              <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-lg sm:text-xl font-extrabold text-stone-900">
+                SSLCommerz সুরক্ষিত পেমেন্টে নিয়ে যাওয়া হচ্ছে...
+              </h3>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                অনুগ্রহ করে অপেক্ষা করুন। আপনাকে সরাসরি SSLCommerz-এর অফিসিয়াল সুরক্ষিত পেমেন্ট গেটওয়েতে রিডাইরেক্ট করা হচ্ছে।
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-800 text-[11px] font-bold">
+              <Lock className="w-3.5 h-3.5 text-emerald-700" />
+              <span>PCI-DSS SAQ A কমপ্লায়েন্ট নিরাপদ পেমেন্ট</span>
+            </div>
           </div>
         </div>
       )}
