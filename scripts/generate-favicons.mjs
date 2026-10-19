@@ -149,11 +149,6 @@ async function generateFavicons() {
 
   const svgBuffer = Buffer.from(svgContent, "utf-8");
 
-  // Write SVG files
-  fs.writeFileSync(path.resolve(publicDir, "favicon.svg"), svgContent);
-  fs.writeFileSync(path.resolve(publicDir, "icon.svg"), svgContent);
-  console.log("✓ Saved public/favicon.svg and public/icon.svg");
-
   // Render PNG sizes
   const sizes = [16, 32, 48, 64, 180, 192, 512];
   const pngMap = {};
@@ -166,29 +161,26 @@ async function generateFavicons() {
     pngMap[size] = pngBuf;
   }
 
-  // 1. Standard PNG Icons in public/
-  fs.writeFileSync(path.resolve(publicDir, "icon-192.png"), pngMap[192]);
-  fs.writeFileSync(path.resolve(publicDir, "icon-512.png"), pngMap[512]);
-  fs.writeFileSync(path.resolve(publicDir, "apple-touch-icon.png"), pngMap[180]);
-  fs.writeFileSync(path.resolve(publicDir, "icon.png"), pngMap[192]);
-  console.log("✓ Saved public/icon-192.png, icon-512.png, apple-touch-icon.png, icon.png");
-
-  // 2. Next.js App Router root icons in src/app/
+  // 1. Next.js App Router root icons in src/app/ (Turned into metadata routes automatically)
   fs.writeFileSync(path.resolve(appDir, "icon.png"), pngMap[192]);
   fs.writeFileSync(path.resolve(appDir, "apple-icon.png"), pngMap[180]);
   fs.writeFileSync(path.resolve(appDir, "icon.svg"), svgContent);
   console.log("✓ Saved src/app/icon.png, apple-icon.png, icon.svg");
 
-  // 3. Multi-resolution favicon.ico (16x16, 32x32, 48x48)
+  // 2. Multi-resolution favicon.ico (16x16, 32x32, 48x48) in src/app/
   const icoBuffer = buildIcoBuffer([
     { width: 16, height: 16, buffer: pngMap[16] },
     { width: 32, height: 32, buffer: pngMap[32] },
     { width: 48, height: 48, buffer: pngMap[48] },
   ]);
 
-  fs.writeFileSync(path.resolve(publicDir, "favicon.ico"), icoBuffer);
   fs.writeFileSync(path.resolve(appDir, "favicon.ico"), icoBuffer);
-  console.log("✓ Built valid Windows multi-resolution favicon.ico in public/ and src/app/");
+  console.log("✓ Built valid Windows multi-resolution favicon.ico in src/app/");
+
+  // 3. High-res PWA & Web App Manifest icons in public/
+  fs.writeFileSync(path.resolve(publicDir, "icon-192.png"), pngMap[192]);
+  fs.writeFileSync(path.resolve(publicDir, "icon-512.png"), pngMap[512]);
+  console.log("✓ Saved public/icon-192.png and public/icon-512.png");
 
   // 4. Web App Manifest (site.webmanifest)
   const manifest = {
