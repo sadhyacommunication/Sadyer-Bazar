@@ -218,6 +218,74 @@ function TrackOrderContent() {
     }
   };
 
+  const handlePayDueWithBkash = async () => {
+    if (!activeOrder || activeOrder.dueAmount <= 0) return;
+    setPayingDue(true);
+    setDueTrxError(null);
+    try {
+      const res = await fetch("/api/payment/bkash/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderCode: activeOrder.orderCode,
+          paymentType: "due",
+        }),
+      });
+      const data = (await res.json()) as {
+        success: boolean;
+        bkashURL?: string;
+        error?: string;
+      };
+
+      if (res.ok && data.success && data.bkashURL) {
+        window.location.href = data.bkashURL;
+      } else {
+        throw new Error(data.error || "bKash গেটওয়ে সংযোগে সমস্যা হয়েছে।");
+      }
+    } catch (err) {
+      setDueTrxError(
+        err instanceof Error
+          ? err.message
+          : "bKash গেটওয়েতে সংযোগ করতে সমস্যা হয়েছে।"
+      );
+      setPayingDue(false);
+    }
+  };
+
+  const handlePayDueWithNagad = async () => {
+    if (!activeOrder || activeOrder.dueAmount <= 0) return;
+    setPayingDue(true);
+    setDueTrxError(null);
+    try {
+      const res = await fetch("/api/payment/nagad/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderCode: activeOrder.orderCode,
+          paymentType: "due",
+        }),
+      });
+      const data = (await res.json()) as {
+        success: boolean;
+        callBackUrl?: string;
+        error?: string;
+      };
+
+      if (res.ok && data.success && data.callBackUrl) {
+        window.location.href = data.callBackUrl;
+      } else {
+        throw new Error(data.error || "নগদ গেটওয়ে সংযোগে সমস্যা হয়েছে।");
+      }
+    } catch (err) {
+      setDueTrxError(
+        err instanceof Error
+          ? err.message
+          : "নগদ গেটওয়েতে সংযোগ করতে সমস্যা হয়েছে।"
+      );
+      setPayingDue(false);
+    }
+  };
+
   const handlePayRemainingDue = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeOrder || activeOrder.dueAmount <= 0) return;
@@ -1068,6 +1136,31 @@ function TrackOrderContent() {
                               )}
                             </button>
                           </div>
+                        </div>
+
+                        {/* 1-Click Automated Gateway Option */}
+                        <div className="p-3.5 rounded-2xl bg-stone-50 border border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="text-left">
+                            <span className="text-xs font-black text-stone-900 block">
+                              ১-ক্লিক অনলাইন পেমেন্ট (স্বয়ংক্রিয়)
+                            </span>
+                            <span className="text-[10px] text-stone-500 block">
+                              সরাসরি {isBkash ? "bKash" : "নগদ"} অফিশিয়াল গেটওয়ে পেজে পেমেন্ট সম্পন্ন করুন
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={payingDue}
+                            onClick={isBkash ? handlePayDueWithBkash : handlePayDueWithNagad}
+                            className={`px-4 py-2.5 rounded-xl text-white font-extrabold text-xs shadow-sm transition cursor-pointer shrink-0 flex items-center justify-center gap-1.5 ${
+                              isBkash
+                                ? "bg-[#E2136E] hover:bg-[#c20f5d]"
+                                : "bg-[#E35124] hover:bg-[#c44119]"
+                            }`}
+                          >
+                            <CreditCard className="w-3.5 h-3.5" />
+                            <span>{isBkash ? "bKash দিয়ে পে করুন" : "নগদ দিয়ে পে করুন"}</span>
+                          </button>
                         </div>
 
                         {/* Step-by-Step Instructions */}

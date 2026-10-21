@@ -302,6 +302,156 @@ RETURNS SETOF public.orders LANGUAGE sql SECURITY DEFINER SET search_path = publ
 $$;
 GRANT EXECUTE ON FUNCTION public.get_order_by_code(TEXT) TO anon, authenticated, service_role;
 
+-- 11. GATEWAY TOKEN CACHE TABLE (bKash id_token & refresh_token with TTL)
+CREATE TABLE IF NOT EXISTS public.payment_gateway_tokens (
+    gateway TEXT PRIMARY KEY,
+    token TEXT NOT NULL,
+    refresh_token TEXT,
+    expires_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.payment_gateway_tokens ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.payment_gateway_tokens FROM anon, authenticated, public;
+GRANT ALL ON public.payment_gateway_tokens TO service_role;
+
+-- 12. SERVER-SIDE PAYMENT & WEBHOOK VERIFICATION (WITH IDEMPOTENCY & SPLIT PAYMENT SAFETY)
+CREATE OR REPLACE FUNCTION public.verify_and_record_payment(
+    p_order_code TEXT,
+    p_gateway TEXT,
+    p_transaction_id TEXT,
+    p_validation_id TEXT,
+    p_amount NUMERIC(10, 2),
+    p_currency TEXT DEFAULT 'BDT',
+    p_sender_phone TEXT DEFAULT NULL,
+    p_raw_payload JSONB DEFAULT '{}'::jsonb
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_order RECORD;
+    v_new_payment_status TEXT;
+    v_advance_paid NUMERIC(10, 2);
+    v_due_amount NUMERIC(10, 2);
+    v_order_status TEXT;
+    v_now TIMESTAMPTZ := NOW();
+BEGIN
+    -- 1. Currency Enforcement
+    IF UPPER(p_currency) != 'BDT' THEN
+        RAISE EXCEPTION 'Currency mismatch: Expected BDT, got %', p_currency;
+    END IF;
+
+    -- 2. Idempotency Check: Prevent duplicate payment replay
+    INSERT INTO public.processed_webhook_events (
+        gateway,
+        transaction_id,
+        order_code,
+        amount,
+        currency,
+        payload,
+        processed_at
+    ) VALUES (
+        p_gateway,
+        trim(p_transaction_id),
+        trim(p_order_code),
+        p_amount,
+        p_currency,
+        p_raw_payload,
+        v_now
+    )
+    ON CONFLICT (gateway, transaction_id) DO NOTHING;
+
+    -- If conflict occurred, event was already processed
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object(
+            'success', true,
+            'idempotent', true,
+            'message', 'Transaction already processed previously'
+        );
+    END IF;
+
+    -- 3. Order Verification
+    SELECT * INTO v_order 
+    FROM public.orders 
+    WHERE upper(order_code) = upper(trim(p_order_code)) 
+    LIMIT 1;
+
+    IF v_order IS NULL THEN
+        RAISE EXCEPTION 'Order not found for code: %', p_order_code;
+    END IF;
+
+    -- 4. Calculate Verified Status (Accumulative / Split Payment Safe)
+    v_advance_paid := COALESCE(v_order.advance_paid, 0) + p_amount;
+    v_due_amount := GREATEST(0, v_order.total_amount - v_advance_paid);
+
+    IF v_due_amount <= 0 THEN
+        v_new_payment_status := 'paid';
+        v_order_status := 'confirmed';
+    ELSE
+        v_new_payment_status := 'advance_paid';
+        v_order_status := 'confirmed';
+    END IF;
+
+    -- 5. Record Transaction in Audit Trail
+    INSERT INTO public.payment_transactions (
+        id,
+        order_id,
+        order_code,
+        gateway,
+        transaction_id,
+        validation_id,
+        amount,
+        currency,
+        status,
+        sender_phone,
+        verified_at,
+        created_at
+    ) VALUES (
+        'tx-' || extract(epoch from v_now)::bigint || '-' || substr(md5(random()::text), 1, 4),
+        v_order.id,
+        v_order.order_code,
+        p_gateway,
+        trim(p_transaction_id),
+        p_validation_id,
+        p_amount,
+        'BDT',
+        'validated',
+        p_sender_phone,
+        v_now,
+        v_now
+    );
+
+    -- 6. Update Order Status in Database (Preserve prior TrxIDs if multi-stage payment)
+    UPDATE public.orders 
+    SET payment_status = v_new_payment_status,
+        order_status = v_order_status,
+        advance_paid = v_advance_paid,
+        due_amount = v_due_amount,
+        transaction_id = CASE 
+            WHEN transaction_id IS NULL OR transaction_id = '' THEN trim(p_transaction_id)
+            WHEN position(trim(p_transaction_id) in transaction_id) > 0 THEN transaction_id
+            ELSE transaction_id || ', ' || trim(p_transaction_id)
+        END,
+        updated_at = v_now
+    WHERE id = v_order.id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'orderCode', v_order.order_code,
+        'paymentStatus', v_new_payment_status,
+        'orderStatus', v_order_status,
+        'amountPaid', p_amount,
+        'dueAmount', v_due_amount
+    );
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.verify_and_record_payment FROM anon, authenticated, public;
+GRANT EXECUTE ON FUNCTION public.verify_and_record_payment TO service_role;
+
 -- Initialize Default Site Settings
 INSERT INTO public.site_settings (id, inside_dhaka_fee, outside_dhaka_fee, free_delivery_threshold, preorder_advance_percent)
 VALUES (1, 70.00, 130.00, 3000.00, 25)

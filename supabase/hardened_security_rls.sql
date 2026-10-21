@@ -748,16 +748,15 @@ BEGIN
         RAISE EXCEPTION 'Order not found for code: %', p_order_code;
     END IF;
 
-    -- 4. Calculate Verified Status
-    IF p_amount >= v_order.total_amount THEN
+    -- 4. Calculate Verified Status (Accumulative / Split Payment Safe)
+    v_advance_paid := COALESCE(v_order.advance_paid, 0) + p_amount;
+    v_due_amount := GREATEST(0, v_order.total_amount - v_advance_paid);
+
+    IF v_due_amount <= 0 THEN
         v_new_payment_status := 'paid';
-        v_advance_paid := p_amount;
-        v_due_amount := 0;
         v_order_status := 'confirmed';
     ELSE
         v_new_payment_status := 'advance_paid';
-        v_advance_paid := p_amount;
-        v_due_amount := GREATEST(0, v_order.total_amount - p_amount);
         v_order_status := 'confirmed';
     END IF;
 
@@ -790,13 +789,17 @@ BEGIN
         v_now
     );
 
-    -- 6. Update Order Status in Database
+    -- 6. Update Order Status in Database (Preserve prior TrxIDs if multi-stage payment)
     UPDATE public.orders 
     SET payment_status = v_new_payment_status,
         order_status = v_order_status,
         advance_paid = v_advance_paid,
         due_amount = v_due_amount,
-        transaction_id = trim(p_transaction_id),
+        transaction_id = CASE 
+            WHEN transaction_id IS NULL OR transaction_id = '' THEN trim(p_transaction_id)
+            WHEN position(trim(p_transaction_id) in transaction_id) > 0 THEN transaction_id
+            ELSE transaction_id || ', ' || trim(p_transaction_id)
+        END,
         updated_at = v_now
     WHERE id = v_order.id;
 
@@ -841,3 +844,18 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION public.admin_verify_cod_phone FROM anon, authenticated, public;
 GRANT EXECUTE ON FUNCTION public.admin_verify_cod_phone TO service_role;
+
+-- ============================================================================
+-- 14. GATEWAY TOKEN CACHE TABLE (bKash id_token & refresh_token with TTL)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.payment_gateway_tokens (
+    gateway TEXT PRIMARY KEY,
+    token TEXT NOT NULL,
+    refresh_token TEXT,
+    expires_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.payment_gateway_tokens ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.payment_gateway_tokens FROM anon, authenticated, public;
+GRANT ALL ON public.payment_gateway_tokens TO service_role;

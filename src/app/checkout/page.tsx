@@ -363,12 +363,11 @@ export default function CheckoutPage() {
           } else {
             throw new Error(
               initData.error ||
-                "SSLCommerz গেটওয়ে সেশন তৈরি করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন অথবা ক্যাশ অন ডেলিভারি বেছে নিন।"
+                "SSLCommerz গেটওয়ে সেশন তৈরি করতে সমস্যা হয়েছে।"
             );
           }
         } catch (gatewayErr) {
           setRedirectingToGateway(false);
-          // If gateway error, register the order as pending so customer does not lose work
           registerNewOrder(createdOrder);
           clearCart();
           showToast(
@@ -381,18 +380,96 @@ export default function CheckoutPage() {
           );
           return;
         }
-      } else if (
-        (parsed.data.paymentMethod === "bkash" ||
-          parsed.data.paymentMethod === "nagad") &&
-        payableNow > 0
-      ) {
-        setSenderPhone(parsed.data.customerPhone);
-        setTransactionId("");
-        setTrxError(null);
-        setPendingGatewayOrder({
-          order: createdOrder,
-          payableNow,
-        });
+      } else if (parsed.data.paymentMethod === "bkash" && payableNow > 0) {
+        // Attempt automated bKash Tokenized PGW first
+        setRedirectingToGateway(true);
+        try {
+          const initRes = await fetch("/api/payment/bkash/init", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              orderCode: createdOrder.orderCode,
+              paymentType: createdOrder.paymentPlan,
+            }),
+          });
+          const initData = (await initRes.json()) as {
+            success: boolean;
+            bkashURL?: string;
+            error?: string;
+            unconfigured?: boolean;
+          };
+
+          if (initRes.ok && initData.success && initData.bkashURL) {
+            registerNewOrder(createdOrder);
+            clearCart();
+            window.location.href = initData.bkashURL;
+            return;
+          }
+
+          // Fallback to manual TrxID entry drawer if bKash merchant API unconfigured
+          setRedirectingToGateway(false);
+          setSenderPhone(parsed.data.customerPhone);
+          setTransactionId("");
+          setTrxError(null);
+          setPendingGatewayOrder({
+            order: createdOrder,
+            payableNow,
+          });
+        } catch {
+          setRedirectingToGateway(false);
+          setSenderPhone(parsed.data.customerPhone);
+          setTransactionId("");
+          setTrxError(null);
+          setPendingGatewayOrder({
+            order: createdOrder,
+            payableNow,
+          });
+        }
+      } else if (parsed.data.paymentMethod === "nagad" && payableNow > 0) {
+        // Attempt automated Nagad Direct Asymmetric PGW first
+        setRedirectingToGateway(true);
+        try {
+          const initRes = await fetch("/api/payment/nagad/init", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              orderCode: createdOrder.orderCode,
+              paymentType: createdOrder.paymentPlan,
+            }),
+          });
+          const initData = (await initRes.json()) as {
+            success: boolean;
+            callBackUrl?: string;
+            error?: string;
+            unconfigured?: boolean;
+          };
+
+          if (initRes.ok && initData.success && initData.callBackUrl) {
+            registerNewOrder(createdOrder);
+            clearCart();
+            window.location.href = initData.callBackUrl;
+            return;
+          }
+
+          // Fallback to manual TrxID entry drawer if Nagad merchant API unconfigured
+          setRedirectingToGateway(false);
+          setSenderPhone(parsed.data.customerPhone);
+          setTransactionId("");
+          setTrxError(null);
+          setPendingGatewayOrder({
+            order: createdOrder,
+            payableNow,
+          });
+        } catch {
+          setRedirectingToGateway(false);
+          setSenderPhone(parsed.data.customerPhone);
+          setTransactionId("");
+          setTrxError(null);
+          setPendingGatewayOrder({
+            order: createdOrder,
+            payableNow,
+          });
+        }
       } else {
         registerNewOrder(createdOrder);
         clearCart();
