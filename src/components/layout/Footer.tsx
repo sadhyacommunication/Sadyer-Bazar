@@ -449,10 +449,21 @@ export default function Footer() {
 
         {/* Bottom Minimal Copyright Bar */}
         <div className="border-t border-emerald-900/90 bg-emerald-950/70 py-5 px-4 text-center text-xs text-emerald-300/70">
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 px-4">
-            <span>
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3 px-4">
+            <span className="text-center md:text-left">
               © {new Date().getFullYear()} Sadyer Bazar (সাধ্যের বাজার). All rights reserved.
             </span>
+            <div className="text-xs text-emerald-300/90">
+              developed by{" "}
+              <a
+                href="https://abuhanifmia.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-amber-300 hover:text-white font-semibold transition hover:underline underline-offset-4"
+              >
+                &quot;Abu Hanif&quot;
+              </a>
+            </div>
             <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-emerald-200/80">
               <Link
                 href="/about"
