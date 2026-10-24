@@ -1,4 +1,4 @@
-﻿-- SADYER BAZAR — ONE-CLICK MASTER PRODUCTION SQL MIGRATION
+-- SADYER BAZAR — ONE-CLICK MASTER PRODUCTION SQL MIGRATION
 
 -- ============================================================================
 -- SADYER BAZAR (à¦¸à¦¾à¦§à§à¦¯à§‡à¦° à¦¬à¦¾à¦œà¦¾à¦°) â€” SUPABASE POSTGRESQL SCHEMA & RLS SECURITY
@@ -334,8 +334,10 @@ $$;
 CREATE TABLE IF NOT EXISTS public.admins (
   user_id    uuid PRIMARY KEY REFERENCES auth.users (id) ON DELETE CASCADE,
   email      text,
+  role       text NOT NULL DEFAULT 'owner',
   created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'owner';
 ALTER TABLE public.admins ENABLE ROW LEVEL SECURITY;
 
 CREATE OR REPLACE FUNCTION public.is_admin()

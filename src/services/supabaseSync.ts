@@ -876,7 +876,7 @@ export async function fetchAuthenticatedAdminDataFromSupabase(): Promise<{
   // Check membership in public.admins (RLS policy `admins_self_read` allows reading own row)
   const { data: adminRow, error: adminErr } = await supabase
     .from("admins")
-    .select("user_id, email, role")
+    .select("user_id, email")
     .eq("user_id", userRes.user.id)
     .maybeSingle();
 
