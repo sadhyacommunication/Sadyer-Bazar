@@ -3,7 +3,7 @@ import { CreateOrderInput } from "@/lib/validations/schemas";
 
 /**
  * Generates a cryptographically non-guessable, human-readable Order ID.
- * Format: SB-YYMM-XXXXX (e.g., SB-2610-9K4M2)
+ * Format: SB-YYMM-XXXXXXXXXX (10 random chars, 32^10 ~ 2^50 combinations)
  * Excludes ambiguous characters like 0/O and 1/I.
  */
 export function generateSecureOrderCode(): string {
@@ -11,18 +11,18 @@ export function generateSecureOrderCode(): string {
   const yy = String(now.getFullYear()).slice(-2);
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const randomBytes = new Uint8Array(5);
+  const randomBytes = new Uint8Array(10);
 
   if (typeof crypto !== "undefined" && crypto.getRandomValues) {
     crypto.getRandomValues(randomBytes);
   } else {
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 10; i++) {
       randomBytes[i] = Math.floor(Math.random() * 256);
     }
   }
 
   let code = "";
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 10; i++) {
     code += alphabet[randomBytes[i] % alphabet.length];
   }
 
@@ -73,7 +73,7 @@ export function maskAddress(address: string, district: string): string {
 }
 
 /**
- * In-Memory / Edge Rate Limiter to block automated fake order floods & brute force tracking.
+ * Client-side burst guard to prevent accidental rapid double clicks before hitting edge rate limiter.
  */
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
@@ -99,8 +99,7 @@ export function checkRateLimit(
 }
 
 /**
- * ZERO-CLIENT-TRUST COUPON CALCULATOR:
- * Validates coupon eligibility and computes exact discount amount on server.
+ * Coupon preview calculator (authoritative calculation is enforced in Postgres `_sb_quote_order`).
  */
 export function calculateCouponDiscount(
   subtotal: number,
@@ -135,9 +134,7 @@ export function calculateCouponDiscount(
 }
 
 /**
- * ZERO-CLIENT-TRUST PRICING ENGINE:
- * Computes exact subtotal, coupon discount, delivery fee, advance required, and due amount strictly
- * using server-side catalog, coupons & admin settings. Ignores any client-side price manipulation.
+ * Preview pricing helper (authoritative pricing is enforced in Postgres `create_order_server`).
  */
 export function calculateVerifiedOrderPricing(
   input: CreateOrderInput,
@@ -184,14 +181,12 @@ export function calculateVerifiedOrderPricing(
     };
   });
 
-  // Server-Side Coupon Validation
   const { discountAmount, appliedCoupon } = calculateCouponDiscount(
     subtotal,
     input.couponCode,
     coupons
   );
 
-  // Delivery charge calculation from dynamic Admin Settings
   const baseDeliveryFee =
     input.deliveryZone === "inside_dhaka"
       ? Number(settings.insideDhakaFee)
@@ -204,7 +199,6 @@ export function calculateVerifiedOrderPricing(
   const deliveryCharge = qualifiesForFreeDelivery ? 0 : baseDeliveryFee;
   const totalAmount = Math.max(0, subtotal - discountAmount + deliveryCharge);
 
-  // Calculate payable now (Advance vs Full vs COD)
   let payableNow = 0;
   if (input.paymentMethod === "cod" || input.paymentPlan === "cod") {
     payableNow = 0;
@@ -215,7 +209,7 @@ export function calculateVerifiedOrderPricing(
     const percentAdvance = Math.round(
       (discountedSubtotal * Number(settings.preorderAdvancePercent)) / 100
     );
-    payableNow = Math.max(deliveryCharge, percentAdvance);
+    payableNow = Math.min(totalAmount, Math.max(deliveryCharge, percentAdvance));
   }
 
   return {
@@ -231,95 +225,7 @@ export function calculateVerifiedOrderPricing(
 }
 
 /**
- * Cryptographic Admin Authentication & Anti-Brute-Force Shield
- */
-const ADMIN_PASSKEY_SALT = "sadyer_bazar_sec_salt_2026_9x8k";
-export const VALID_ADMIN_HASHES = [
-  "202a193cb2d93c6feeb2c2cb883b08d8e5293a5d479b5e0232d0845e6de70669", // Passkey 2026
-  "055915741b13c085d73c42c00ae919eb3cbe2111067967aa8a661bf197faf963", // Passkey SadyerBazar@2026!
-];
-
-export async function hashAdminPasskey(passkey: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(ADMIN_PASSKEY_SALT + passkey);
-
-  if (typeof crypto !== "undefined" && crypto.subtle) {
-    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-  }
-
-  // Fallback for non-subtle crypto environments
-  let hash = 0;
-  for (let i = 0; i < data.length; i++) {
-    hash = (hash << 5) - hash + data[i];
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(16);
-}
-
-export async function verifyAdminPasskey(
-  passkey: string
-): Promise<{ success: boolean; hash?: string }> {
-  const digest = await hashAdminPasskey(passkey.trim());
-  const isValid = VALID_ADMIN_HASHES.includes(digest);
-  return { success: isValid, hash: isValid ? digest : undefined };
-}
-
-/**
- * Creates a cryptographically signed, timestamped session token (valid 2 hours).
- */
-export function createAdminSessionToken(hash: string): string {
-  const now = Date.now();
-  const payload = {
-    iat: now,
-    exp: now + 2 * 60 * 60 * 1000,
-    h: hash.slice(0, 16),
-  };
-  const payloadStr =
-    typeof window !== "undefined"
-      ? btoa(JSON.stringify(payload))
-      : Buffer.from(JSON.stringify(payload)).toString("base64");
-
-  let sig = 0;
-  const strToSign = payloadStr + ADMIN_PASSKEY_SALT;
-  for (let i = 0; i < strToSign.length; i++) {
-    sig = (sig << 5) - sig + strToSign.charCodeAt(i);
-    sig |= 0;
-  }
-  return `${payloadStr}.${Math.abs(sig).toString(36)}`;
-}
-
-export function verifyAdminSessionToken(token: string | null): boolean {
-  if (!token) return false;
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 2) return false;
-    const [payloadStr, sigStr] = parts;
-
-    let expectedSig = 0;
-    const strToSign = payloadStr + ADMIN_PASSKEY_SALT;
-    for (let i = 0; i < strToSign.length; i++) {
-      expectedSig = (expectedSig << 5) - expectedSig + strToSign.charCodeAt(i);
-      expectedSig |= 0;
-    }
-    if (Math.abs(expectedSig).toString(36) !== sigStr) return false;
-
-    const raw =
-      typeof window !== "undefined"
-        ? atob(payloadStr)
-        : Buffer.from(payloadStr, "base64").toString("utf-8");
-    const payload = JSON.parse(raw);
-    if (!payload.exp || Date.now() > payload.exp) return false;
-
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Checks if the browser device is currently locked out from admin attempts.
+ * Checks if the browser device is currently locked out from admin sign-in attempts.
  */
 export function checkAdminLockout(): {
   locked: boolean;
@@ -346,7 +252,7 @@ export function checkAdminLockout(): {
 }
 
 /**
- * Records admin attempt and enforces exponential backoff (3 fails -> 60s, 5 fails -> 15 min).
+ * Records admin login attempt and enforces exponential backoff (3 fails -> 60s, 5 fails -> 15 min).
  */
 export function recordAdminLoginAttempt(isSuccess: boolean): {
   locked: boolean;
@@ -412,7 +318,7 @@ export function validateSubmissionVelocity(
 }
 
 /**
- * Generates a unique, non-colliding idempotency key for order submission and webhook deduplication.
+ * Generates a unique, non-colliding idempotency key for order submission.
  */
 export function generateIdempotencyKey(prefix = "idemp"): string {
   const bytes = new Uint8Array(16);
@@ -427,8 +333,7 @@ export function generateIdempotencyKey(prefix = "idemp"): string {
 }
 
 /**
- * ANTI-FRAUD RISK ENGINE:
- * Scores incoming orders based on high COD threshold, velocity, and delivery zone anomalies.
+ * ANTI-FRAUD RISK ENGINE (Preview helper; authoritative scoring is in Postgres `create_order_server`).
  */
 export function evaluateFraudRisk(input: {
   customerPhone: string;
@@ -445,7 +350,6 @@ export function evaluateFraudRisk(input: {
   let score = 0;
   const reasons: string[] = [];
 
-  // 1. High value Cash on Delivery risk (> ৳5,000)
   if (input.paymentMethod === "cod" && input.totalAmount > 5000) {
     score += 35;
     reasons.push(
@@ -453,7 +357,6 @@ export function evaluateFraudRisk(input: {
     );
   }
 
-  // 2. Velocity risk from same phone
   if (input.recentOrdersForPhone && input.recentOrdersForPhone >= 2) {
     score += 30;
     reasons.push(
@@ -461,7 +364,6 @@ export function evaluateFraudRisk(input: {
     );
   }
 
-  // 3. Location mismatch: Inside Dhaka zone with non-Dhaka district
   if (
     input.deliveryZone === "inside_dhaka" &&
     !/dhaka|ঢাকা/i.test(input.customerDistrict)
@@ -478,49 +380,3 @@ export function evaluateFraudRisk(input: {
     reviewReasons: reasons,
   };
 }
-
-/**
- * 4-POINT WEBHOOK SIGNATURE & INTEGRITY VALIDATOR:
- * Validates gateway callback signature, exact amount, order code, and BDT currency.
- */
-export function verifyWebhookSignature(params: {
-  gateway: "sslcommerz" | "bkash" | "nagad";
-  payload: Record<string, unknown>;
-  expectedOrderAmount: number;
-  expectedOrderCode: string;
-}): {
-  valid: boolean;
-  reason?: string;
-} {
-  // 1. Currency enforcement (BDT only)
-  const currency = String(params.payload.currency || "").toUpperCase();
-  if (currency && currency !== "BDT") {
-    return {
-      valid: false,
-      reason: `Currency mismatch: Expected BDT, got ${currency}`,
-    };
-  }
-
-  // 2. Order ID / tran_id check
-  const reportedOrderCode = String(
-    params.payload.tran_id || params.payload.orderCode || ""
-  ).toUpperCase();
-  if (reportedOrderCode && reportedOrderCode !== params.expectedOrderCode.toUpperCase()) {
-    return {
-      valid: false,
-      reason: `Order Code mismatch: Expected ${params.expectedOrderCode}, got ${reportedOrderCode}`,
-    };
-  }
-
-  // 3. Amount validation (Strict zero-underpayment tolerance)
-  const reportedAmount = Number(params.payload.amount);
-  if (isNaN(reportedAmount) || reportedAmount < params.expectedOrderAmount) {
-    return {
-      valid: false,
-      reason: `Amount mismatch: Expected at least ৳${params.expectedOrderAmount}, got ৳${reportedAmount}`,
-    };
-  }
-
-  return { valid: true };
-}
-

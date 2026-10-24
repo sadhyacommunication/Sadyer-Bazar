@@ -37,17 +37,49 @@ import {
   deleteContactMessageFromSupabase,
   deleteCouponFromSupabase,
   deleteProductFromSupabase,
+  executeAdminActionViaEdgeApi,
   fetchLiveStoreFromSupabase,
-  insertReviewToSupabase,
+  insertPublicContactMessageToSupabase,
+  PaymentAttemptRecord,
   seedFullDatabaseToSupabase,
   subscribeToRealtimeStore,
   SupabaseConnectionState,
   upsertContactMessageToSupabase,
   upsertCouponToSupabase,
-  upsertOrderToSupabase,
   upsertProductToSupabase,
   upsertSettingsToSupabase,
 } from "@/services/supabaseSync";
+
+const RECENT_ORDERS_SESSION_KEY = "sb_recent_orders";
+
+export function rememberRecentOrderInSession(orderCode: string, phoneLast4: string) {
+  if (typeof window === "undefined") return;
+  const cleanCode = orderCode.trim().toUpperCase();
+  const cleanLast4 = phoneLast4.replace(/\D/g, "").slice(-4);
+  if (!cleanCode || cleanLast4.length !== 4) return;
+  try {
+    const raw = sessionStorage.getItem(RECENT_ORDERS_SESSION_KEY);
+    const map: Record<string, string> = raw ? JSON.parse(raw) : {};
+    map[cleanCode] = cleanLast4;
+    sessionStorage.setItem(RECENT_ORDERS_SESSION_KEY, JSON.stringify(map));
+  } catch {
+    // Ignore sessionStorage errors
+  }
+}
+
+export function getRecentOrderPhoneLast4(orderCode: string): string {
+  if (typeof window === "undefined") return "";
+  const cleanCode = orderCode.trim().toUpperCase();
+  if (!cleanCode) return "";
+  try {
+    const raw = sessionStorage.getItem(RECENT_ORDERS_SESSION_KEY);
+    if (!raw) return "";
+    const map: Record<string, string> = JSON.parse(raw);
+    return map[cleanCode] || "";
+  } catch {
+    return "";
+  }
+}
 
 interface StoreContextValue {
   products: Product[];
@@ -56,6 +88,7 @@ interface StoreContextValue {
   reviews: ProductReview[];
   orders: Order[];
   transactions: PaymentTransaction[];
+  paymentAttempts: PaymentAttemptRecord[];
   settings: SiteSettings;
   cart: CartItem[];
   isCartOpen: boolean;
@@ -84,26 +117,31 @@ interface StoreContextValue {
   // Order & Tracking Actions
   registerNewOrder: (order: Order, transaction?: PaymentTransaction) => void;
   findOrderByCode: (code: string) => Order | undefined;
-  updateOrderStatus: (orderId: string, status: OrderStatus) => void;
+  updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
   updateOrderPaymentStatus: (
     orderId: string,
     paymentStatus: PaymentStatus,
     advancePaid?: number,
     transactionId?: string
-  ) => void;
+  ) => Promise<void>;
   adjustOrderWeightAndBill: (
     orderId: string,
     weightAdjustmentAmount: number,
     weightAdjustmentNote: string
-  ) => void;
+  ) => Promise<void>;
   assignOrderLogistics: (
     orderId: string,
     courierName: string,
     trackingReference: string,
     riderName: string,
     riderPhone: string
-  ) => void;
-  verifyCodOrderPhone: (orderId: string) => void;
+  ) => Promise<void>;
+  verifyCodOrderPhone: (orderId: string) => Promise<void>;
+  resolvePaymentAttempt: (
+    attemptId: string,
+    resolution: "refunded" | "dismissed",
+    note?: string
+  ) => Promise<boolean>;
 
   // Admin Product Management Actions
   addProduct: (newProduct: Product) => void;
@@ -140,7 +178,10 @@ interface StoreContextValue {
   // Secure Admin Record Hydration
   hydrateAdminRecords: (
     adminOrders: Order[],
-    adminMessages: ContactMessage[]
+    adminMessages: ContactMessage[],
+    adminTransactions?: PaymentTransaction[],
+    adminAttempts?: PaymentAttemptRecord[],
+    adminCoupons?: Coupon[]
   ) => void;
 }
 
@@ -151,10 +192,11 @@ const STORAGE_KEYS = {
   PRODUCTS: "sb_products_v2",
   COUPONS: "sb_coupons_v2",
   REVIEWS: "sb_reviews_v2",
-  ORDERS: "sb_orders_v2",
-  TRANSACTIONS: "sb_transactions_v2",
   SETTINGS: "sb_settings_v2",
-  CONTACT_MESSAGES: "sb_contact_messages_v1",
+  // Legacy PII keys to purge from localStorage
+  LEGACY_ORDERS: "sb_orders_v2",
+  LEGACY_TRANSACTIONS: "sb_transactions_v2",
+  LEGACY_CONTACT_MESSAGES: "sb_contact_messages_v1",
 };
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
@@ -165,6 +207,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
   const [transactions, setTransactions] =
     useState<PaymentTransaction[]>(INITIAL_TRANSACTIONS);
+  const [paymentAttempts, setPaymentAttempts] = useState<PaymentAttemptRecord[]>([]);
   const [settings, setSettings] = useState<SiteSettings>(INITIAL_SITE_SETTINGS);
   const [messages, setMessages] =
     useState<ContactMessage[]>(INITIAL_CONTACT_MESSAGES);
@@ -184,6 +227,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
+      // Purge any legacy PII caches from localStorage
+      localStorage.removeItem(STORAGE_KEYS.LEGACY_ORDERS);
+      localStorage.removeItem(STORAGE_KEYS.LEGACY_TRANSACTIONS);
+      localStorage.removeItem(STORAGE_KEYS.LEGACY_CONTACT_MESSAGES);
+
       const savedCart = localStorage.getItem(STORAGE_KEYS.CART);
       if (savedCart) setCart(JSON.parse(savedCart));
 
@@ -203,17 +251,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const savedReviews = localStorage.getItem(STORAGE_KEYS.REVIEWS);
       if (savedReviews) setReviews(JSON.parse(savedReviews));
 
-      const savedOrders = localStorage.getItem(STORAGE_KEYS.ORDERS);
-      if (savedOrders) setOrders(JSON.parse(savedOrders));
-
-      const savedTransactions = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
-      if (savedTransactions) setTransactions(JSON.parse(savedTransactions));
-
       const savedSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
       if (savedSettings) setSettings(JSON.parse(savedSettings));
-
-      const savedMessages = localStorage.getItem(STORAGE_KEYS.CONTACT_MESSAGES);
-      if (savedMessages) setMessages(JSON.parse(savedMessages));
     } catch {
       // Ignore storage parse issues
     }
@@ -226,21 +265,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           if (live.settings) setSettings(live.settings);
           if (live.products && live.products.length > 0)
             setProducts(live.products);
-          if (live.coupons && live.coupons.length > 0) setCoupons(live.coupons);
-          if (live.orders && live.orders.length > 0) setOrders(live.orders);
-          if (live.transactions && live.transactions.length > 0)
-            setTransactions(live.transactions);
           if (live.reviews && live.reviews.length > 0) setReviews(live.reviews);
-          if (live.messages && live.messages.length > 0)
-            setMessages(live.messages);
         }
       });
     };
 
-    // Connect and hydrate live data from Supabase (https://uqyjtlndgnvfqjcdwbop.supabase.co)
     loadFromSupabase();
 
-    // Subscribe to real-time Postgres changes across devices
     const unsubscribe = subscribeToRealtimeStore(() => {
       loadFromSupabase();
     });
@@ -254,12 +285,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setSupabaseStatus("checking");
     const res = await seedFullDatabaseToSupabase(
       products,
-      orders,
       coupons,
-      reviews,
-      transactions,
-      settings,
-      messages
+      settings
     );
     if (res.ok) {
       setSupabaseStatus("connected_live");
@@ -301,36 +328,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!hydrated) return;
     try {
-      localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
-    } catch {}
-  }, [orders, hydrated]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    try {
-      localStorage.setItem(
-        STORAGE_KEYS.TRANSACTIONS,
-        JSON.stringify(transactions)
-      );
-    } catch {}
-  }, [transactions, hydrated]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    try {
       localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
     } catch {}
   }, [settings, hydrated]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    try {
-      localStorage.setItem(
-        STORAGE_KEYS.CONTACT_MESSAGES,
-        JSON.stringify(messages)
-      );
-    } catch {}
-  }, [messages, hydrated]);
 
   const addToCart = (
     product: Product,
@@ -414,6 +414,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const registerNewOrder = (order: Order, transaction?: PaymentTransaction) => {
+    // Remember orderCode + phoneLast4 in sessionStorage so /track-order can auto-fill phoneLast4
+    rememberRecentOrderInSession(order.orderCode, order.customerPhone.slice(-4));
+
     setOrders((prev) => [
       order,
       ...prev.filter((o) => o.orderCode !== order.orderCode),
@@ -423,14 +426,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
     if (order.couponCode) {
       setCoupons((prev) =>
-        prev.map((c) => {
-          if (c.code.toUpperCase() === order.couponCode?.toUpperCase()) {
-            const updatedCoupon = { ...c, usageCount: c.usageCount + 1 };
-            upsertCouponToSupabase(updatedCoupon);
-            return updatedCoupon;
-          }
-          return c;
-        })
+        prev.map((c) =>
+          c.code.toUpperCase() === order.couponCode?.toUpperCase()
+            ? { ...c, usageCount: c.usageCount + 1 }
+            : c
+        )
       );
     }
     setProducts((prev) =>
@@ -439,20 +439,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           .filter((i) => i.productId === prod.id)
           .reduce((acc, i) => acc + i.quantity, 0);
         if (orderedQty === 0) return prod;
-        const updatedProd = {
+        return {
           ...prod,
           batchBookedQty: Math.min(
             prod.batchTargetQty,
             prod.batchBookedQty + orderedQty
           ),
         };
-        upsertProductToSupabase(updatedProd);
-        return updatedProd;
       })
     );
-
-    // Sync order & payment transaction to live Supabase
-    upsertOrderToSupabase(order, transaction);
   };
 
   const findOrderByCode = (code: string): Order | undefined => {
@@ -460,58 +455,101 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return orders.find((o) => o.orderCode.toUpperCase() === clean);
   };
 
-  const updateOrderStatus = (orderId: string, status: OrderStatus) => {
+  const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
+    const target = orders.find((o) => o.id === orderId);
+    if (!target) return;
+
+    const res = await executeAdminActionViaEdgeApi({
+      action: "set_order_status",
+      orderId: target.id,
+      newStatus: status,
+    });
+
+    if (!res.success) {
+      showToast(res.error || "Failed to update order status on server.");
+      return;
+    }
+
     setOrders((prev) =>
-      prev.map((o) => {
-        if (o.id !== orderId) return o;
-        const updated = {
-          ...o,
-          orderStatus: status,
-          updatedAt: new Date().toISOString(),
-        };
-        upsertOrderToSupabase(updated);
-        return updated;
-      })
+      prev.map((o) =>
+        o.id === orderId
+          ? { ...o, orderStatus: status, updatedAt: new Date().toISOString() }
+          : o
+      )
     );
     showToast(`Order status updated to "${status.toUpperCase()}"`);
   };
 
-  const updateOrderPaymentStatus = (
+  const updateOrderPaymentStatus = async (
     orderId: string,
     paymentStatus: PaymentStatus,
     advancePaid?: number,
     transactionId?: string
   ) => {
+    const target = orders.find((o) => o.id === orderId);
+    if (!target) return;
+
+    const nextAdvance =
+      advancePaid !== undefined
+        ? advancePaid
+        : paymentStatus === "paid"
+        ? target.totalAmount
+        : target.advancePaid;
+    const paidAmount = Math.max(1, nextAdvance - target.advancePaid || target.totalAmount);
+    const effectiveTrxId =
+      (transactionId || target.transactionId || `ADM-${target.orderCode}-${Date.now().toString(36).toUpperCase()}`).trim();
+
+    const res = await executeAdminActionViaEdgeApi({
+      action: "mark_order_paid",
+      orderId: target.id,
+      amount: paidAmount,
+      reference: effectiveTrxId,
+      note: `Admin payment update (${paymentStatus})`,
+    });
+
+    if (!res.success) {
+      showToast(res.error || "Failed to update payment status on server.");
+      return;
+    }
+
+    const nextDue = Math.max(0, target.totalAmount - nextAdvance);
     setOrders((prev) =>
-      prev.map((o) => {
-        if (o.id !== orderId) return o;
-        const nextAdvance =
-          advancePaid !== undefined
-            ? advancePaid
-            : paymentStatus === "paid"
-            ? o.totalAmount
-            : o.advancePaid;
-        const nextDue = Math.max(0, o.totalAmount - nextAdvance);
-        const updated: Order = {
-          ...o,
-          paymentStatus,
-          advancePaid: nextAdvance,
-          dueAmount: nextDue,
-          transactionId: transactionId || o.transactionId,
-          updatedAt: new Date().toISOString(),
-        };
-        upsertOrderToSupabase(updated);
-        return updated;
-      })
+      prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              paymentStatus,
+              advancePaid: nextAdvance,
+              dueAmount: nextDue,
+              transactionId: effectiveTrxId,
+              updatedAt: new Date().toISOString(),
+            }
+          : o
+      )
     );
     showToast(`Payment status updated to "${paymentStatus.toUpperCase()}"`);
   };
 
-  const adjustOrderWeightAndBill = (
+  const adjustOrderWeightAndBill = async (
     orderId: string,
     weightAdjustmentAmount: number,
     weightAdjustmentNote: string
   ) => {
+    const target = orders.find((o) => o.id === orderId);
+    if (!target) return;
+
+    const res = await executeAdminActionViaEdgeApi({
+      action: "adjust_order_weight",
+      orderId: target.id,
+      adjustment: weightAdjustmentAmount,
+      note: weightAdjustmentNote,
+    });
+
+    if (!res.success) {
+      showToast(res.error || "Failed to adjust weight on server.");
+      return;
+    }
+
     setOrders((prev) =>
       prev.map((o) => {
         if (o.id !== orderId) return o;
@@ -527,7 +565,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             : o.advancePaid > 0
             ? "advance_paid"
             : o.paymentStatus;
-        const updated: Order = {
+        return {
           ...o,
           weightAdjustmentAmount,
           weightAdjustmentNote,
@@ -536,8 +574,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           paymentStatus: nextPaymentStatus,
           updatedAt: new Date().toISOString(),
         };
-        upsertOrderToSupabase(updated);
-        return updated;
       })
     );
     showToast(
@@ -547,17 +583,34 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
-  const assignOrderLogistics = (
+  const assignOrderLogistics = async (
     orderId: string,
     courierName: string,
     trackingReference: string,
     riderName: string,
     riderPhone: string
   ) => {
+    const target = orders.find((o) => o.id === orderId);
+    if (!target) return;
+
+    const res = await executeAdminActionViaEdgeApi({
+      action: "assign_logistics",
+      orderId: target.id,
+      courierName,
+      trackingReference,
+      riderName,
+      riderPhone,
+    });
+
+    if (!res.success) {
+      showToast(res.error || "Failed to assign logistics on server.");
+      return;
+    }
+
     setOrders((prev) =>
       prev.map((o) => {
         if (o.id !== orderId) return o;
-        const updated: Order = {
+        return {
           ...o,
           courierName,
           trackingReference,
@@ -569,29 +622,72 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               : o.orderStatus,
           updatedAt: new Date().toISOString(),
         };
-        upsertOrderToSupabase(updated);
-        return updated;
       })
     );
     showToast(`Assigned to "${courierName}" & updated tracking info!`);
   };
 
-  const verifyCodOrderPhone = (orderId: string) => {
+  const verifyCodOrderPhone = async (orderId: string) => {
+    const target = orders.find((o) => o.id === orderId);
+    if (!target) return;
+
+    const res = await executeAdminActionViaEdgeApi({
+      action: "verify_cod_phone",
+      orderId: target.id,
+      method: "manual_call",
+    });
+
+    if (!res.success) {
+      showToast(res.error || "Failed to verify COD phone on server.");
+      return;
+    }
+
     setOrders((prev) =>
-      prev.map((o) => {
-        if (o.id !== orderId) return o;
-        const updated: Order = {
-          ...o,
-          isPhoneVerified: true,
-          verificationMethod: "manual_call",
-          orderStatus: "confirmed",
-          updatedAt: new Date().toISOString(),
-        };
-        upsertOrderToSupabase(updated);
-        return updated;
-      })
+      prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              isPhoneVerified: true,
+              verificationMethod: "manual_call",
+              orderStatus: "confirmed",
+              updatedAt: new Date().toISOString(),
+            }
+          : o
+      )
     );
     showToast(`Phone verified for order! Status changed to CONFIRMED.`);
+  };
+
+  const resolvePaymentAttempt = async (
+    attemptId: string,
+    resolution: "refunded" | "dismissed",
+    note?: string
+  ): Promise<boolean> => {
+    const res = await executeAdminActionViaEdgeApi({
+      action: "resolve_attempt",
+      attemptId,
+      resolution,
+      note,
+    });
+
+    if (!res.success) {
+      showToast(res.error || "Failed to resolve payment attempt.");
+      return false;
+    }
+
+    setPaymentAttempts((prev) =>
+      prev.map((att) =>
+        att.id === attemptId
+          ? {
+              ...att,
+              status: resolution === "refunded" ? "cancelled" : "failed",
+              completedAt: new Date().toISOString(),
+            }
+          : att
+      )
+    );
+    showToast(`Payment attempt marked as "${resolution.toUpperCase()}".`);
+    return true;
   };
 
   const addProduct = (newProduct: Product) => {
@@ -643,14 +739,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const addProductReview = (review: ProductReview) => {
     setReviews((prev) => [review, ...prev]);
-    insertReviewToSupabase(review);
     setProducts((prev) =>
-      prev.map((p) => {
-        if (p.id !== review.productId) return p;
-        const updated = { ...p, reviewCount: p.reviewCount + 1 };
-        upsertProductToSupabase(updated);
-        return updated;
-      })
+      prev.map((p) =>
+        p.id === review.productId ? { ...p, reviewCount: p.reviewCount + 1 } : p
+      )
     );
     showToast("JazakAllah! Your verified review has been published!");
   };
@@ -675,8 +767,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [newMsg, ...prev]);
-    showToast("আপনার বার্তা সফলভাবে গৃহীত হয়েছে! শীঘ্রই আমাদের প্রতিনিধি যোগাযোগ করবেন।");
-    await upsertContactMessageToSupabase(newMsg);
+    showToast(
+      "আপনার বার্তা সফলভাবে গৃহীত হয়েছে! শীঘ্রই আমাদের প্রতিনিধি যোগাযোগ করবেন।"
+    );
+    await insertPublicContactMessageToSupabase(newMsg);
     return newMsg;
   };
 
@@ -693,7 +787,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             ...m,
             status,
             ...(adminReply !== undefined ? { adminReply } : {}),
-            repliedAt: status === "replied" ? new Date().toISOString() : m.repliedAt,
+            repliedAt:
+              status === "replied" ? new Date().toISOString() : m.repliedAt,
           };
           target = updated;
           return updated;
@@ -750,13 +845,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const hydrateAdminRecords = (
     adminOrders: Order[],
-    adminMessages: ContactMessage[]
+    adminMessages: ContactMessage[],
+    adminTransactions?: PaymentTransaction[],
+    adminAttempts?: PaymentAttemptRecord[],
+    adminCoupons?: Coupon[]
   ) => {
-    if (adminOrders.length > 0) {
-      setOrders(adminOrders);
+    setOrders(adminOrders);
+    setMessages(adminMessages);
+    if (adminTransactions) {
+      setTransactions(adminTransactions);
     }
-    if (adminMessages.length > 0) {
-      setMessages(adminMessages);
+    if (adminAttempts) {
+      setPaymentAttempts(adminAttempts);
+    }
+    if (adminCoupons && adminCoupons.length > 0) {
+      setCoupons(adminCoupons);
     }
   };
 
@@ -769,6 +872,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         reviews,
         orders,
         transactions,
+        paymentAttempts,
         settings,
         cart,
         isCartOpen,
@@ -790,6 +894,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         adjustOrderWeightAndBill,
         assignOrderLogistics,
         verifyCodOrderPhone,
+        resolvePaymentAttempt,
         addProduct,
         updateProduct,
         deleteProduct,

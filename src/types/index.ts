@@ -2,6 +2,8 @@ export type DeliveryZone = "inside_dhaka" | "outside_dhaka";
 
 export type PaymentMethod = "bkash" | "nagad" | "sslcommerz" | "cod";
 
+export type ActiveCheckoutPaymentMethod = "bkash" | "nagad" | "cod";
+
 export type PaymentPlan = "full" | "advance" | "cod";
 
 export type PaymentStatus =

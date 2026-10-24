@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   PackageSearch,
@@ -19,15 +19,14 @@ import {
   Smartphone,
   AlertCircle,
 } from "lucide-react";
-import { useStore } from "@/context/StoreContext";
-import { Order, OrderStatus, PaymentTransaction } from "@/types";
 import {
-  checkRateLimit,
-  maskAddress,
-  maskPhoneNumber,
-  normalizeBdPhone,
-} from "@/lib/security";
-import { fetchOrderByCodeFromSupabase } from "@/services/supabaseSync";
+  getRecentOrderPhoneLast4,
+  rememberRecentOrderInSession,
+  useStore,
+} from "@/context/StoreContext";
+import { Order, OrderStatus } from "@/types";
+import { checkRateLimit, maskAddress, maskPhoneNumber } from "@/lib/security";
+import { trackOrderViaEdgeApi } from "@/services/supabaseSync";
 
 const STATUS_STEPS: {
   key: OrderStatus;
@@ -69,153 +68,142 @@ const STATUS_STEPS: {
 
 function TrackOrderContent() {
   const searchParams = useSearchParams();
-  const initialCode = searchParams.get("code") || "";
+  const initialCode = (searchParams.get("code") || "").trim().toUpperCase();
   const justOrdered = searchParams.get("justOrdered") === "1";
+  const gatewayError = searchParams.get("gatewayError") === "1";
   const paymentStatusParam = searchParams.get("payment");
   const gatewayParam = searchParams.get("gateway");
 
-  const {
-    findOrderByCode,
-    orders,
-    settings,
-    updateOrderPaymentStatus,
-    registerNewOrder,
-  } = useStore();
+  const { findOrderByCode, orders, settings } = useStore();
 
   const [orderCodeInput, setOrderCodeInput] = useState(initialCode);
   const [phoneLast4, setPhoneLast4] = useState("");
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [needsPhonePrompt, setNeedsPhonePrompt] = useState(false);
+  const [loadingTrack, setLoadingTrack] = useState(false);
+  const [trackError, setTrackError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Pay Remaining Due Online Modal State
+  // Pay Online / Pay Remaining Due Modal State (Official bKash & Nagad Merchant Gateways)
   const [isPayDueModalOpen, setIsPayDueModalOpen] = useState(false);
   const [selectedDueGateway, setSelectedDueGateway] = useState<
-    "bkash" | "nagad" | "sslcommerz"
+    "bkash" | "nagad"
   >("bkash");
-  const [dueSenderPhone, setDueSenderPhone] = useState("");
-  const [dueTrxId, setDueTrxId] = useState("");
   const [dueTrxError, setDueTrxError] = useState<string | null>(null);
-  const [dueCopiedField, setDueCopiedField] = useState<string | null>(null);
   const [payingDue, setPayingDue] = useState(false);
 
-  const handleDueCopyText = (text: string, field: string) => {
-    try {
-      navigator.clipboard.writeText(text);
-      setDueCopiedField(field);
-      setTimeout(() => setDueCopiedField(null), 2500);
-    } catch {}
-  };
+  const performLookup = useCallback(
+    async (codeToTrack: string, last4ToTrack: string) => {
+      const cleanCode = codeToTrack.trim().toUpperCase();
+      const cleanLast4 = last4ToTrack.replace(/\D/g, "").slice(-4);
+      if (!cleanCode) return;
+
+      if (cleanLast4.length !== 4) {
+        // Check if order is already in current memory session (e.g. just ordered)
+        const inMemory = findOrderByCode(cleanCode);
+        if (inMemory) {
+          const derivedLast4 = inMemory.customerPhone.replace(/\D/g, "").slice(-4);
+          if (derivedLast4.length === 4) {
+            setPhoneLast4(derivedLast4);
+            rememberRecentOrderInSession(cleanCode, derivedLast4);
+          }
+          setActiveOrder(inMemory);
+          setNotFound(false);
+          setNeedsPhonePrompt(false);
+          return;
+        }
+        setNeedsPhonePrompt(true);
+        return;
+      }
+
+      setLoadingTrack(true);
+      setTrackError(null);
+      setNeedsPhonePrompt(false);
+
+      try {
+        const res = await trackOrderViaEdgeApi(cleanCode, cleanLast4);
+        if (res.success && res.order) {
+          rememberRecentOrderInSession(cleanCode, cleanLast4);
+          setActiveOrder(res.order);
+          setNotFound(false);
+          return;
+        }
+
+        // Fallback to in-memory seed order only if matching code + last4
+        const localMatch = findOrderByCode(cleanCode);
+        if (
+          localMatch &&
+          localMatch.customerPhone.replace(/\D/g, "").endsWith(cleanLast4)
+        ) {
+          setActiveOrder(localMatch);
+          setNotFound(false);
+          return;
+        }
+
+        setActiveOrder(null);
+        setNotFound(true);
+        if (res.error) setTrackError(res.error);
+      } catch {
+        setActiveOrder(null);
+        setNotFound(true);
+      } finally {
+        setLoadingTrack(false);
+      }
+    },
+    [findOrderByCode]
+  );
 
   useEffect(() => {
-    if (initialCode) {
-      // If returning from payment gateway, always prioritize live database record
-      if (paymentStatusParam === "success") {
-        fetchOrderByCodeFromSupabase(initialCode)
-          .then((liveOrder) => {
-            if (liveOrder) {
-              registerNewOrder(liveOrder);
-              setActiveOrder(liveOrder);
-              setNotFound(false);
-            }
-          })
-          .catch(() => {
-            const found = findOrderByCode(initialCode);
-            if (found) setActiveOrder(found);
-          });
+    if (!initialCode) return;
+    setOrderCodeInput(initialCode);
+    const savedLast4 = getRecentOrderPhoneLast4(initialCode);
+    if (savedLast4) {
+      setPhoneLast4(savedLast4);
+      void performLookup(initialCode, savedLast4);
+    } else {
+      const inMemory = findOrderByCode(initialCode);
+      if (inMemory) {
+        const derivedLast4 = inMemory.customerPhone.replace(/\D/g, "").slice(-4);
+        setPhoneLast4(derivedLast4);
+        void performLookup(initialCode, derivedLast4);
       } else {
-        const found = findOrderByCode(initialCode);
-        if (found) {
-          setActiveOrder(found);
-          setNotFound(false);
-        } else {
-          fetchOrderByCodeFromSupabase(initialCode)
-            .then((liveOrder) => {
-              if (liveOrder) {
-                setActiveOrder(liveOrder);
-                setNotFound(false);
-              } else {
-                setNotFound(true);
-              }
-            })
-            .catch(() => setNotFound(true));
-        }
+        setNeedsPhonePrompt(true);
       }
     }
-  }, [initialCode, paymentStatusParam, findOrderByCode, registerNewOrder]);
+  }, [initialCode, findOrderByCode, performLookup]);
 
-  // Keep activeOrder synced when orders update in context
+  // Keep activeOrder synced when orders update in context (e.g. admin action in same tab)
   useEffect(() => {
     if (activeOrder) {
       const updated = findOrderByCode(activeOrder.orderCode);
-      if (updated) setActiveOrder(updated);
+      if (updated && updated.updatedAt > activeOrder.updatedAt) {
+        setActiveOrder(updated);
+      }
     }
   }, [orders, activeOrder, findOrderByCode]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     const clean = orderCodeInput.trim().toUpperCase();
+    const cleanLast4 = phoneLast4.replace(/\D/g, "").slice(-4);
     if (!clean) return;
 
-    const rl = checkRateLimit(`track_${clean}`, 15, 60_000);
-    if (!rl.allowed) return;
-
-    const localMatch = findOrderByCode(clean);
-    if (localMatch) {
-      setActiveOrder(localMatch);
-      setNotFound(false);
+    if (cleanLast4.length !== 4) {
+      setTrackError(
+        "নিরাপত্তার স্বার্থে আপনার অর্ডারের মোবাইল নম্বরের শেষ ৪টি ডিজিট লিখুন।"
+      );
+      setNeedsPhonePrompt(true);
       return;
     }
 
-    try {
-      const liveOrder = await fetchOrderByCodeFromSupabase(clean);
-      if (liveOrder) {
-        setActiveOrder(liveOrder);
-        setNotFound(false);
-      } else {
-        setActiveOrder(null);
-        setNotFound(true);
-      }
-    } catch {
-      setNotFound(true);
+    const rl = checkRateLimit(`track_${clean}`, 15, 60_000);
+    if (!rl.allowed) {
+      setTrackError("অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।");
+      return;
     }
-  };
 
-  const handlePayDueWithSSLCommerz = async () => {
-    if (!activeOrder || activeOrder.dueAmount <= 0) return;
-    setPayingDue(true);
-    setDueTrxError(null);
-    try {
-      const res = await fetch("/api/payment/sslcommerz/init", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderCode: activeOrder.orderCode,
-          paymentType: "due",
-        }),
-      });
-      const data = (await res.json()) as {
-        success: boolean;
-        GatewayPageURL?: string;
-        error?: string;
-      };
-
-      if (res.ok && data.success && data.GatewayPageURL) {
-        window.location.href = data.GatewayPageURL;
-      } else {
-        throw new Error(
-          data.error ||
-            "SSLCommerz গেটওয়ে সংযোগে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন অথবা বিকাশ নির্বাচন করুন।"
-        );
-      }
-    } catch (err) {
-      setDueTrxError(
-        err instanceof Error
-          ? err.message
-          : "SSLCommerz গেটওয়েতে সংযোগ করতে সমস্যা হয়েছে।"
-      );
-      setPayingDue(false);
-    }
+    await performLookup(clean, cleanLast4);
   };
 
   const handlePayDueWithBkash = async () => {
@@ -223,24 +211,29 @@ function TrackOrderContent() {
     setPayingDue(true);
     setDueTrxError(null);
     try {
-      const res = await fetch("/api/payment/bkash/init", {
+      const res = await fetch("/api/payment/bkash/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           orderCode: activeOrder.orderCode,
-          paymentType: "due",
         }),
       });
       const data = (await res.json()) as {
-        success: boolean;
+        ok?: boolean;
+        success?: boolean;
         bkashURL?: string;
-        error?: string;
+        error?: string | { message?: string };
       };
 
-      if (res.ok && data.success && data.bkashURL) {
+      if (res.ok && (data.ok || data.success) && data.bkashURL) {
         window.location.href = data.bkashURL;
       } else {
-        throw new Error(data.error || "bKash গেটওয়ে সংযোগে সমস্যা হয়েছে।");
+        const errText =
+          typeof data.error === "string" ? data.error : data.error?.message;
+        throw new Error(
+          errText ||
+            "bKash মার্চেন্ট গেটওয়ে সংযোগে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।"
+        );
       }
     } catch (err) {
       setDueTrxError(
@@ -257,94 +250,36 @@ function TrackOrderContent() {
     setPayingDue(true);
     setDueTrxError(null);
     try {
-      const res = await fetch("/api/payment/nagad/init", {
+      const res = await fetch("/api/payment/nagad/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           orderCode: activeOrder.orderCode,
-          paymentType: "due",
         }),
       });
       const data = (await res.json()) as {
-        success: boolean;
+        ok?: boolean;
+        success?: boolean;
         callBackUrl?: string;
-        error?: string;
+        error?: string | { message?: string };
       };
 
-      if (res.ok && data.success && data.callBackUrl) {
+      if (res.ok && (data.ok || data.success) && data.callBackUrl) {
         window.location.href = data.callBackUrl;
       } else {
-        throw new Error(data.error || "নগদ গেটওয়ে সংযোগে সমস্যা হয়েছে।");
+        const errText =
+          typeof data.error === "string" ? data.error : data.error?.message;
+        throw new Error(
+          errText ||
+            "Nagad মার্চেন্ট গেটওয়ে সংযোগে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।"
+        );
       }
     } catch (err) {
       setDueTrxError(
         err instanceof Error
           ? err.message
-          : "নগদ গেটওয়েতে সংযোগ করতে সমস্যা হয়েছে।"
+          : "Nagad গেটওয়েতে সংযোগ করতে সমস্যা হয়েছে।"
       );
-      setPayingDue(false);
-    }
-  };
-
-  const handlePayRemainingDue = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeOrder || activeOrder.dueAmount <= 0) return;
-    setDueTrxError(null);
-
-    const cleanPhone = normalizeBdPhone(dueSenderPhone);
-    if (!cleanPhone || !/^01[3-9]\d{8}$/.test(cleanPhone)) {
-      setDueTrxError("সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন: 017XXXXXXXX)");
-      return;
-    }
-
-    const cleanTrx = dueTrxId.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-    if (!cleanTrx || cleanTrx.length < 6) {
-      setDueTrxError(
-        "সঠিক Transaction ID (TrxID) দিন (বিকাশ বা নগদ ফিরতি SMS থেকে প্রাপ্ত কমপক্ষে ৬ সংখ্যার কোড, যেমন: BKX8492019)"
-      );
-      return;
-    }
-
-    setPayingDue(true);
-    try {
-      const dueTx: PaymentTransaction = {
-        id: `tx-${Date.now()}`,
-        orderId: activeOrder.id,
-        orderCode: activeOrder.orderCode,
-        gateway: selectedDueGateway,
-        transactionId: cleanTrx,
-        validationId: `DUE-${selectedDueGateway.toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,
-        amount: activeOrder.dueAmount,
-        currency: "BDT",
-        status: "validated",
-        senderPhone: cleanPhone,
-        verifiedAt: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-      };
-
-      const settledOrder: Order = {
-        ...activeOrder,
-        paymentStatus: "paid",
-        advancePaid: activeOrder.totalAmount,
-        dueAmount: 0,
-        transactionId: cleanTrx,
-        updatedAt: new Date().toISOString(),
-      };
-
-      updateOrderPaymentStatus(
-        activeOrder.id,
-        "paid",
-        activeOrder.totalAmount,
-        cleanTrx
-      );
-      registerNewOrder(settledOrder, dueTx);
-      setActiveOrder(settledOrder);
-      setIsPayDueModalOpen(false);
-    } catch (err) {
-      setDueTrxError(
-        err instanceof Error ? err.message : "পেমেন্ট সংরক্ষণ করতে সমস্যা হয়েছে।"
-      );
-    } finally {
       setPayingDue(false);
     }
   };
@@ -359,11 +294,12 @@ function TrackOrderContent() {
     ? STATUS_STEPS.findIndex((s) => s.key === activeOrder.orderStatus)
     : 0;
 
-  const isPhoneUnlocked =
-    justOrdered ||
-    (activeOrder &&
-      phoneLast4.length === 4 &&
-      activeOrder.customerPhone.endsWith(phoneLast4));
+  const gatewayDisplayName =
+    gatewayParam === "bkash"
+      ? "bKash (বিকাশ)"
+      : gatewayParam === "nagad"
+      ? "Nagad (নগদ)"
+      : "অনলাইন পেমেন্ট গেটওয়ে";
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
@@ -371,18 +307,20 @@ function TrackOrderContent() {
       <div className="bg-[#0F3D2E] text-white rounded-3xl p-7 sm:p-10 shadow-xl space-y-6 no-print">
         <div className="space-y-2">
           <span className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-amber-300">
-            <PackageSearch className="w-4 h-4" /> Real-Time Order Tracking
+            <PackageSearch className="w-4 h-4" /> Real-Time Order & Cold-Chain
+            Delivery Tracking
           </span>
           <h1 className="text-2xl sm:text-4xl font-extrabold">
             Track Your Order by Order ID
           </h1>
           <p className="text-xs sm:text-sm text-emerald-100/85 max-w-2xl">
-            Enter your non-guessable Order ID (format:{" "}
+            Enter your Order ID (e.g.{" "}
             <code className="px-2 py-0.5 rounded bg-white/15 font-mono text-amber-300">
-              SB-YYMM-XXXXX
+              SB-YYMM-XXXXXXXXXX
             </code>
-            ) to check live harvest, digital scale weight verification, courier
-            rider info, and payment ledger.
+            ) and the last 4 digits of your mobile number to check live harvest,
+            digital scale weight verification, courier rider info, and payment
+            ledger.
           </p>
         </div>
 
@@ -392,24 +330,31 @@ function TrackOrderContent() {
         >
           <input
             type="text"
+            required
             value={orderCodeInput}
             onChange={(e) => setOrderCodeInput(e.target.value.toUpperCase())}
-            placeholder="Order ID (e.g. SB-2610-XXXXX)"
+            placeholder="Order ID (e.g. SB-2610-XXXXXXXXXX)"
             className="sm:col-span-6 px-4 py-3.5 rounded-2xl bg-white text-stone-900 text-sm font-mono uppercase focus:outline-none"
           />
           <input
             type="text"
+            required
             maxLength={4}
             value={phoneLast4}
             onChange={(e) => setPhoneLast4(e.target.value.replace(/\D/g, ""))}
-            placeholder="Last 4 digits of Phone (Required for full address)"
-            className="sm:col-span-4 px-4 py-3.5 rounded-2xl bg-white/95 text-stone-900 text-xs sm:text-sm focus:outline-none"
+            placeholder="Last 4 digits of Phone *"
+            className="sm:col-span-4 px-4 py-3.5 rounded-2xl bg-white/95 text-stone-900 text-xs sm:text-sm font-mono focus:outline-none"
           />
           <button
             type="submit"
-            className="sm:col-span-2 py-3.5 px-5 rounded-2xl bg-[#C83E2B] hover:bg-[#b03221] text-white font-extrabold text-sm transition cursor-pointer"
+            disabled={loadingTrack}
+            className="sm:col-span-2 py-3.5 px-5 rounded-2xl bg-[#C83E2B] hover:bg-[#b03221] disabled:opacity-60 text-white font-extrabold text-sm transition cursor-pointer flex items-center justify-center gap-1.5"
           >
-            Track Now
+            {loadingTrack ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              "Track Now"
+            )}
           </button>
         </form>
 
@@ -418,13 +363,27 @@ function TrackOrderContent() {
           <span className="inline-flex items-center gap-1.5 font-medium">
             <Lock className="w-3.5 h-3.5 text-amber-300 shrink-0" />
             <span>
-              Customer Privacy Protected: Order IDs are unique and confidential. Please check your SMS or invoice receipt.
+              Zero-Leakage Privacy Guard: Both your unique Order ID and last 4
+              digits of your mobile number are verified on our server.
             </span>
           </span>
         </div>
       </div>
 
-      {/* SSLCommerz / Gateway Status Banners */}
+      {/* Prompt for 4 digits if opened on a new device with ?code= */}
+      {needsPhonePrompt && !activeOrder && (
+        <div className="p-6 rounded-3xl bg-amber-50 border border-amber-200 text-amber-950 text-xs sm:text-sm font-semibold flex items-center gap-3 no-print">
+          <Lock className="w-5 h-5 text-amber-700 shrink-0" />
+          <span>
+            অর্ডার{" "}
+            <strong className="font-mono">{orderCodeInput}</strong>-এর বিস্তারিত
+            দেখতে উপরে আপনার মোবাইল নম্বরের শেষ ৪টি ডিজিট লিখে{" "}
+            <strong>Track Now</strong> বাটনে ক্লিক করুন।
+          </span>
+        </div>
+      )}
+
+      {/* Official bKash / Nagad Gateway Status Banners */}
       {paymentStatusParam === "success" && (
         <div className="p-6 rounded-3xl bg-emerald-50 border-2 border-emerald-600/40 flex items-start gap-3.5 no-print shadow-sm">
           <div className="w-12 h-12 rounded-2xl bg-[#0F3D2E] text-emerald-300 flex items-center justify-center shrink-0">
@@ -432,28 +391,42 @@ function TrackOrderContent() {
           </div>
           <div className="space-y-1">
             <h2 className="text-lg font-extrabold text-[#0F3D2E]">
-              আলহামদুলিল্লাহ! আপনার SSLCommerz অনলাইন পেমেন্ট সফলভাবে ভেরিফাই ও রেকর্ড হয়েছে!
+              আলহামদুলিল্লাহ! আপনার {gatewayDisplayName} পেমেন্ট সফলভাবে সার্ভার থেকে ভেরিফাই ও রেকর্ড হয়েছে!
             </h2>
             <p className="text-xs sm:text-sm text-stone-700">
-              গেটওয়ে থেকে আপনার লেনদেন নিশ্চিত করা হয়েছে এবং অর্ডারের স্ট্যাটাস আপডেট করা হয়েছে। নিচের অর্ডারের রসিদ ও ট্র্যাকিং তথ্য দেখুন।
+              গেটওয়ে থেকে আপনার লেনদেন নিশ্চিত করা হয়েছে এবং অর্ডারের পেমেন্ট লেজার আপডেট করা হয়েছে। নিচের অর্ডারের রসিদ ও ডেলিভারি ট্র্যাকিং দেখুন।
             </p>
           </div>
         </div>
       )}
 
-      {paymentStatusParam === "failed" && (
-        <div className="p-6 rounded-3xl bg-red-50 border-2 border-red-500/40 flex items-start gap-3.5 no-print shadow-sm">
-          <div className="w-12 h-12 rounded-2xl bg-[#C83E2B] text-white flex items-center justify-center shrink-0">
-            <AlertCircle className="w-6 h-6" />
+      {(paymentStatusParam === "failed" || gatewayError) && (
+        <div className="p-6 rounded-3xl bg-red-50 border-2 border-red-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print shadow-sm">
+          <div className="flex items-start gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-[#C83E2B] text-white flex items-center justify-center shrink-0">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-lg font-extrabold text-[#C83E2B]">
+                অনলাইন পেমেন্ট সম্পন্ন করা যায়নি
+              </h2>
+              <p className="text-xs sm:text-sm text-stone-700">
+                গেটওয়ে থেকে অর্থ কর্তন করা হয়নি। আপনার অর্ডারটি পেন্ডিং হিসেবে সুরক্ষিত আছে। আপনি নিচের বাটনে ক্লিক করে বিকাশ বা নগদের মাধ্যমে পেমেন্ট সম্পন্ন করতে পারেন।
+              </p>
+            </div>
           </div>
-          <div className="space-y-1">
-            <h2 className="text-lg font-extrabold text-[#C83E2B]">
-              পেমেন্ট সফল হয়নি বা সম্পন্ন করা যায়নি
-            </h2>
-            <p className="text-xs sm:text-sm text-stone-700">
-              গেটওয়ে থেকে অর্থ কর্তন করা যায়নি। আপনার অর্ডারটি সুরক্ষিত আছে। আপনি নিচে &quot;Pay Remaining Due Online&quot; বাটনে ক্লিক করে আবার চেষ্টা করতে পারেন অথবা ক্যাশ অন ডেলিভারি বেছে নিতে পারেন।
-            </p>
-          </div>
+          {activeOrder && activeOrder.dueAmount > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setDueTrxError(null);
+                setIsPayDueModalOpen(true);
+              }}
+              className="px-4 py-2.5 rounded-2xl bg-[#E2136E] hover:bg-[#c20f5d] text-white text-xs font-extrabold shrink-0 cursor-pointer transition"
+            >
+              Pay Online Now (৳{activeOrder.dueAmount.toLocaleString()})
+            </button>
+          )}
         </div>
       )}
 
@@ -467,7 +440,39 @@ function TrackOrderContent() {
               পেমেন্ট প্রক্রিয়াটি বাতিল করা হয়েছে
             </h2>
             <p className="text-xs sm:text-sm text-stone-700">
-              আপনি পেমেন্ট উইন্ডো বাতিল করেছেন। আপনার অর্ডারটি পেন্ডিং রয়েছে, আপনি যেকোনো সময় আবার পেমেন্ট সম্পন্ন করতে পারবেন।
+              আপনি পেমেন্ট উইন্ডো বাতিল করেছেন। আপনার অর্ডারটি পেন্ডিং রয়েছে, আপনি যেকোনো সময় &ldquo;Pay Due Online&rdquo; বাটনে ক্লিক করে পেমেন্ট সম্পন্ন করতে পারবেন।
+            </p>
+          </div>
+        </div>
+      )}
+
+      {paymentStatusParam === "processing" && (
+        <div className="p-6 rounded-3xl bg-blue-50 border-2 border-blue-500/40 flex items-start gap-3.5 no-print shadow-sm">
+          <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shrink-0">
+            <Loader2 className="w-6 h-6 animate-spin" />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-lg font-extrabold text-blue-950">
+              পেমেন্ট গেটওয়েতে প্রক্রিয়াধীন রয়েছে
+            </h2>
+            <p className="text-xs sm:text-sm text-stone-700">
+              আপনার পেমেন্টটি বর্তমানে গেটওয়েতে যাচাই করা হচ্ছে। কিছুক্ষণের মধ্যে স্ট্যাটাস আপডেট হবে।
+            </p>
+          </div>
+        </div>
+      )}
+
+      {paymentStatusParam === "review" && (
+        <div className="p-6 rounded-3xl bg-amber-50 border-2 border-amber-500/40 flex items-start gap-3.5 no-print shadow-sm">
+          <div className="w-12 h-12 rounded-2xl bg-amber-600 text-white flex items-center justify-center shrink-0">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-lg font-extrabold text-amber-950">
+              পেমেন্ট যাচাইকরণ প্রক্রিয়াধীন (Under Verification)
+            </h2>
+            <p className="text-xs sm:text-sm text-stone-700">
+              গেটওয়ে থেকে ধীর গতির রেসপন্স পাওয়ায় আমাদের টিম আপনার পেমেন্টটি ম্যানুয়ালি যাচাই করছে। অনুগ্রহ করে দ্বিতীয়বার পেমেন্ট করবেন না; প্রয়োজনে কল করুন: {settings.supportPhone}।
             </p>
           </div>
         </div>
@@ -482,7 +487,7 @@ function TrackOrderContent() {
             </div>
             <div>
               <h2 className="text-lg font-extrabold text-[#0F3D2E]">
-                Alhamdulillah! Your Order is Confirmed!
+                Alhamdulillah! Your Order is Registered!
               </h2>
               <p className="text-xs sm:text-sm text-stone-700 mt-0.5">
                 Save your Order ID{" "}
@@ -514,12 +519,11 @@ function TrackOrderContent() {
       {notFound && (
         <div className="bg-white rounded-3xl border border-stone-200 p-10 text-center space-y-3">
           <h3 className="text-lg font-bold text-stone-900">
-            No Order Found for &ldquo;{orderCodeInput}&rdquo;
+            No Matching Order Found for &ldquo;{orderCodeInput}&rdquo;
           </h3>
           <p className="text-xs text-stone-500 max-w-md mx-auto">
-            Please verify that your Order ID matches the format{" "}
-            <code className="font-mono font-bold">SB-YYMM-XXXXX</code> or call
-            our hotline at {settings.supportPhone}.
+            {trackError ||
+              `Please verify both your Order ID (e.g. SB-YYMM-XXXXXXXXXX) and the last 4 digits of the phone number used during checkout, or call our hotline at ${settings.supportPhone}.`}
           </p>
         </div>
       )}
@@ -566,22 +570,24 @@ function TrackOrderContent() {
             </div>
 
             <div className="flex items-center gap-3 no-print">
-              {activeOrder.dueAmount > 0 && (
-                <button
-                  onClick={() => {
-                    setDueSenderPhone(activeOrder.customerPhone || "");
-                    setDueTrxId("");
-                    setDueTrxError(null);
-                    setIsPayDueModalOpen(true);
-                  }}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#E2136E] hover:bg-[#c20f5d] text-white text-xs font-extrabold shadow-md transition cursor-pointer"
-                >
-                  <CreditCard className="w-4 h-4" />
-                  <span>
-                    Pay Due ৳{activeOrder.dueAmount.toLocaleString()} Online
-                  </span>
-                </button>
-              )}
+              {activeOrder.dueAmount > 0 &&
+                activeOrder.orderStatus !== "cancelled" && (
+                  <button
+                    onClick={() => {
+                      setSelectedDueGateway(
+                        activeOrder.paymentMethod === "nagad" ? "nagad" : "bkash"
+                      );
+                      setDueTrxError(null);
+                      setIsPayDueModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#E2136E] hover:bg-[#c20f5d] text-white text-xs font-extrabold shadow-md transition cursor-pointer"
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    <span>
+                      Pay Due ৳{activeOrder.dueAmount.toLocaleString()} Online
+                    </span>
+                  </button>
+                )}
               <button
                 onClick={() => window.print()}
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#0F3D2E] hover:bg-[#165b44] text-white text-xs font-bold transition cursor-pointer"
@@ -654,7 +660,7 @@ function TrackOrderContent() {
               </div>
             )}
 
-            {/* Cold-Chain Courier & Assigned Rider Banner (Step 4 Upgrade) */}
+            {/* Cold-Chain Courier & Assigned Rider Banner */}
             {activeOrder.courierName && (
               <div className="p-4 sm:p-5 rounded-2xl bg-blue-50/80 border border-blue-200 flex flex-wrap items-center justify-between gap-4">
                 <div className="flex items-start gap-3.5">
@@ -694,7 +700,7 @@ function TrackOrderContent() {
               </div>
             )}
 
-            {/* Digital Scale Weight Verification Transparency Banner (Step 1 Upgrade) */}
+            {/* Digital Scale Weight Verification Transparency Banner */}
             {activeOrder.weightAdjustmentAmount !== undefined &&
               activeOrder.weightAdjustmentAmount !== 0 && (
                 <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-3">
@@ -716,7 +722,7 @@ function TrackOrderContent() {
 
           {/* Customer Info & Payment Ledger Grid */}
           <div className="p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 border-b border-stone-200">
-            {/* Customer Delivery Details (with PII Privacy Masking) */}
+            {/* Customer Delivery Details (with Server-Side PII Privacy Masking) */}
             <div className="p-5 rounded-2xl bg-[#FAF8F5] border border-stone-200/80 space-y-2.5">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-extrabold uppercase tracking-wider text-stone-500">
@@ -732,7 +738,7 @@ function TrackOrderContent() {
               <p className="text-xs text-stone-700 font-mono">
                 Phone:{" "}
                 <strong>
-                  {isPhoneUnlocked
+                  {activeOrder.customerPhone.includes("*")
                     ? activeOrder.customerPhone
                     : maskPhoneNumber(activeOrder.customerPhone)}
                 </strong>
@@ -749,7 +755,7 @@ function TrackOrderContent() {
               <p className="text-xs text-stone-700">
                 Address:{" "}
                 <strong>
-                  {isPhoneUnlocked
+                  {activeOrder.customerAddress.includes("*")
                     ? activeOrder.customerAddress
                     : maskAddress(
                         activeOrder.customerAddress,
@@ -757,12 +763,6 @@ function TrackOrderContent() {
                       )}
                 </strong>
               </p>
-              {!isPhoneUnlocked && (
-                <p className="text-[11px] text-stone-400 pt-1 no-print">
-                  * Enter the last 4 digits of your phone number above to reveal
-                  full street address.
-                </p>
-              )}
             </div>
 
             {/* Payment Ledger Card */}
@@ -851,11 +851,13 @@ function TrackOrderContent() {
                   className="p-4 flex items-center justify-between gap-4 bg-white"
                 >
                   <div className="flex items-center gap-3.5">
-                    <img
-                      src={item.productImage}
-                      alt={item.productTitle}
-                      className="w-14 h-14 rounded-xl object-contain bg-stone-950 p-0.5 border border-stone-200 shrink-0"
-                    />
+                    {item.productImage && (
+                      <img
+                        src={item.productImage}
+                        alt={item.productTitle}
+                        className="w-14 h-14 rounded-xl object-contain bg-stone-950 p-0.5 border border-stone-200 shrink-0"
+                      />
+                    )}
                     <div>
                       <p className="text-xs font-bold text-[#0F3D2E]">
                         {item.productTitleBn}
@@ -887,25 +889,14 @@ function TrackOrderContent() {
         </div>
       )}
 
-      {/* MODAL: PAY REMAINING DUE ONLINE VIA BKASH / NAGAD / SSLCOMMERZ */}
+      {/* MODAL: PAY REMAINING DUE ONLINE VIA OFFICIAL BKASH OR NAGAD MERCHANT GATEWAY */}
       {isPayDueModalOpen && activeOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/75 backdrop-blur-xs no-print overflow-y-auto">
           <div className="w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl bg-white border border-stone-200 my-6">
             {(() => {
               const isNagad = selectedDueGateway === "nagad";
               const isBkash = selectedDueGateway === "bkash";
-              const targetAccountNumber = isNagad
-                ? settings.nagadNumber || "01713-477780"
-                : settings.bkashMerchantNumber || "01713-477780";
-              const targetAccountType = isNagad
-                ? settings.nagadAccountType || "personal"
-                : settings.bkashAccountType || "merchant";
-
-              const headerBg = isBkash
-                ? "bg-[#E2136E]"
-                : isNagad
-                ? "bg-[#E35124]"
-                : "bg-[#1A4B8C]";
+              const headerBg = isBkash ? "bg-[#E2136E]" : "bg-[#E35124]";
 
               return (
                 <>
@@ -913,14 +904,12 @@ function TrackOrderContent() {
                     <div className="flex items-start justify-between">
                       <div>
                         <span className="text-[11px] uppercase tracking-widest font-black opacity-90 inline-block px-2 py-0.5 rounded bg-white/20 mb-1">
-                          বাকি টাকা পরিশোধ (Due Settlement)
+                          Official Merchant Payment
                         </span>
                         <h3 className="text-xl sm:text-2xl font-black">
                           {isBkash
-                            ? "বিকাশের মাধ্যমে বাকি পরিশোধ"
-                            : isNagad
-                            ? "নগদের মাধ্যমে বাকি পরিশোধ"
-                            : "SSLCommerz গেটওয়ে পেমেন্ট"}
+                            ? "বিকাশ মার্চেন্ট গেটওয়ে পেমেন্ট"
+                            : "নগদ মার্চেন্ট গেটওয়ে পেমেন্ট"}
                         </h3>
                         <p className="text-xs opacity-90 font-mono mt-1">
                           অর্ডার রেফারেন্স: {activeOrder.orderCode}
@@ -938,46 +927,29 @@ function TrackOrderContent() {
                     <div className="mt-4 p-3.5 rounded-2xl bg-black/20 backdrop-blur-xs flex items-center justify-between">
                       <div>
                         <span className="text-[11px] opacity-80 block font-semibold">
-                          পরিশোধযোগ্য বাকি টাকা
+                          পরিশোধযোগ্য টাকা (Server Verified)
                         </span>
                         <strong className="text-2xl font-black">
                           ৳{activeOrder.dueAmount.toLocaleString()}
                         </strong>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleDueCopyText(
-                            String(activeOrder.dueAmount),
-                            "amount"
-                          )
-                        }
-                        className="px-3 py-1.5 rounded-xl bg-white/25 hover:bg-white/35 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition"
-                      >
-                        {dueCopiedField === "amount" ? (
-                          <>
-                            <Check className="w-3.5 h-3.5" /> কপি হয়েছে!
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5" /> টাকার পরিমাণ কপি
-                          </>
-                        )}
-                      </button>
+                      <span className="px-3 py-1 rounded-full bg-white/20 text-[11px] font-bold">
+                        Zero-Trust Verified
+                      </span>
                     </div>
                   </div>
 
-                  <div className="p-6 space-y-4 text-xs">
+                  <div className="p-6 space-y-5 text-xs">
                     {/* Method Selector */}
                     <div>
-                      <label className="block font-bold text-stone-700 mb-1.5">
+                      <label className="block font-bold text-stone-700 mb-2">
                         পেমেন্ট মাধ্যম বেছে নিন:
                       </label>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-3 gap-2.5">
                         <button
                           type="button"
                           onClick={() => setSelectedDueGateway("bkash")}
-                          className={`py-2.5 px-3 rounded-xl font-bold border-2 transition cursor-pointer flex flex-col items-center gap-0.5 ${
+                          className={`py-3 px-3 rounded-xl font-bold border-2 transition cursor-pointer flex flex-col items-center gap-1 ${
                             selectedDueGateway === "bkash"
                               ? "border-[#E2136E] bg-pink-50 text-[#E2136E]"
                               : "border-stone-200 text-stone-600 hover:border-stone-300"
@@ -989,7 +961,7 @@ function TrackOrderContent() {
                         <button
                           type="button"
                           onClick={() => setSelectedDueGateway("nagad")}
-                          className={`py-2.5 px-3 rounded-xl font-bold border-2 transition cursor-pointer flex flex-col items-center gap-0.5 ${
+                          className={`py-3 px-3 rounded-xl font-bold border-2 transition cursor-pointer flex flex-col items-center gap-1 ${
                             selectedDueGateway === "nagad"
                               ? "border-orange-500 bg-orange-50 text-orange-700"
                               : "border-stone-200 text-stone-600 hover:border-stone-300"
@@ -998,262 +970,74 @@ function TrackOrderContent() {
                           <Smartphone className="w-4 h-4" />
                           <span className="text-xs">Nagad (নগদ)</span>
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedDueGateway("sslcommerz")}
-                          className={`py-2.5 px-3 rounded-xl font-bold border-2 transition cursor-pointer flex flex-col items-center gap-0.5 ${
-                            selectedDueGateway === "sslcommerz"
-                              ? "border-blue-600 bg-blue-50 text-blue-700"
-                              : "border-stone-200 text-stone-600 hover:border-stone-300"
-                          }`}
+                        <div
+                          aria-disabled="true"
+                          className="py-3 px-3 rounded-xl font-bold border-2 border-dashed border-stone-200 bg-stone-50 text-stone-400 flex flex-col items-center gap-1 opacity-60 cursor-not-allowed"
                         >
                           <CreditCard className="w-4 h-4" />
-                          <span className="text-xs">SSLCommerz</span>
-                        </button>
+                          <span className="text-[11px]">SSLCommerz (Hold)</span>
+                        </div>
                       </div>
                     </div>
 
-                    {selectedDueGateway === "sslcommerz" ? (
-                      <div className="p-4 sm:p-5 rounded-2xl bg-blue-50/80 border border-blue-200 text-blue-950 space-y-4">
-                        <div className="flex items-start gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-[#1A4B8C] text-white flex items-center justify-center shrink-0">
-                            <CreditCard className="w-5 h-5" />
-                          </div>
-                          <div className="space-y-1">
-                            <p className="text-sm font-extrabold text-[#1A4B8C]">
-                              SSLCommerz অটোমেটেড পেমেন্ট গেটওয়ে
-                            </p>
-                            <p className="text-xs text-stone-700 leading-relaxed">
-                              ভিসা, মাস্টারকার্ড, বিকাশ, নগদ, রকেট, উপায় অথবা যেকোনো ব্যাংক কার্ড ও ইন্টারনেট ব্যাংকিং দিয়ে সরাসরি নিরাপদে আপনার বাকি <strong>৳{activeOrder.dueAmount.toLocaleString()}</strong> পরিশোধ করুন।
-                            </p>
-                          </div>
-                        </div>
+                    <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200 space-y-2 text-stone-700 leading-relaxed">
+                      <p className="font-extrabold text-stone-900 flex items-center gap-1.5">
+                        <Lock className="w-4 h-4 text-emerald-700 shrink-0" />
+                        ১০০% স্বয়ংক্রিয় ও নিরাপদ মার্চেন্ট পেমেন্ট:
+                      </p>
+                      <p>
+                        নিচের বাটনে ক্লিক করলে আপনাকে সরাসরি{" "}
+                        <strong>
+                          {isBkash
+                            ? "bKash Tokenized Checkout"
+                            : "Nagad Official Merchant Gateway"}
+                        </strong>{" "}
+                        পেজে নিয়ে যাওয়া হবে। পেমেন্ট সম্পন্ন হওয়া মাত্রই আমাদের সার্ভার স্বয়ংক্রিয়ভাবে ট্রানজেকশন যাচাই করে আপনার অর্ডারের রসিদ আপডেট করবে। ম্যানুয়ালি কোনো TrxID লেখার প্রয়োজন নেই।
+                      </p>
+                    </div>
 
-                        <div className="flex items-center gap-2 text-[11px] text-stone-600 font-semibold bg-white p-3 rounded-xl border border-stone-200">
-                          <Lock className="w-4 h-4 text-emerald-600 shrink-0" />
-                          <span>পেমেন্ট গেটওয়েতে সম্পূর্ণ এনক্রিপ্টেড ও PCI-DSS SAQ A কমপ্লায়েন্ট।</span>
-                        </div>
-
-                        {dueTrxError && (
-                          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-bold flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-                            <span>{dueTrxError}</span>
-                          </div>
-                        )}
-
-                        <div className="flex gap-2.5 pt-2">
-                          <button
-                            type="button"
-                            onClick={() => setIsPayDueModalOpen(false)}
-                            className="px-4 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold cursor-pointer text-xs"
-                          >
-                            বাতিল
-                          </button>
-                          <button
-                            type="button"
-                            disabled={payingDue}
-                            onClick={handlePayDueWithSSLCommerz}
-                            className="flex-1 py-3 px-5 rounded-xl bg-[#1A4B8C] hover:bg-[#123668] text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer transition"
-                          >
-                            {payingDue ? (
-                              <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                <span>SSLCommerz গেটওয়ে সংযোগ হচ্ছে...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Lock className="w-4 h-4" />
-                                <span>
-                                  SSLCommerz দিয়ে ৳{activeOrder.dueAmount.toLocaleString()} পরিশোধ করুন
-                                </span>
-                              </>
-                            )}
-                          </button>
-                        </div>
+                    {dueTrxError && (
+                      <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-bold flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                        <span>{dueTrxError}</span>
                       </div>
-                    ) : (
-                      <form onSubmit={handlePayRemainingDue} className="space-y-4">
-                        {/* Number Box with Copy */}
-                        <div className="p-3.5 rounded-2xl bg-stone-50 border border-stone-200 space-y-2.5">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <span className="text-[11px] font-bold text-stone-500 uppercase block">
-                                আমাদের {isNagad ? "নগদ" : "বিকাশ"} নম্বর (
-                                {targetAccountType === "merchant"
-                                  ? "মার্চেন্ট পেমেন্ট"
-                                  : "পার্সোনাল সেন্ড মানি"}
-                                )
-                              </span>
-                              <span className="text-base font-black text-stone-900 font-mono">
-                                {targetAccountNumber}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleDueCopyText(targetAccountNumber, "number")
-                              }
-                              className="px-2.5 py-1.5 rounded-lg bg-[#0F3D2E] text-white font-bold flex items-center gap-1 cursor-pointer hover:bg-[#155440] transition"
-                            >
-                              {dueCopiedField === "number" ? (
-                                <>
-                                  <Check className="w-3 h-3 text-emerald-300" /> কপি
-                                  হয়েছে
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="w-3 h-3" /> নম্বর কপি
-                                </>
-                              )}
-                            </button>
-                          </div>
-
-                          <div className="pt-2 border-t border-stone-200/80 flex items-center justify-between">
-                            <div>
-                              <span className="text-[11px] font-bold text-stone-500 block">
-                                রেফারেন্স কোড (Reference)
-                              </span>
-                              <span className="text-sm font-black text-[#0F3D2E] font-mono">
-                                {activeOrder.orderCode}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleDueCopyText(activeOrder.orderCode, "ref")
-                              }
-                              className="px-2 py-1 rounded-md bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold flex items-center gap-1 cursor-pointer transition text-[11px]"
-                            >
-                              {dueCopiedField === "ref" ? (
-                                <>
-                                  <Check className="w-3 h-3 text-emerald-700" /> কপি
-                                  হয়েছে
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="w-3 h-3" /> কোড কপি
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* 1-Click Automated Gateway Option */}
-                        <div className="p-3.5 rounded-2xl bg-stone-50 border border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div className="text-left">
-                            <span className="text-xs font-black text-stone-900 block">
-                              ১-ক্লিক অনলাইন পেমেন্ট (স্বয়ংক্রিয়)
-                            </span>
-                            <span className="text-[10px] text-stone-500 block">
-                              সরাসরি {isBkash ? "bKash" : "নগদ"} অফিশিয়াল গেটওয়ে পেজে পেমেন্ট সম্পন্ন করুন
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            disabled={payingDue}
-                            onClick={isBkash ? handlePayDueWithBkash : handlePayDueWithNagad}
-                            className={`px-4 py-2.5 rounded-xl text-white font-extrabold text-xs shadow-sm transition cursor-pointer shrink-0 flex items-center justify-center gap-1.5 ${
-                              isBkash
-                                ? "bg-[#E2136E] hover:bg-[#c20f5d]"
-                                : "bg-[#E35124] hover:bg-[#c44119]"
-                            }`}
-                          >
-                            <CreditCard className="w-3.5 h-3.5" />
-                            <span>{isBkash ? "bKash দিয়ে পে করুন" : "নগদ দিয়ে পে করুন"}</span>
-                          </button>
-                        </div>
-
-                        {/* Step-by-Step Instructions */}
-                        <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 text-amber-950 space-y-1.5 text-[11px]">
-                          <p className="font-extrabold text-amber-900 flex items-center gap-1">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                            পেমেন্ট করার নিয়ম:
-                          </p>
-                          <p className="leading-relaxed text-stone-700">
-                            {isNagad ? "নগদ" : "বিকাশ"} অ্যাপে গিয়ে{" "}
-                            <strong>{targetAccountNumber}</strong> নম্বরে{" "}
-                            <strong>৳{activeOrder.dueAmount}</strong>{" "}
-                            {targetAccountType === "merchant"
-                              ? "পেমেন্ট"
-                              : "সেন্ড মানি"}{" "}
-                            করুন এবং রেফারেন্সে <strong>{activeOrder.orderCode}</strong>{" "}
-                            লিখুন। এরপর প্রাপ্ত Transaction ID (TrxID) নিচে দিন।
-                          </p>
-                        </div>
-
-                        {/* Form Inputs */}
-                        <div className="space-y-3">
-                          <div>
-                            <label className="block font-bold text-stone-700 mb-1">
-                              আপনার প্রেরক মোবাইল নম্বর *
-                            </label>
-                            <input
-                              type="tel"
-                              required
-                              value={dueSenderPhone}
-                              onChange={(e) => setDueSenderPhone(e.target.value)}
-                              placeholder="e.g., 017XXXXXXXX"
-                              className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-mono focus:outline-none focus:border-[#0F3D2E]"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block font-bold text-stone-700 mb-1">
-                              Transaction ID (TrxID) *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              value={dueTrxId}
-                              onChange={(e) => setDueTrxId(e.target.value)}
-                              placeholder="e.g., BKX8492019 বা 7GC89021"
-                              className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-mono uppercase tracking-wider focus:outline-none focus:border-[#0F3D2E]"
-                            />
-                          </div>
-                        </div>
-
-                        {dueTrxError && (
-                          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-bold flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-                            <span>{dueTrxError}</span>
-                          </div>
-                        )}
-
-                        <div className="flex gap-2.5 pt-1">
-                          <button
-                            type="button"
-                            onClick={() => setIsPayDueModalOpen(false)}
-                            className="px-4 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold cursor-pointer"
-                          >
-                            বাতিল
-                          </button>
-                          <button
-                            type="submit"
-                            disabled={payingDue}
-                            className={`flex-1 py-3 px-5 rounded-xl text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg cursor-pointer transition ${
-                              isBkash
-                                ? "bg-[#E2136E] hover:bg-[#c20f5d]"
-                                : "bg-[#E35124] hover:bg-[#c44119]"
-                            }`}
-                          >
-                            {payingDue ? (
-                              <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                <span>ভেরিফাই হচ্ছে...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Lock className="w-4 h-4" />
-                                <span>
-                                  বাকি ৳{activeOrder.dueAmount.toLocaleString()} পরিশোধ
-                                  কনফার্ম করুন
-                                </span>
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </form>
                     )}
+
+                    <div className="flex gap-2.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setIsPayDueModalOpen(false)}
+                        className="px-4 py-3 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold cursor-pointer"
+                      >
+                        বাতিল
+                      </button>
+                      <button
+                        type="button"
+                        disabled={payingDue}
+                        onClick={
+                          isBkash ? handlePayDueWithBkash : handlePayDueWithNagad
+                        }
+                        className={`flex-1 py-3 px-5 rounded-xl text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer transition ${
+                          isBkash
+                            ? "bg-[#E2136E] hover:bg-[#c20f5d]"
+                            : "bg-[#E35124] hover:bg-[#c44119]"
+                        }`}
+                      >
+                        {payingDue ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>গেটওয়ে সংযোগ হচ্ছে...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-4 h-4" />
+                            <span>
+                              {isBkash ? "bKash" : "Nagad"} দিয়ে পরিশোধ করুন
+                            </span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </>
               );

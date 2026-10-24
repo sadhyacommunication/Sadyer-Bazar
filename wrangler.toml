@@ -1,13 +1,36 @@
+# =============================================================================
+# Sadyer Bazar -- Cloudflare PAGES project configuration
+#
+# Static site  : ./out        (next build, output: "export")
+# API (Functions): ./functions (file-based routing -> /api/*)
+#
+# This is a Pages config (pages_build_output_dir). Do NOT add an [assets] block or a
+# `main` entry: that switches Wrangler to the Workers model, which silently ignores
+# the ./functions directory and would leave /api/* undeployed.
+#
+# SECRETS never go in this file. Set them with:
+#   wrangler pages secret put <NAME> --project-name sadyer-bazar
+# (full list: docs/SECURITY_ROTATION_CHECKLIST.md). Local dev uses .dev.vars.
+# =============================================================================
 name = "sadyer-bazar"
-compatibility_date = "2025-03-01"
+pages_build_output_dir = "./out"
+compatibility_date = "2025-09-01"
 compatibility_flags = ["nodejs_compat"]
 
-[assets]
-directory = "./out"
-not_found_handling = "404-page"
-
-[vars]
+# --- Production ---------------------------------------------------------------
+# Invariant enforced in code (functions/_lib/env.ts): production => PAYMENT_MODE "live".
+# Production therefore refuses sandbox gateways even if sandbox credentials leak in.
+[env.production.vars]
+APP_ENV = "production"
+PAYMENT_MODE = "live"
 NEXT_PUBLIC_SITE_URL = "https://sadhyerbazar.com"
 NEXT_PUBLIC_SUPABASE_URL = "https://uqyjtlndgnvfqjcdwbop.supabase.co"
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_fjenVMXelWDkrC8CEu3XeQ_xxrpxzOu"
-NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVxeWp0bG5kZ252ZnFqY2R3Ym9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwMDU3MTQsImV4cCI6MjEwNTU4MTcxNH0.e82cv5ugvYRgkDqRYW5Nw8dZ1R4RskEJIjrTw9d22H0"
+
+# --- Preview deployments ------------------------------------------------------
+# Preview URLs are dynamic, so NEXT_PUBLIC_SITE_URL is intentionally omitted: callbacks
+# fall back to the request origin (allowed only outside production).
+# Invariant: non-production => PAYMENT_MODE "sandbox".
+[env.preview.vars]
+APP_ENV = "preview"
+PAYMENT_MODE = "sandbox"
+NEXT_PUBLIC_SUPABASE_URL = "https://uqyjtlndgnvfqjcdwbop.supabase.co"

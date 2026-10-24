@@ -4,11 +4,17 @@
   "private": true,
   "description": "Sadyer Bazar (সাধ্যের বাজার) — Pure Organic Food, Fresh Jamuna River Fish & Nationwide Pre-Order Platform",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build && node scripts/postbuild.mjs",
+    "dev": "node scripts/dev-runner.mjs",
+    "dev:next": "next dev",
+    "dev:api": "tsx scripts/dev-api-server.mjs",
+    "build": "next build && node scripts/check-secrets.mjs",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:db": "node tests/db.harness.mjs",
+    "test:edge": "tsx tests/middleware.test.mjs",
+    "test:api": "tsx tests/api-routes.test.mjs",
+    "test": "npm run test:db && npm run test:edge && npm run test:api"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
@@ -20,11 +26,13 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.11",
     "@tailwindcss/postcss": "^4.0.9",
     "@types/node": "^22.13.5",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "tailwindcss": "^4.0.9",
+    "tsx": "^4.23.15",
     "typescript": "^5.8.2"
   }
 }

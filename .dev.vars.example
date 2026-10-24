@@ -1,0 +1,30 @@
+# =============================================================================
+# Local development secrets for `wrangler pages dev out`  (copy to .dev.vars)
+# .dev.vars is git-ignored. NEVER commit real values. NEVER use production keys here.
+# =============================================================================
+APP_ENV=development
+PAYMENT_MODE=sandbox
+
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+# Must be the service_role / sb_secret_ key of a DEV or STAGING project.
+SUPABASE_SERVICE_ROLE_KEY=your-dev-service-role-key
+
+# Salt for hashing client IPs in rate-limit buckets (any random string in dev).
+IP_HASH_SALT=dev-only-random-salt-change-me
+
+# Cloudflare Turnstile. Official always-pass TEST secret (pairs with test site key
+# 1x00000000000000000000AA). Use the real secret in production.
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
+# Explicit dev-only escape hatch; ignored (and logged) unless APP_ENV=development.
+TURNSTILE_DEV_BYPASS=false
+
+# bKash sandbox merchant credentials
+BKASH_APP_KEY=
+BKASH_APP_SECRET=
+BKASH_USERNAME=
+BKASH_PASSWORD=
+
+# Nagad sandbox merchant credentials (PEM bodies on one line, \n escaped)
+NAGAD_MERCHANT_ID=
+NAGAD_PUBLIC_KEY=
+NAGAD_PRIVATE_KEY=

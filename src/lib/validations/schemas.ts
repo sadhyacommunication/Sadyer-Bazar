@@ -32,18 +32,19 @@ export const createOrderSchema = z.object({
     .string()
     .trim()
     .min(2, "Please select or enter your District / Area")
-    .max(60),
+    .max(80),
   customerAddress: z
     .string()
     .trim()
     .min(8, "Please provide your full street/house delivery address")
     .max(350, "Address is too long"),
   customerNote: z.string().trim().max(300).optional(),
-  couponCode: z.string().trim().max(30).optional(),
-  paymentMethod: z.enum(["bkash", "nagad", "sslcommerz", "cod"]),
+  couponCode: z.string().trim().max(40).optional(),
+  paymentMethod: z.enum(["bkash", "nagad", "cod"]),
   paymentPlan: z.enum(["full", "advance", "cod"]),
   items: z.array(checkoutItemSchema).min(1, "Your cart is empty"),
   idempotencyKey: z.string().trim().max(100).optional(),
+  turnstileToken: z.string().trim().max(2048).optional(),
   // Honeypot anti-bot field (must be empty)
   websiteHoneypot: z.string().max(0, "Bot detected").optional(),
 });
@@ -54,10 +55,13 @@ export const trackOrderQuerySchema = z.object({
     .trim()
     .toUpperCase()
     .regex(
-      /^SB-\d{4}-[A-Z0-9]{5}$/,
-      "Invalid Order ID format (Expected: SB-YYMM-XXXXX)"
+      /^SB-\d{4}-[A-Z0-9]{5,10}$/,
+      "Invalid Order ID format (Expected: SB-YYMM-XXXXXXXXXX)"
     ),
-  phoneLast4: z.string().trim().optional(),
+  phoneLast4: z
+    .string()
+    .trim()
+    .regex(/^\d{4}$/, "Please enter the last 4 digits of your mobile number"),
 });
 
 export const updateSettingsSchema = z.object({
@@ -71,20 +75,17 @@ export const updateSettingsSchema = z.object({
   bkashMerchantNumber: z.string().trim().min(6).max(30),
   bkashAccountType: z.enum(["merchant", "personal", "agent"]).default("merchant"),
   nagadNumber: z.string().trim().min(6).max(30).default("01713-477780"),
-  nagadAccountType: z.enum(["merchant", "personal"]).default("personal"),
+  nagadAccountType: z.enum(["merchant", "personal"]).default("merchant"),
   nagadEnabled: z.boolean().default(true),
   announcementEn: z.string().trim().min(5).max(240),
   announcementBn: z.string().trim().min(2).max(240),
-  sslcommerzEnabled: z.boolean(),
-  sslcommerzStoreId: z.string().trim().max(100).optional(),
-  sslcommerzIsLive: z.boolean().optional(),
+  sslcommerzEnabled: z.boolean().default(false),
   bkashEnabled: z.boolean(),
-  bkashAppKey: z.string().trim().max(100).optional(),
   codEnabled: z.boolean(),
 });
 
 export const createContactMessageSchema = z.object({
-  name: z.string().trim().min(2, "Name must be at least 2 characters").max(100),
+  name: z.string().trim().min(2, "Name must be at least 2 characters").max(80),
   phone: z
     .string()
     .trim()

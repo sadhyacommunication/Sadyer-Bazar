@@ -2,6 +2,10 @@
 -- SADYER BAZAR (সাধ্যের বাজার) — SUPABASE POSTGRESQL SCHEMA & RLS SECURITY
 -- Project: sadhyarbazar (https://uqyjtlndgnvfqjcdwbop.supabase.co)
 -- Instructions: Copy & Paste this entire file into Supabase SQL Editor and click RUN.
+--
+-- NOTE (security hardening): this file is the BASELINE (tables) only. Its legacy policies and
+-- functions below are insecure and are REMOVED by supabase/migrations/..._05_rls_lockdown.sql.
+-- After running this file you MUST run migrations 01 -> 05 (see supabase/README.md).
 -- ============================================================================
 
 -- 1. SITE SETTINGS TABLE (Admin Configurable Delivery Charges & Business Rules)

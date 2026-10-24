@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   LayoutDashboard,
@@ -26,27 +26,22 @@ import {
   Scale,
   Tag,
   Download,
-  Smartphone,
   Copy,
   Check,
   MessageSquare,
   Phone,
   Mail,
   AlertCircle,
+  Loader2,
+  LogOut,
+  RefreshCw,
 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
-import {
-  checkAdminLockout,
-  checkRateLimit,
-  createAdminSessionToken,
-  recordAdminLoginAttempt,
-  verifyAdminPasskey,
-  verifyAdminSessionToken,
-} from "@/lib/security";
-import { fetchAdminOrdersFromSupabase } from "@/services/supabaseSync";
+import { checkRateLimit } from "@/lib/security";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { fetchAuthenticatedAdminDataFromSupabase } from "@/services/supabaseSync";
 import {
   ContactMessage,
-  ContactMessageStatus,
   Coupon,
   Order,
   OrderStatus,
@@ -71,6 +66,7 @@ export default function AdminDashboardPage() {
     coupons,
     orders,
     transactions,
+    paymentAttempts,
     settings,
     procurementSummary,
     messages,
@@ -82,6 +78,7 @@ export default function AdminDashboardPage() {
     adjustOrderWeightAndBill,
     assignOrderLogistics,
     verifyCodOrderPhone,
+    resolvePaymentAttempt,
     addProduct,
     updateProduct,
     deleteProduct,
@@ -95,31 +92,82 @@ export default function AdminDashboardPage() {
     hydrateAdminRecords,
   } = useStore();
 
-  // Admin Passkey Gate (Cryptographically Signed Token & Tamper-Evident Expiry)
+  // Supabase Auth + public.admins Allow-List Gate
   const [isUnlocked, setIsUnlocked] = useState(false);
-  const [pinInput, setPinInput] = useState("");
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [loggedInEmail, setLoggedInEmail] = useState<string | null>(null);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [refreshingAdminData, setRefreshingAdminData] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
+  const [resolveTrxInput, setResolveTrxInput] = useState<Record<string, string>>({});
+
+  const loadAdminRecords = useCallback(async () => {
+    setRefreshingAdminData(true);
+    try {
+      const adminData = await fetchAuthenticatedAdminDataFromSupabase();
+      if (adminData.authorized) {
+        hydrateAdminRecords(
+          adminData.orders,
+          adminData.messages,
+          adminData.transactions,
+          adminData.paymentAttempts,
+          adminData.coupons
+        );
+        return true;
+      }
+      return false;
+    } finally {
+      setRefreshingAdminData(false);
+    }
+  }, [hydrateAdminRecords]);
 
   useEffect(() => {
-    try {
-      const token = sessionStorage.getItem("sb_admin_session_token");
-      if (token && verifyAdminSessionToken(token)) {
-        setIsUnlocked(true);
-        const cachedHash = sessionStorage.getItem("sb_admin_hash");
-        if (cachedHash) {
-          fetchAdminOrdersFromSupabase(cachedHash).then((adminData) => {
-            if (adminData) {
-              hydrateAdminRecords(adminData.orders, adminData.messages);
-            }
-          });
-        }
-      } else {
+    let active = true;
+    const checkSession = async () => {
+      try {
+        // Purge any legacy client-side passkey session keys
         sessionStorage.removeItem("sb_admin_session_token");
         sessionStorage.removeItem("sb_admin_hash");
         sessionStorage.removeItem("sb_admin_auth_v2");
+
+        const supabase = getSupabaseBrowserClient();
+        if (!supabase) {
+          if (active) setCheckingSession(false);
+          return;
+        }
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.user) {
+          if (active) setCheckingSession(false);
+          return;
+        }
+
+        const ok = await loadAdminRecords();
+        if (active) {
+          if (ok) {
+            setIsUnlocked(true);
+            setLoggedInEmail(session.user.email || "Authorized Admin");
+          } else {
+            await supabase.auth.signOut();
+            setPinError(
+              "Your account is not listed in public.admins. Please add your User ID to public.admins in Supabase."
+            );
+          }
+          setCheckingSession(false);
+        }
+      } catch {
+        if (active) setCheckingSession(false);
       }
-    } catch {}
-  }, [hydrateAdminRecords]);
+    };
+    void checkSession();
+    return () => {
+      active = false;
+    };
+  }, [loadAdminRecords]);
 
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>("all");
@@ -498,6 +546,19 @@ export default function AdminDashboardPage() {
     await updateSiteSettings(settingsForm);
   };
 
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen bg-[#0F3D2E] flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl text-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin text-[#0F3D2E] mx-auto" />
+          <p className="text-sm font-bold text-stone-700">
+            Verifying Supabase Admin Session...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (!isUnlocked) {
     return (
       <div className="min-h-screen bg-[#0F3D2E] flex items-center justify-center p-4">
@@ -510,79 +571,126 @@ export default function AdminDashboardPage() {
               Sadyer Bazar Admin Security Gate
             </h1>
             <p className="text-xs text-stone-500">
-              Protected Merchant Portal • Enter Authorized Admin Passkey
+              Supabase Auth + <code className="font-mono">public.admins</code>{" "}
+              Allow-List Verification
             </p>
           </div>
 
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              const lockout = checkAdminLockout();
-              if (lockout.locked) {
-                setPinError(
-                  `Security Lockout: Please wait ${lockout.lockRemainingSeconds}s before attempting to unlock.`
-                );
-                return;
-              }
+              setPinError(null);
 
               const rl = checkRateLimit("admin_login_gate", 5, 60_000);
               if (!rl.allowed) {
+                setPinError("Rate limit reached. Please wait 60 seconds.");
+                return;
+              }
+
+              const supabase = getSupabaseBrowserClient();
+              if (!supabase) {
                 setPinError(
-                  "Rate limit reached. Please wait 60 seconds."
+                  "Supabase client is not configured. Check NEXT_PUBLIC_SUPABASE_URL & NEXT_PUBLIC_SUPABASE_ANON_KEY."
                 );
                 return;
               }
 
-              const res = await verifyAdminPasskey(pinInput);
-              if (res.success && res.hash) {
-                setIsUnlocked(true);
-                setPinError(null);
-                recordAdminLoginAttempt(true);
-                try {
-                  const token = createAdminSessionToken(res.hash);
-                  sessionStorage.setItem("sb_admin_session_token", token);
-                  sessionStorage.setItem("sb_admin_hash", res.hash);
-                } catch {}
-
-                fetchAdminOrdersFromSupabase(res.hash).then((adminData) => {
-                  if (adminData) {
-                    hydrateAdminRecords(adminData.orders, adminData.messages);
-                  }
+              setLoginLoading(true);
+              try {
+                const { data, error } = await supabase.auth.signInWithPassword({
+                  email: adminEmail.trim(),
+                  password: adminPassword,
                 });
-              } else {
-                const attempt = recordAdminLoginAttempt(false);
-                if (attempt.locked) {
+
+                if (error || !data.session) {
                   setPinError(
-                    `Too many failed attempts! Device locked for ${attempt.lockRemainingSeconds}s.`
+                    error?.message || "Invalid admin email or password."
                   );
-                } else {
-                  const remaining = Math.max(0, 3 - attempt.attempts);
-                  setPinError(
-                    `Invalid Cryptographic Passkey. (${remaining > 0 ? remaining : 1} attempts before lockout)`
-                  );
+                  return;
                 }
+
+                const isAllowedAdmin = await loadAdminRecords();
+                if (!isAllowedAdmin) {
+                  await supabase.auth.signOut();
+                  setPinError(
+                    `Authenticated as ${data.user?.email}, but user ID (${data.user?.id}) is not in public.admins. Run: INSERT INTO public.admins (user_id, email) VALUES ('${data.user?.id}', '${data.user?.email}');`
+                  );
+                  return;
+                }
+
+                setLoggedInEmail(data.user?.email || adminEmail.trim());
+                setIsUnlocked(true);
+                setAdminPassword("");
+                showToast("Welcome back! Admin session verified via Supabase Auth.");
+              } catch (err) {
+                setPinError(
+                  err instanceof Error
+                    ? err.message
+                    : "Failed to authenticate with Supabase."
+                );
+              } finally {
+                setLoginLoading(false);
               }
             }}
             className="space-y-4"
           >
-            <input
-              type="password"
-              value={pinInput}
-              onChange={(e) => setPinInput(e.target.value)}
-              placeholder="Enter Admin Passkey"
-              autoFocus
-              className="w-full px-4 py-3.5 rounded-2xl bg-stone-50 border border-stone-200 text-center text-lg font-mono tracking-widest focus:outline-none focus:border-[#0F3D2E]"
-            />
+            <div>
+              <label className="block text-xs font-bold text-stone-700 mb-1">
+                Admin Email Address *
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="email"
+                  required
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  placeholder="admin@sadyerbazar.com"
+                  autoFocus
+                  className="w-full pl-10 pr-4 py-3 rounded-2xl bg-stone-50 border border-stone-200 text-sm focus:outline-none focus:border-[#0F3D2E]"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-stone-700 mb-1">
+                Password *
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="password"
+                  required
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="w-full pl-10 pr-4 py-3 rounded-2xl bg-stone-50 border border-stone-200 text-sm focus:outline-none focus:border-[#0F3D2E]"
+                />
+              </div>
+            </div>
+
             {pinError && (
-              <p className="text-xs text-red-600 text-center font-bold">
+              <div className="p-3 rounded-2xl bg-red-50 border border-red-200 text-xs text-red-700 font-semibold break-words">
                 {pinError}
-              </p>
+              </div>
             )}
+
             <button
               type="submit"
-              className="w-full py-3.5 rounded-2xl bg-[#0F3D2E] hover:bg-[#15533f] text-white font-bold text-sm transition cursor-pointer"
+              disabled={loginLoading}
+              className="w-full py-3.5 rounded-2xl bg-[#0F3D2E] hover:bg-[#15533f] disabled:opacity-60 text-white font-bold text-sm transition cursor-pointer flex items-center justify-center gap-2"
             >
-              Unlock Merchant Portal
+              {loginLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Verifying Admin Credentials...</span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Sign In to Merchant Portal</span>
+                </>
+              )}
             </button>
           </form>
         </div>
@@ -611,25 +719,23 @@ export default function AdminDashboardPage() {
                 <span className="text-base font-extrabold text-white block leading-none">
                   Sadyer Bazar
                 </span>
-                <span className="text-[11px] text-emerald-300 font-medium">
-                  Enterprise Portal v2.0
+                <span className="text-[11px] text-emerald-300 font-medium truncate max-w-[140px] block">
+                  {loggedInEmail || "Admin Session"}
                 </span>
               </div>
             </Link>
             <button
-              onClick={() => {
+              onClick={async () => {
+                const supabase = getSupabaseBrowserClient();
+                await supabase?.auth.signOut();
                 setIsUnlocked(false);
-                setPinInput("");
-                try {
-                  sessionStorage.removeItem("sb_admin_session_token");
-                  sessionStorage.removeItem("sb_admin_hash");
-                  sessionStorage.removeItem("sb_admin_auth_v2");
-                } catch {}
+                setLoggedInEmail(null);
+                setAdminPassword("");
               }}
               className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-emerald-200 text-xs cursor-pointer"
-              title="Lock Admin Session"
+              title="Sign Out of Admin Session"
             >
-              <Lock className="w-4 h-4" />
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
 
@@ -663,8 +769,11 @@ export default function AdminDashboardPage() {
               },
               {
                 id: "payments",
-                label: "bKash & SSL Ledger",
+                label: "bKash & Nagad Ledger",
                 icon: CreditCard,
+                badge:
+                  paymentAttempts.filter((a) => a.status === "needs_review")
+                    .length || null,
               },
               {
                 id: "messages",
@@ -753,7 +862,7 @@ export default function AdminDashboardPage() {
                   rel="noreferrer"
                   className="px-2.5 py-0.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-[11px] font-extrabold underline"
                 >
-                  ⚠ Run supabase/schema.sql in SQL Editor →
+                  ⚠ Run supabase/migrations in SQL Editor →
                 </a>
               )}
             </div>
@@ -768,7 +877,7 @@ export default function AdminDashboardPage() {
               {activeTab === "coupons" &&
                 "Promo Code & Campaign Discount Manager"}
               {activeTab === "payments" &&
-                "Payment Ledger (bKash, SSLCommerz & COD)"}
+                "Payment Ledger & Gateway Attempts (bKash, Nagad & COD)"}
               {activeTab === "settings" &&
                 "Inside / Outside Dhaka Delivery Charges & Site Settings"}
             </h1>
@@ -776,12 +885,25 @@ export default function AdminDashboardPage() {
 
           <div className="flex flex-wrap items-center gap-2.5">
             <button
+              onClick={() => void loadAdminRecords()}
+              disabled={refreshingAdminData}
+              className="px-3.5 py-2.5 rounded-2xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer"
+              title="Refresh Orders, Payment Attempts & Messages from Supabase"
+            >
+              <RefreshCw
+                className={`w-4 h-4 ${
+                  refreshingAdminData ? "animate-spin" : ""
+                }`}
+              />
+              <span>Refresh Live</span>
+            </button>
+            <button
               onClick={syncDatabaseWithSupabase}
               className="px-3.5 py-2.5 rounded-2xl bg-[#0F3D2E] hover:bg-[#165b44] text-amber-300 text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer"
-              title="Push & Sync All Products, Orders, Coupons & Settings to Supabase"
+              title="Push Catalog, Coupons & Safe Settings to Supabase"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>Sync to Supabase</span>
+              <span>Sync Catalog</span>
             </button>
             <button
               onClick={handleExportOrdersCsv}
@@ -1643,147 +1765,350 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* TAB 6: PAYMENTS & BKASH / NAGAD / SSLCOMMERZ LEDGER */}
+        {/* TAB 6: PAYMENTS & BKASH / NAGAD LEDGER + GATEWAY ATTEMPTS QUEUE */}
         {activeTab === "payments" && (
-          <div className="bg-white rounded-3xl border border-stone-200/90 p-6 space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-extrabold text-stone-900">
-                  Automated bKash, Nagad & SSLCommerz Transaction Ledger
-                </h2>
-                <p className="text-xs text-stone-500">
-                  Every online payment TrxID submitted by customers or verified by gateways is recorded live below.
-                </p>
+          <div className="space-y-6">
+            {/* Gateway Payment Attempts & Needs Review Triage */}
+            <div className="bg-white rounded-3xl border border-stone-200/90 p-6 space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-[#C83E2B]">
+                    Server-to-Server Gateway Audit Log
+                  </span>
+                  <h2 className="text-lg font-extrabold text-stone-900">
+                    bKash & Nagad Payment Attempts ({paymentAttempts.length})
+                  </h2>
+                  <p className="text-xs text-stone-500">
+                    If a gateway callback is delayed or ambiguous, it is marked{" "}
+                    <code className="font-mono font-bold text-amber-800">
+                      needs_review
+                    </code>{" "}
+                    so an admin can verify the bank/MFS portal and settle or reject it safely.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-bold">
+                    Needs Review:{" "}
+                    {
+                      paymentAttempts.filter((a) => a.status === "needs_review")
+                        .length
+                    }
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void loadAdminRecords()}
+                    className="px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Refresh
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold">
-                  Total Transactions: {transactions.length}
-                </span>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-stone-200 text-stone-500 uppercase">
+                      <th className="py-3 pr-3">Gateway Ref</th>
+                      <th className="py-3 px-3">Gateway</th>
+                      <th className="py-3 px-3">Payment ID / TrxID</th>
+                      <th className="py-3 px-3">Expected</th>
+                      <th className="py-3 px-3">Status</th>
+                      <th className="py-3 pl-3 text-right">Admin Resolution</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {paymentAttempts.map((att) => {
+                      const isReview =
+                        att.status === "needs_review" ||
+                        att.status === "executing" ||
+                        att.status === "created" ||
+                        att.status === "redirected";
+                      return (
+                        <tr
+                          key={att.id}
+                          className={`hover:bg-stone-50 transition ${
+                            att.status === "needs_review"
+                              ? "bg-amber-50/50"
+                              : ""
+                          }`}
+                        >
+                          <td className="py-3.5 pr-3 font-mono font-bold text-stone-900">
+                            {att.gatewayOrderRef}
+                            <span className="block text-[10px] text-stone-400">
+                              {new Date(att.createdAt).toLocaleString("en-BD", {
+                                dateStyle: "short",
+                                timeStyle: "short",
+                              })}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-3">
+                            <span
+                              className={`px-2.5 py-1 rounded-md text-white font-extrabold uppercase text-[10px] ${
+                                att.gateway === "bkash"
+                                  ? "bg-[#E2136E]"
+                                  : "bg-[#E35124]"
+                              }`}
+                            >
+                              {att.gateway} ({att.purpose})
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-3 font-mono text-stone-700">
+                            <div>ID: {att.gatewayPaymentId || "—"}</div>
+                            {att.gatewayTrxId && (
+                              <div className="text-emerald-800 font-bold">
+                                TrxID: {att.gatewayTrxId}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-3 font-extrabold text-[#0F3D2E]">
+                            ৳{att.expectedAmount.toLocaleString()}
+                          </td>
+                          <td className="py-3.5 px-3">
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full font-bold text-[11px] uppercase ${
+                                att.status === "succeeded"
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : att.status === "needs_review"
+                                  ? "bg-amber-200 text-amber-950"
+                                  : att.status === "failed" ||
+                                    att.status === "cancelled"
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-blue-100 text-blue-800"
+                              }`}
+                            >
+                              {att.status.replace("_", " ")}
+                            </span>
+                          </td>
+                          <td className="py-3.5 pl-3 text-right">
+                            {isReview ? (
+                              <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                                <input
+                                  type="text"
+                                  value={resolveTrxInput[att.id] || ""}
+                                  onChange={(e) =>
+                                    setResolveTrxInput((prev) => ({
+                                      ...prev,
+                                      [att.id]: e.target.value.toUpperCase(),
+                                    }))
+                                  }
+                                  placeholder="Verified TrxID"
+                                  className="px-2.5 py-1 rounded-lg bg-white border border-stone-300 font-mono text-[11px] w-28"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const trx = (
+                                      resolveTrxInput[att.id] ||
+                                      att.gatewayTrxId ||
+                                      ""
+                                    ).trim();
+                                    if (!trx) {
+                                      showToast(
+                                        "Please enter the verified gateway TrxID before approving."
+                                      );
+                                      return;
+                                    }
+                                    await updateOrderPaymentStatus(
+                                      att.orderId,
+                                      "paid",
+                                      undefined,
+                                      trx
+                                    );
+                                    const ok = await resolvePaymentAttempt(
+                                      att.id,
+                                      "dismissed",
+                                      `Approved & settled by admin (${trx})`
+                                    );
+                                    if (ok) void loadAdminRecords();
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-[#0F3D2E] hover:bg-[#165a44] text-white font-bold text-[11px] cursor-pointer"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const ok = await resolvePaymentAttempt(
+                                      att.id,
+                                      "dismissed",
+                                      "Dismissed by admin"
+                                    );
+                                    if (ok) void loadAdminRecords();
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-red-100 hover:bg-red-200 text-red-800 font-bold text-[11px] cursor-pointer"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-stone-400 text-[11px]">
+                                Settled
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {paymentAttempts.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="py-6 text-center text-stone-400"
+                        >
+                          No gateway payment attempts recorded yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-stone-200 text-stone-500 uppercase">
-                    <th className="py-3 pr-4">Transaction ID (TrxID)</th>
-                    <th className="py-3 px-4">Order Code</th>
-                    <th className="py-3 px-4">Gateway / MFS</th>
-                    <th className="py-3 px-4">Sender Phone</th>
-                    <th className="py-3 px-4">Paid Amount</th>
-                    <th className="py-3 px-4">Order Payment Status</th>
-                    <th className="py-3 pl-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-100">
-                  {transactions.map((trx) => {
-                    const linkedOrder = orders.find(
-                      (o) => o.id === trx.orderId || o.orderCode === trx.orderCode
-                    );
-                    const isFullyPaid =
-                      linkedOrder?.paymentStatus === "paid" ||
-                      linkedOrder?.dueAmount === 0;
+            {/* Verified Payment Transactions Ledger */}
+            <div className="bg-white rounded-3xl border border-stone-200/90 p-6 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-extrabold text-stone-900">
+                    Verified bKash, Nagad & COD Settlement Ledger
+                  </h2>
+                  <p className="text-xs text-stone-500">
+                    Every server-verified gateway transaction and admin settlement is recorded with anti-replay uniqueness on TrxID.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold">
+                    Total Verified Transactions: {transactions.length}
+                  </span>
+                </div>
+              </div>
 
-                    return (
-                      <tr key={trx.id} className="hover:bg-stone-50 transition">
-                        <td className="py-3.5 pr-4">
-                          <div className="flex items-center gap-1.5 font-mono font-black text-stone-900">
-                            <span>{trx.transactionId}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleCopyTrx(trx.transactionId)}
-                              className="p-1 rounded hover:bg-stone-200 text-stone-500 cursor-pointer"
-                              title="Copy TrxID"
-                            >
-                              {copiedTrxId === trx.transactionId ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                          </div>
-                        </td>
-                        <td className="py-3.5 px-4 font-mono font-bold text-[#0F3D2E]">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setOrderSearch(trx.orderCode);
-                              setActiveTab("orders");
-                            }}
-                            className="hover:underline cursor-pointer"
-                            title="View this order"
-                          >
-                            {trx.orderCode}
-                          </button>
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <span
-                            className={`px-2.5 py-1 rounded-md text-white font-extrabold uppercase text-[10px] ${
-                              trx.gateway === "bkash"
-                                ? "bg-[#E2136E]"
-                                : trx.gateway === "nagad"
-                                ? "bg-[#E35124]"
-                                : trx.gateway === "sslcommerz"
-                                ? "bg-[#1A4B8C]"
-                                : "bg-purple-600"
-                            }`}
-                          >
-                            {trx.gateway}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 font-mono text-stone-600">
-                          {trx.senderPhone || "Verified Wallet"}
-                        </td>
-                        <td className="py-3.5 px-4 font-extrabold text-sm text-[#0F3D2E]">
-                          ৳{trx.amount.toLocaleString()}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
-                              isFullyPaid
-                                ? "bg-emerald-100 text-emerald-800"
-                                : "bg-amber-100 text-amber-800"
-                            }`}
-                          >
-                            <CheckCircle2 className="w-3 h-3" />
-                            {linkedOrder
-                              ? linkedOrder.paymentStatus.toUpperCase()
-                              : trx.status.toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="py-3.5 pl-4 text-right">
-                          {linkedOrder && !isFullyPaid && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-stone-200 text-stone-500 uppercase">
+                      <th className="py-3 pr-4">Transaction ID (TrxID)</th>
+                      <th className="py-3 px-4">Order Code</th>
+                      <th className="py-3 px-4">Gateway / MFS</th>
+                      <th className="py-3 px-4">Sender Phone</th>
+                      <th className="py-3 px-4">Paid Amount</th>
+                      <th className="py-3 px-4">Order Payment Status</th>
+                      <th className="py-3 pl-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {transactions.map((trx) => {
+                      const linkedOrder = orders.find(
+                        (o) =>
+                          o.id === trx.orderId || o.orderCode === trx.orderCode
+                      );
+                      const isFullyPaid =
+                        linkedOrder?.paymentStatus === "paid" ||
+                        linkedOrder?.dueAmount === 0;
+
+                      return (
+                        <tr
+                          key={trx.id}
+                          className="hover:bg-stone-50 transition"
+                        >
+                          <td className="py-3.5 pr-4">
+                            <div className="flex items-center gap-1.5 font-mono font-black text-stone-900">
+                              <span>{trx.transactionId}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyTrx(trx.transactionId)}
+                                className="p-1 rounded hover:bg-stone-200 text-stone-500 cursor-pointer"
+                                title="Copy TrxID"
+                              >
+                                {copiedTrxId === trx.transactionId ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 font-mono font-bold text-[#0F3D2E]">
                             <button
                               type="button"
                               onClick={() => {
-                                updateOrderPaymentStatus(
-                                  linkedOrder.id,
-                                  "paid",
-                                  linkedOrder.totalAmount,
-                                  trx.transactionId
-                                );
-                                showToast(
-                                  `Order ${linkedOrder.orderCode} marked as Fully Paid!`
-                                );
+                                setOrderSearch(trx.orderCode);
+                                setActiveTab("orders");
                               }}
-                              className="px-2.5 py-1.5 rounded-lg bg-[#0F3D2E] hover:bg-[#165a44] text-white font-bold text-[11px] cursor-pointer transition shadow-2xs"
+                              className="hover:underline cursor-pointer"
+                              title="View this order"
                             >
-                              Verify & Mark Paid
+                              {trx.orderCode}
                             </button>
-                          )}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span
+                              className={`px-2.5 py-1 rounded-md text-white font-extrabold uppercase text-[10px] ${
+                                trx.gateway === "bkash"
+                                  ? "bg-[#E2136E]"
+                                  : trx.gateway === "nagad"
+                                  ? "bg-[#E35124]"
+                                  : trx.gateway === "sslcommerz"
+                                  ? "bg-[#1A4B8C]"
+                                  : "bg-[#0F3D2E]"
+                              }`}
+                            >
+                              {trx.gateway}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 font-mono text-stone-600">
+                            {trx.senderPhone || "Verified Wallet"}
+                          </td>
+                          <td className="py-3.5 px-4 font-extrabold text-sm text-[#0F3D2E]">
+                            ৳{trx.amount.toLocaleString()}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
+                                isFullyPaid
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-amber-100 text-amber-800"
+                              }`}
+                            >
+                              <CheckCircle2 className="w-3 h-3" />
+                              {linkedOrder
+                                ? linkedOrder.paymentStatus.toUpperCase()
+                                : trx.status.toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="py-3.5 pl-4 text-right">
+                            {linkedOrder && !isFullyPaid && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void updateOrderPaymentStatus(
+                                    linkedOrder.id,
+                                    "paid",
+                                    linkedOrder.totalAmount,
+                                    trx.transactionId
+                                  );
+                                }}
+                                className="px-2.5 py-1.5 rounded-lg bg-[#0F3D2E] hover:bg-[#165a44] text-white font-bold text-[11px] cursor-pointer transition shadow-2xs"
+                              >
+                                Verify & Mark Paid
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {transactions.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="py-8 text-center text-stone-400"
+                        >
+                          No transactions recorded yet.
                         </td>
                       </tr>
-                    );
-                  })}
-                  {transactions.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="py-8 text-center text-stone-400">
-                        No transactions recorded yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -2250,28 +2575,17 @@ export default function AdminDashboardPage() {
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                    bKash PGW App Key (ঐচ্ছিক / Tokenized Gateway)
-                  </label>
-                  <input
-                    type="password"
-                    value={settingsForm.bkashAppKey || ""}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        bkashAppKey: e.target.value,
-                      })
-                    }
-                    placeholder="bKash App Key"
-                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-mono"
-                  />
-                </div>
-
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-900 flex items-start gap-2">
+                <div className="sm:col-span-2 bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-xs text-emerald-900 flex items-start gap-2.5">
                   <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-bold">ব্যাংক-গ্রেড নিরাপত্তা:</span> bKash App Secret সার্ভার সিক্রেটে (`.env.local` / Cloudflare Secrets) সুরক্ষিত, ডাটাবেসে বা ব্রাউজারে উন্মুক্ত নয়।
+                    <span className="font-bold">Zero-Leakage Secret Vault:</span>{" "}
+                    bKash Merchant API credentials (<code className="font-mono">BKASH_APP_KEY</code>,{" "}
+                    <code className="font-mono">BKASH_APP_SECRET</code>,{" "}
+                    <code className="font-mono">BKASH_USERNAME</code>,{" "}
+                    <code className="font-mono">BKASH_PASSWORD</code>) are stored
+                    exclusively in <code className="font-mono">.env</code> /{" "}
+                    <code className="font-mono">.dev.vars</code> / Cloudflare
+                    Secrets and never saved in the public database.
                   </div>
                 </div>
               </div>
@@ -2284,10 +2598,10 @@ export default function AdminDashboardPage() {
                   3. Nagad Configuration (নগদ পেমেন্ট সেটিংস)
                 </span>
                 <h3 className="text-lg font-extrabold text-stone-900 mt-0.5">
-                  নগদ অ্যাকাউন্ট ও TrxID সেটিংস
+                  নগদ মার্চেন্ট অ্যাকাউন্ট ও গেটওয়ে সেটিংস
                 </h3>
                 <p className="text-xs text-stone-500">
-                  গ্রাহকরা সরাসরি এই নম্বরে নগদ পেমেন্ট/সেন্ড মানি করে TrxID দিয়ে অর্ডার কনফার্ম করতে পারবে।
+                  চেকআউটে নগদ মার্চেন্ট পেমেন্ট অপশন ও ডিসপ্লে নম্বর কনফিগারেশন।
                 </p>
               </div>
 
@@ -2316,7 +2630,7 @@ export default function AdminDashboardPage() {
                     Nagad Account Type (অ্যাকাউন্টের ধরন)
                   </label>
                   <select
-                    value={settingsForm.nagadAccountType || "personal"}
+                    value={settingsForm.nagadAccountType || "merchant"}
                     onChange={(e) =>
                       setSettingsForm({
                         ...settingsForm,
@@ -2325,11 +2639,11 @@ export default function AdminDashboardPage() {
                     }
                     className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-bold cursor-pointer"
                   >
-                    <option value="personal">
-                      Personal Account (গ্রাহক “Send Money” করবেন)
-                    </option>
                     <option value="merchant">
                       Merchant Account (গ্রাহক “Merchant Pay” করবেন)
+                    </option>
+                    <option value="personal">
+                      Personal Account (গ্রাহক “Send Money” করবেন)
                     </option>
                   </select>
                 </div>
@@ -2352,66 +2666,41 @@ export default function AdminDashboardPage() {
                     </span>
                   </label>
                 </div>
+
+                <div className="sm:col-span-2 bg-orange-50 border border-orange-200 rounded-xl p-3.5 text-xs text-orange-950 flex items-start gap-2.5">
+                  <ShieldCheck className="w-4 h-4 text-[#E35124] shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">RSA Asymmetric Security:</span>{" "}
+                    Nagad Merchant keys (<code className="font-mono">NAGAD_MERCHANT_ID</code>,{" "}
+                    <code className="font-mono">NAGAD_PG_PUBLIC_KEY</code>,{" "}
+                    <code className="font-mono">NAGAD_MERCHANT_PRIVATE_KEY</code>)
+                    are stored strictly in <code className="font-mono">.env</code>{" "}
+                    / <code className="font-mono">.dev.vars</code> / Cloudflare
+                    Secrets.
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* SSLCommerz Gateway Configuration */}
+            {/* SSLCommerz Gateway Status (On Hold) */}
             <div>
-              <div className="border-b border-blue-200 pb-3 mb-4">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-[#1A4B8C]">
-                  4. SSLCommerz Official Gateway (কার্ড ও নেট ব্যাংকিং)
+              <div className="border-b border-stone-200 pb-3 mb-4">
+                <span className="text-xs font-extrabold uppercase tracking-wider text-stone-500">
+                  4. SSLCommerz Official Gateway (On Hold)
                 </span>
                 <h3 className="text-lg font-extrabold text-stone-900 mt-0.5">
-                  SSLCommerz API ক্রেডেনশিয়াল
+                  SSLCommerz গেটওয়ে স্ট্যাটাস (সাময়িকভাবে স্থগিত)
                 </h3>
-                <p className="text-xs text-stone-500">
-                  ভিসা, মাস্টারকার্ড ও অন্যান্য গেটওয়ে পেমেন্টের জন্য স্টোর আইডি ও পাসওয়ার্ড।
-                </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-stone-50 border border-dashed border-stone-300 rounded-2xl p-4 text-xs text-stone-600 flex items-start gap-3">
+                <Lock className="w-4 h-4 text-stone-500 shrink-0 mt-0.5" />
                 <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                    SSLCommerz Store ID
-                  </label>
-                  <input
-                    type="text"
-                    value={settingsForm.sslcommerzStoreId || ""}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        sslcommerzStoreId: e.target.value,
-                      })
-                    }
-                    placeholder="e.g. sadyerbazar001live"
-                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-mono font-bold"
-                  />
-                </div>
-
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-900 flex items-start gap-2">
-                  <ShieldCheck className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold">PCI-DSS SAQ A কমপ্লায়েন্স:</span> SSLCommerz Store Password সার্ভার সিক্রেটে (`.env.local` / Cloudflare Secrets) সুরক্ষিত, ডাটাবেসে বা ব্রাউজারে উন্মুক্ত নয়।
-                  </div>
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-stone-50 border border-stone-200 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={settingsForm.sslcommerzIsLive ?? false}
-                      onChange={(e) =>
-                        setSettingsForm({
-                          ...settingsForm,
-                          sslcommerzIsLive: e.target.checked,
-                        })
-                      }
-                      className="w-4 h-4 accent-[#1A4B8C]"
-                    />
-                    <span className="text-xs font-bold text-stone-800">
-                      Live Production Mode (টিক দিলে আসল পেমেন্ট প্রসেসিং হবে, আনচেক থাকলে স্যান্ডবক্স টেস্ট মোড)
-                    </span>
-                  </label>
+                  <span className="font-bold text-stone-800">
+                    SSLCommerz ইন্টিগ্রেশন অন হোল্ড (On Hold):
+                  </span>{" "}
+                  সার্ভার কোড (<code className="font-mono">functions/api/payment/sslcommerz/*</code>) সুরক্ষিতভাবে সংরক্ষিত আছে এবং মিডলওয়্যারে সাময়িকভাবে হোল্ডে রাখা হয়েছে। সক্রিয় পেমেন্ট মাধ্যম হিসেবে বর্তমানে{" "}
+                  <strong>bKash Merchant, Nagad Merchant এবং Cash on Delivery (COD)</strong> চালু রয়েছে।
                 </div>
               </div>
             </div>

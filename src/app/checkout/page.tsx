@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ShieldCheck,
   Truck,
   Lock,
-  CheckCircle2,
   ArrowLeft,
   Zap,
   AlertCircle,
@@ -17,35 +16,51 @@ import {
   Banknote,
   Tag,
   X,
-  Copy,
-  Check,
 } from "lucide-react";
-import { useStore } from "@/context/StoreContext";
 import {
+  rememberRecentOrderInSession,
+  useStore,
+} from "@/context/StoreContext";
+import {
+  ActiveCheckoutPaymentMethod,
   DeliveryZone,
-  Order,
-  PaymentMethod,
   PaymentPlan,
-  PaymentTransaction,
 } from "@/types";
 import {
   calculateCouponDiscount,
-  calculateVerifiedOrderPricing,
   checkRateLimit,
-  evaluateFraudRisk,
   generateIdempotencyKey,
-  generateSecureOrderCode,
   normalizeBdPhone,
   sanitizeText,
   validateSubmissionVelocity,
 } from "@/lib/security";
 import { createOrderSchema } from "@/lib/validations/schemas";
-import { createSecureOrderInSupabase } from "@/services/supabaseSync";
+import { createOrderViaEdgeApi } from "@/services/supabaseSync";
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (
+        container: HTMLElement,
+        options: {
+          sitekey: string;
+          callback?: (token: string) => void;
+          "expired-callback"?: () => void;
+          "error-callback"?: () => void;
+          theme?: "light" | "dark" | "auto";
+        }
+      ) => string;
+      reset?: (widgetId?: string) => void;
+    };
+  }
+}
+
+const TURNSTILE_SITE_KEY =
+  process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() || "";
 
 export default function CheckoutPage() {
   const router = useRouter();
   const {
-    products,
     cart,
     cartSubtotal,
     coupons,
@@ -70,6 +85,11 @@ export default function CheckoutPage() {
   const [couponInput, setCouponInput] = useState("");
   const [appliedCouponCode, setAppliedCouponCode] = useState<string>("");
 
+  // Cloudflare Turnstile State
+  const [turnstileToken, setTurnstileToken] = useState<string>("");
+  const turnstileContainerRef = useRef<HTMLDivElement | null>(null);
+  const turnstileWidgetIdRef = useRef<string | null>(null);
+
   // Auto-apply bundle coupon if customer came from FamilyComboBuilder
   useEffect(() => {
     try {
@@ -82,33 +102,65 @@ export default function CheckoutPage() {
     } catch {}
   }, []);
 
-  // Payment Selection
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("bkash");
+  // Load Cloudflare Turnstile script when site key is configured
+  useEffect(() => {
+    if (!TURNSTILE_SITE_KEY || typeof window === "undefined") return;
+
+    const renderWidget = () => {
+      if (
+        !window.turnstile ||
+        !turnstileContainerRef.current ||
+        turnstileWidgetIdRef.current
+      ) {
+        return;
+      }
+      turnstileWidgetIdRef.current = window.turnstile.render(
+        turnstileContainerRef.current,
+        {
+          sitekey: TURNSTILE_SITE_KEY,
+          theme: "light",
+          callback: (token: string) => setTurnstileToken(token),
+          "expired-callback": () => setTurnstileToken(""),
+          "error-callback": () => setTurnstileToken(""),
+        }
+      );
+    };
+
+    if (window.turnstile) {
+      renderWidget();
+      return;
+    }
+
+    const existingScript = document.querySelector(
+      'script[src^="https://challenges.cloudflare.com/turnstile/v0/api.js"]'
+    );
+    if (existingScript) {
+      existingScript.addEventListener("load", renderWidget);
+      return () => existingScript.removeEventListener("load", renderWidget);
+    }
+
+    const script = document.createElement("script");
+    script.src =
+      "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    script.async = true;
+    script.defer = true;
+    script.onload = renderWidget;
+    document.head.appendChild(script);
+  }, []);
+
+  // Payment Selection (Active: bkash | nagad | cod; SSLCommerz kept on hold)
+  const [paymentMethod, setPaymentMethod] =
+    useState<ActiveCheckoutPaymentMethod>("bkash");
   const [paymentPlan, setPaymentPlan] = useState<PaymentPlan>("full");
 
-  // Submission & Real Payment Drawer State
+  // Submission & Gateway Redirect State
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [pendingGatewayOrder, setPendingGatewayOrder] = useState<{
-    order: Order;
-    payableNow: number;
-  } | null>(null);
-  const [senderPhone, setSenderPhone] = useState("");
-  const [transactionId, setTransactionId] = useState("");
-  const [trxError, setTrxError] = useState<string | null>(null);
-  const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [verifyingPayment, setVerifyingPayment] = useState(false);
-  const [redirectingToGateway, setRedirectingToGateway] = useState(false);
+  const [redirectingGateway, setRedirectingGateway] = useState<
+    "bkash" | "nagad" | null
+  >(null);
 
-  const handleCopyText = (text: string, field: string) => {
-    try {
-      navigator.clipboard.writeText(text);
-      setCopiedField(field);
-      setTimeout(() => setCopiedField(null), 2500);
-    } catch {}
-  };
-
-  // Live Delivery, Coupon & Payable Calculation (Mirrored by Zero-Trust Server API)
+  // Live Delivery, Coupon & Payable Preview (Recalculated authoritatively on Server)
   const { discountAmount, appliedCoupon } = calculateCouponDiscount(
     cartSubtotal,
     appliedCouponCode,
@@ -202,13 +254,20 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (TURNSTILE_SITE_KEY && !turnstileToken) {
+      setErrorMsg(
+        "Please complete the Cloudflare security verification before placing your order."
+      );
+      return;
+    }
+
     const payload = {
       customerName: sanitizeText(customerName),
       customerPhone: normalizeBdPhone(customerPhone),
       deliveryZone,
       customerDistrict: sanitizeText(
         customerDistrict ||
-          (deliveryZone === "inside_dhaka" ? "Dhaka" : "Outside Dhaka")
+          (deliveryZone === "inside_dhaka" ? "Dhaka City" : "Outside Dhaka")
       ),
       customerAddress: sanitizeText(customerAddress),
       customerNote: sanitizeText(customerNote),
@@ -216,6 +275,7 @@ export default function CheckoutPage() {
       paymentMethod,
       paymentPlan: (paymentMethod === "cod" ? "cod" : paymentPlan) as PaymentPlan,
       websiteHoneypot,
+      turnstileToken: turnstileToken || undefined,
       items: cart.map((item) => ({
         productId: item.productId,
         variantId: item.variantId,
@@ -258,120 +318,73 @@ export default function CheckoutPage() {
           cuttingPreference: item.cuttingPreference,
         })),
         idempotencyKey,
+        turnstileToken: turnstileToken || undefined,
+        websiteHoneypot,
       };
 
-      let createdOrder: Order;
-      let payableNow = 0;
-
-      // 1. Zero-Client-Trust: Execute server-side pricing stored procedure via Supabase
-      const rpcRes = await createSecureOrderInSupabase(orderPayload);
-      if (rpcRes.success && rpcRes.order) {
-        createdOrder = rpcRes.order;
-        payableNow =
-          createdOrder.paymentMethod === "cod"
-            ? 0
-            : createdOrder.paymentPlan === "full"
-            ? createdOrder.totalAmount
-            : Math.max(
-                createdOrder.deliveryCharge,
-                Math.round(
-                  ((createdOrder.subtotal - createdOrder.discountAmount) *
-                    settings.preorderAdvancePercent) /
-                    100
-                )
-              );
-      } else {
-        // Fallback: strict server-side catalog pricing calculation
-        const pricing = calculateVerifiedOrderPricing(
-          parsed.data,
-          products,
-          settings,
-          coupons
+      // 1. Zero-Client-Trust: Create order on Server via /api/orders/create
+      const rpcRes = await createOrderViaEdgeApi(orderPayload);
+      if (!rpcRes.success || !rpcRes.order) {
+        if (window.turnstile && turnstileWidgetIdRef.current) {
+          window.turnstile.reset?.(turnstileWidgetIdRef.current);
+          setTurnstileToken("");
+        }
+        throw new Error(
+          rpcRes.error ||
+            "Unable to verify and create order on server. Please check your connection and try again."
         );
-        const fraud = evaluateFraudRisk({
-          customerPhone: orderPayload.customerPhone,
-          deliveryZone: orderPayload.deliveryZone,
-          customerDistrict: orderPayload.customerDistrict,
-          paymentMethod: orderPayload.paymentMethod,
-          totalAmount: pricing.totalAmount,
-        });
-
-        const orderCode = generateSecureOrderCode();
-        const orderId = `ord-${Date.now()}`;
-        createdOrder = {
-          id: orderId,
-          orderCode,
-          customerName: orderPayload.customerName,
-          customerPhone: orderPayload.customerPhone,
-          deliveryZone: orderPayload.deliveryZone,
-          customerDistrict: orderPayload.customerDistrict,
-          customerAddress: orderPayload.customerAddress,
-          customerNote: orderPayload.customerNote,
-          subtotal: pricing.subtotal,
-          deliveryCharge: pricing.deliveryCharge,
-          discountAmount: pricing.discountAmount,
-          couponCode: pricing.couponCode,
-          weightAdjustmentAmount: 0,
-          totalAmount: pricing.totalAmount,
-          advancePaid: 0,
-          dueAmount: pricing.totalAmount,
-          paymentMethod: orderPayload.paymentMethod,
-          paymentPlan: orderPayload.paymentPlan,
-          paymentStatus: "pending",
-          orderStatus: "pending",
-          hasPreorderItems: pricing.hasPreorderItems,
-          fraudRiskScore: fraud.fraudRiskScore,
-          isSuspicious: fraud.isSuspicious,
-          reviewReasons: fraud.reviewReasons,
-          isPhoneVerified: false,
-          verificationMethod: "unverified",
-          idempotencyKey,
-          items: pricing.verifiedItems.map((item, idx) => ({
-            id: `item-${Date.now()}-${idx}`,
-            orderId,
-            ...item,
-          })),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        payableNow = pricing.payableNow;
       }
 
-      if (parsed.data.paymentMethod === "sslcommerz" && payableNow > 0) {
-        // Zero-Client-Trust: Initiate automated SSLCommerz hosted session via Cloudflare Edge Worker
-        setRedirectingToGateway(true);
+      const createdOrder = rpcRes.order;
+      const payableNow = createdOrder.payableNow ?? payableOnlineNow;
+
+      // Remember orderCode + phoneLast4 in sessionStorage so /track-order auto-loads after redirect
+      rememberRecentOrderInSession(
+        createdOrder.orderCode,
+        orderPayload.customerPhone.slice(-4)
+      );
+
+      // 2. Initiate Official Merchant Gateway Session (bKash or Nagad) or complete COD
+      if (parsed.data.paymentMethod === "bkash" && payableNow > 0) {
+        setRedirectingGateway("bkash");
         try {
-          const initRes = await fetch("/api/payment/sslcommerz/init", {
+          const initRes = await fetch("/api/payment/bkash/create", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               orderCode: createdOrder.orderCode,
-              paymentType: createdOrder.paymentPlan,
             }),
           });
           const initData = (await initRes.json()) as {
-            success: boolean;
-            GatewayPageURL?: string;
-            error?: string;
+            ok?: boolean;
+            success?: boolean;
+            bkashURL?: string;
+            error?: string | { message?: string };
           };
 
-          if (initRes.ok && initData.success && initData.GatewayPageURL) {
+          if (initRes.ok && (initData.ok || initData.success) && initData.bkashURL) {
             registerNewOrder(createdOrder);
             clearCart();
-            window.location.href = initData.GatewayPageURL;
+            window.location.href = initData.bkashURL;
             return;
-          } else {
-            throw new Error(
-              initData.error ||
-                "SSLCommerz গেটওয়ে সেশন তৈরি করতে সমস্যা হয়েছে।"
-            );
           }
-        } catch (gatewayErr) {
-          setRedirectingToGateway(false);
+
+          const errText =
+            typeof initData.error === "string"
+              ? initData.error
+              : initData.error?.message;
+          throw new Error(
+            errText ||
+              "bKash মার্চেন্ট গেটওয়ে সেশন তৈরি করতে সমস্যা হয়েছে।"
+          );
+        } catch (gwErr) {
+          setRedirectingGateway(null);
           registerNewOrder(createdOrder);
           clearCart();
           showToast(
-            "SSLCommerz গেটওয়ে সংযোগে ত্রুটি। আপনার অর্ডারটি পেন্ডিং হিসেবে সংরক্ষিত হয়েছে।"
+            gwErr instanceof Error
+              ? gwErr.message
+              : "bKash গেটওয়ে সংযোগে ত্রুটি। ট্র্যাক অর্ডার পেজ থেকে পেমেন্ট সম্পন্ন করতে পারবেন।"
           );
           router.push(
             `/track-order?code=${encodeURIComponent(
@@ -380,97 +393,56 @@ export default function CheckoutPage() {
           );
           return;
         }
-      } else if (parsed.data.paymentMethod === "bkash" && payableNow > 0) {
-        // Attempt automated bKash Tokenized PGW first
-        setRedirectingToGateway(true);
-        try {
-          const initRes = await fetch("/api/payment/bkash/init", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              orderCode: createdOrder.orderCode,
-              paymentType: createdOrder.paymentPlan,
-            }),
-          });
-          const initData = (await initRes.json()) as {
-            success: boolean;
-            bkashURL?: string;
-            error?: string;
-            unconfigured?: boolean;
-          };
-
-          if (initRes.ok && initData.success && initData.bkashURL) {
-            registerNewOrder(createdOrder);
-            clearCart();
-            window.location.href = initData.bkashURL;
-            return;
-          }
-
-          // Fallback to manual TrxID entry drawer if bKash merchant API unconfigured
-          setRedirectingToGateway(false);
-          setSenderPhone(parsed.data.customerPhone);
-          setTransactionId("");
-          setTrxError(null);
-          setPendingGatewayOrder({
-            order: createdOrder,
-            payableNow,
-          });
-        } catch {
-          setRedirectingToGateway(false);
-          setSenderPhone(parsed.data.customerPhone);
-          setTransactionId("");
-          setTrxError(null);
-          setPendingGatewayOrder({
-            order: createdOrder,
-            payableNow,
-          });
-        }
       } else if (parsed.data.paymentMethod === "nagad" && payableNow > 0) {
-        // Attempt automated Nagad Direct Asymmetric PGW first
-        setRedirectingToGateway(true);
+        setRedirectingGateway("nagad");
         try {
-          const initRes = await fetch("/api/payment/nagad/init", {
+          const initRes = await fetch("/api/payment/nagad/create", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               orderCode: createdOrder.orderCode,
-              paymentType: createdOrder.paymentPlan,
             }),
           });
           const initData = (await initRes.json()) as {
-            success: boolean;
+            ok?: boolean;
+            success?: boolean;
             callBackUrl?: string;
-            error?: string;
-            unconfigured?: boolean;
+            error?: string | { message?: string };
           };
 
-          if (initRes.ok && initData.success && initData.callBackUrl) {
+          if (initRes.ok && (initData.ok || initData.success) && initData.callBackUrl) {
             registerNewOrder(createdOrder);
             clearCart();
             window.location.href = initData.callBackUrl;
             return;
           }
 
-          // Fallback to manual TrxID entry drawer if Nagad merchant API unconfigured
-          setRedirectingToGateway(false);
-          setSenderPhone(parsed.data.customerPhone);
-          setTransactionId("");
-          setTrxError(null);
-          setPendingGatewayOrder({
-            order: createdOrder,
-            payableNow,
-          });
-        } catch {
-          setRedirectingToGateway(false);
-          setSenderPhone(parsed.data.customerPhone);
-          setTransactionId("");
-          setTrxError(null);
-          setPendingGatewayOrder({
-            order: createdOrder,
-            payableNow,
-          });
+          const errText =
+            typeof initData.error === "string"
+              ? initData.error
+              : initData.error?.message;
+          throw new Error(
+            errText ||
+              "Nagad মার্চেন্ট গেটওয়ে সেশন তৈরি করতে সমস্যা হয়েছে।"
+          );
+        } catch (gwErr) {
+          setRedirectingGateway(null);
+          registerNewOrder(createdOrder);
+          clearCart();
+          showToast(
+            gwErr instanceof Error
+              ? gwErr.message
+              : "Nagad গেটওয়ে সংযোগে ত্রুটি। ট্র্যাক অর্ডার পেজ থেকে পেমেন্ট সম্পন্ন করতে পারবেন।"
+          );
+          router.push(
+            `/track-order?code=${encodeURIComponent(
+              createdOrder.orderCode
+            )}&justOrdered=1&gatewayError=1`
+          );
+          return;
         }
       } else {
+        // Cash on Delivery (COD)
         registerNewOrder(createdOrder);
         clearCart();
         router.push(
@@ -488,79 +460,7 @@ export default function CheckoutPage() {
     }
   };
 
-  const handleCompleteGatewayPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pendingGatewayOrder) return;
-    setTrxError(null);
-
-    const cleanPhone = normalizeBdPhone(senderPhone);
-    if (!cleanPhone || !/^01[3-9]\d{8}$/.test(cleanPhone)) {
-      setTrxError("সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন: 017XXXXXXXX)");
-      return;
-    }
-
-    const cleanTrx = transactionId.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-    if (!cleanTrx || cleanTrx.length < 6) {
-      setTrxError(
-        "সঠিক Transaction ID (TrxID) দিন (বিকাশ বা নগদ ফিরতি SMS থেকে প্রাপ্ত কমপক্ষে ৬ সংখ্যার কোড, যেমন: BKX8492019)"
-      );
-      return;
-    }
-
-    setVerifyingPayment(true);
-    try {
-      const isNagad = pendingGatewayOrder.order.paymentMethod === "nagad";
-      const isBkash = pendingGatewayOrder.order.paymentMethod === "bkash";
-      const gatewayType = isNagad ? "nagad" : isBkash ? "bkash" : "sslcommerz";
-
-      // Security Guard: Set status to "initiated" (Pending merchant verification), NOT "validated"
-      const pendingTx: PaymentTransaction = {
-        id: `tx-${Date.now()}`,
-        orderId: pendingGatewayOrder.order.id,
-        orderCode: pendingGatewayOrder.order.orderCode,
-        gateway: gatewayType,
-        transactionId: cleanTrx,
-        validationId: `${gatewayType.toUpperCase()}-INITIATED-${Date.now().toString(36).toUpperCase()}`,
-        amount: pendingGatewayOrder.payableNow,
-        currency: "BDT",
-        status: "initiated",
-        senderPhone: cleanPhone,
-        verifiedAt: undefined,
-        createdAt: new Date().toISOString(),
-      };
-
-      const submittedOrder: Order = {
-        ...pendingGatewayOrder.order,
-        paymentStatus: "pending",
-        orderStatus: "pending",
-        transactionId: cleanTrx,
-        reviewReasons: [
-          ...(pendingGatewayOrder.order.reviewReasons || []),
-          `Customer submitted TrxID: ${cleanTrx} (Pending merchant validation)`,
-        ],
-        updatedAt: new Date().toISOString(),
-      };
-
-      registerNewOrder(submittedOrder, pendingTx);
-      clearCart();
-      showToast(
-        `পেমেন্ট তথ্য সংরক্ষিত হয়েছে! মার্চেন্ট ভেরিফিকেশনের পর অর্ডারটি কনফার্ম হবে।`
-      );
-      router.push(
-        `/track-order?code=${encodeURIComponent(
-          submittedOrder.orderCode
-        )}&justOrdered=1`
-      );
-    } catch (err) {
-      setTrxError(
-        err instanceof Error ? err.message : "পেমেন্ট সংরক্ষণ করতে সমস্যা হয়েছে।"
-      );
-    } finally {
-      setVerifyingPayment(false);
-    }
-  };
-
-  if (cart.length === 0 && !pendingGatewayOrder) {
+  if (cart.length === 0 && !redirectingGateway) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-20 text-center space-y-5">
         <div className="w-16 h-16 rounded-full bg-emerald-100 text-[#0F3D2E] flex items-center justify-center mx-auto">
@@ -781,7 +681,7 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {/* Step 3: Automated Payment Gateway Selection (bKash / SSLCommerz / COD) */}
+          {/* Step 3: Official Merchant Payment Gateway Selection (bKash / Nagad / COD + SSLCommerz On Hold) */}
           <div className="bg-white rounded-3xl border border-stone-200/90 p-6 sm:p-7 shadow-2xs space-y-5">
             <h2 className="text-base sm:text-lg font-extrabold text-stone-900 flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-[#0F3D2E] text-white text-xs flex items-center justify-center">
@@ -791,6 +691,7 @@ export default function CheckoutPage() {
             </h2>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+              {/* bKash Merchant */}
               <button
                 type="button"
                 onClick={() => {
@@ -805,23 +706,22 @@ export default function CheckoutPage() {
               >
                 <div className="flex items-center justify-between">
                   <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-[#E2136E] text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
-                    {settings.bkashAccountType === "merchant"
-                      ? "Merchant"
-                      : "Send Money"}
+                    Merchant PGW
                   </span>
                   <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#E2136E]" />
                 </div>
                 <p className="text-xs font-bold text-stone-900">
                   bKash (বিকাশ)
                 </p>
-                <p className="text-[10px] sm:text-[11px] text-stone-600 font-mono truncate">
-                  {settings.bkashMerchantNumber || "01713-477780"}
+                <p className="text-[10px] sm:text-[11px] text-stone-600 font-semibold truncate">
+                  অফিসিয়াল টোকেনাইজড পেমেন্ট
                 </p>
                 <p className="text-[9px] sm:text-[10px] text-stone-400 truncate">
-                  ইনস্ট্যান্ট TrxID ভেরিফিকেশন
+                  অটোমেটিক সার্ভার ভেরিফাইড
                 </p>
               </button>
 
+              {/* Nagad Merchant */}
               <button
                 type="button"
                 onClick={() => {
@@ -836,52 +736,22 @@ export default function CheckoutPage() {
               >
                 <div className="flex items-center justify-between">
                   <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-[#F7931E] text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
-                    {settings.nagadAccountType === "merchant"
-                      ? "Merchant"
-                      : "Send Money"}
+                    Merchant PGW
                   </span>
                   <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F7931E]" />
                 </div>
                 <p className="text-xs font-bold text-stone-900">
                   Nagad (নগদ)
                 </p>
-                <p className="text-[10px] sm:text-[11px] text-stone-600 font-mono truncate">
-                  {settings.nagadNumber || "01713-477780"}
+                <p className="text-[10px] sm:text-[11px] text-stone-600 font-semibold truncate">
+                  অফিসিয়াল মার্চেন্ট গেটওয়ে
                 </p>
                 <p className="text-[9px] sm:text-[10px] text-stone-400 truncate">
-                  ইনস্ট্যান্ট TrxID ভেরিফিকেশন
+                  RSA ক্রিপ্টোগ্রাফিক ভেরিফাইড
                 </p>
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setPaymentMethod("sslcommerz");
-                  if (paymentPlan === "cod") setPaymentPlan("full");
-                }}
-                className={`p-2.5 sm:p-4 rounded-2xl border-2 text-left transition cursor-pointer space-y-1 sm:space-y-1.5 ${
-                  paymentMethod === "sslcommerz"
-                    ? "border-blue-600 bg-blue-50/60 shadow-xs"
-                    : "border-stone-200 hover:border-stone-300"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-[#1A4B8C] text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
-                    Cards
-                  </span>
-                  <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#1A4B8C]" />
-                </div>
-                <p className="text-xs font-bold text-stone-900">
-                  SSLCommerz
-                </p>
-                <p className="text-[10px] sm:text-[11px] text-stone-500 truncate">
-                  Visa, Master & Cards
-                </p>
-                <p className="text-[9px] sm:text-[10px] text-stone-400 truncate">
-                  অনলাইন গেটওয়ে
-                </p>
-              </button>
-
+              {/* Cash on Delivery */}
               <button
                 type="button"
                 onClick={() => {
@@ -904,12 +774,35 @@ export default function CheckoutPage() {
                   Cash on Delivery
                 </p>
                 <p className="text-[10px] sm:text-[11px] text-stone-500 truncate">
-                  ডেলিভারিতে ক্যাশ
+                  ডেলিভারিতে ক্যাশ পেমেন্ট
                 </p>
                 <p className="text-[9px] sm:text-[10px] text-stone-400 truncate">
-                  পণ্য বুঝে পেয়ে মূল্য
+                  পণ্য বুঝে পেয়ে মূল্য পরিশোধ
                 </p>
               </button>
+
+              {/* SSLCommerz (Kept On Hold as requested) */}
+              <div
+                aria-disabled="true"
+                title="SSLCommerz Card Gateway is currently on hold"
+                className="p-2.5 sm:p-4 rounded-2xl border-2 border-dashed border-stone-200 bg-stone-50/70 text-left opacity-60 cursor-not-allowed space-y-1 sm:space-y-1.5 select-none"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-stone-400 text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
+                    On Hold
+                  </span>
+                  <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-stone-400" />
+                </div>
+                <p className="text-xs font-bold text-stone-500">
+                  SSLCommerz
+                </p>
+                <p className="text-[10px] sm:text-[11px] text-stone-400 truncate">
+                  Visa / Master Cards
+                </p>
+                <p className="text-[9px] sm:text-[10px] text-stone-400 truncate">
+                  সাময়িকভাবে স্থগিত (On Hold)
+                </p>
+              </div>
             </div>
 
             {paymentMethod !== "cod" && (
@@ -1116,10 +1009,8 @@ export default function CheckoutPage() {
                   <span>
                     Pay Now via{" "}
                     {paymentMethod === "bkash"
-                      ? "bKash"
-                      : paymentMethod === "nagad"
-                      ? "Nagad"
-                      : "SSLCommerz"}
+                      ? "bKash Merchant"
+                      : "Nagad Merchant"}
                     :
                   </span>
                   <span>৳{payableOnlineNow.toLocaleString()}</span>
@@ -1134,6 +1025,13 @@ export default function CheckoutPage() {
             )}
           </div>
 
+          {/* Cloudflare Turnstile Bot Protection Widget */}
+          {TURNSTILE_SITE_KEY && (
+            <div className="flex justify-center pt-1">
+              <div ref={turnstileContainerRef} />
+            </div>
+          )}
+
           {/* Submit Button */}
           <button
             type="submit"
@@ -1143,7 +1041,7 @@ export default function CheckoutPage() {
             {submitting ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Securing Your Order...</span>
+                <span>Securing Order on Server...</span>
               </>
             ) : (
               <>
@@ -1151,7 +1049,9 @@ export default function CheckoutPage() {
                 <span>
                   {paymentMethod === "cod"
                     ? `Confirm 1-Click Order (৳${totalAmount.toLocaleString()})`
-                    : `Pay ৳${payableOnlineNow.toLocaleString()} & Confirm Order`}
+                    : `Pay ৳${payableOnlineNow.toLocaleString()} via ${
+                        paymentMethod === "bkash" ? "bKash" : "Nagad"
+                      }`}
                 </span>
               </>
             )}
@@ -1164,302 +1064,40 @@ export default function CheckoutPage() {
             </p>
             <p className="flex items-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-              Instant Unique Order ID generated for live tracking
+              Official bKash & Nagad Merchant Server-to-Server Verification
             </p>
           </div>
         </div>
       </form>
 
-      {/* REAL BANGLADESHI PAYMENT DRAWER / VERIFICATION MODAL */}
-      {pendingGatewayOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/75 backdrop-blur-xs overflow-y-auto">
-          <div className="w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl bg-white border border-stone-200 my-6">
-            {/* Header */}
-            {(() => {
-              const isNagad = pendingGatewayOrder.order.paymentMethod === "nagad";
-              const isBkash = pendingGatewayOrder.order.paymentMethod === "bkash";
-              const targetAccountNumber = isNagad
-                ? settings.nagadNumber || "01713-477780"
-                : settings.bkashMerchantNumber || "01713-477780";
-              const targetAccountType = isNagad
-                ? settings.nagadAccountType || "personal"
-                : settings.bkashAccountType || "merchant";
-
-              const headerBg = isBkash
-                ? "bg-[#E2136E]"
-                : isNagad
-                ? "bg-[#E35124]"
-                : "bg-[#1A4B8C]";
-
-              return (
-                <>
-                  <div className={`p-6 text-white ${headerBg}`}>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <span className="text-[11px] uppercase tracking-widest font-black opacity-90 inline-block px-2 py-0.5 rounded bg-white/20 mb-1">
-                          {isBkash
-                            ? "bKash Direct Payment"
-                            : isNagad
-                            ? "Nagad Direct Payment"
-                            : "SSLCommerz Payment"}
-                        </span>
-                        <h3 className="text-xl sm:text-2xl font-black">
-                          {isBkash
-                            ? "বিকাশ পেমেন্ট সম্পন্ন করুন"
-                            : isNagad
-                            ? "নগদ পেমেন্ট সম্পন্ন করুন"
-                            : "অনলাইন গেটওয়ে পেমেন্ট"}
-                        </h3>
-                        <p className="text-xs opacity-90 font-mono mt-1">
-                          অর্ডার রেফারেন্স: {pendingGatewayOrder.order.orderCode}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setPendingGatewayOrder(null)}
-                        className="p-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white cursor-pointer transition"
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-
-                    <div className="mt-4 p-3.5 rounded-2xl bg-black/20 backdrop-blur-xs flex items-center justify-between">
-                      <div>
-                        <span className="text-[11px] opacity-80 block font-semibold">
-                          পরিশোধযোগ্য মোট টাকা
-                        </span>
-                        <strong className="text-2xl font-black">
-                          ৳{pendingGatewayOrder.payableNow.toLocaleString()}
-                        </strong>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleCopyText(
-                            String(pendingGatewayOrder.payableNow),
-                            "amount"
-                          )
-                        }
-                        className="px-3 py-1.5 rounded-xl bg-white/25 hover:bg-white/35 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition"
-                      >
-                        {copiedField === "amount" ? (
-                          <>
-                            <Check className="w-3.5 h-3.5" /> কপি হয়েছে!
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5" /> টাকার পরিমাণ কপি
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  <form
-                    onSubmit={handleCompleteGatewayPayment}
-                    className="p-6 space-y-5 text-xs"
-                  >
-                    {/* Copy Account & Ref */}
-                    <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-[11px] font-bold text-stone-500 uppercase block">
-                            আমাদের {isNagad ? "নগদ" : "বিকাশ"} অ্যাকাউন্ট নম্বর (
-                            {targetAccountType === "merchant"
-                              ? "মার্চেন্ট পেমেন্ট"
-                              : "পার্সোনাল সেন্ড মানি"}
-                            )
-                          </span>
-                          <span className="text-base sm:text-lg font-black text-stone-900 font-mono">
-                            {targetAccountNumber}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleCopyText(targetAccountNumber, "number")
-                          }
-                          className="px-3 py-1.5 rounded-xl bg-[#0F3D2E] text-white font-bold flex items-center gap-1 cursor-pointer hover:bg-[#155440] transition"
-                        >
-                          {copiedField === "number" ? (
-                            <>
-                              <Check className="w-3.5 h-3.5 text-emerald-300" />{" "}
-                              কপি হয়েছে
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3.5 h-3.5" /> নম্বর কপি করুন
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      <div className="pt-2 border-t border-stone-200/80 flex items-center justify-between">
-                        <div>
-                          <span className="text-[11px] font-bold text-stone-500 block">
-                            রেফারেন্স কোড (Reference)
-                          </span>
-                          <span className="text-sm font-black text-[#0F3D2E] font-mono">
-                            {pendingGatewayOrder.order.orderCode}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleCopyText(
-                              pendingGatewayOrder.order.orderCode,
-                              "ref"
-                            )
-                          }
-                          className="px-2.5 py-1 rounded-lg bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold flex items-center gap-1 cursor-pointer transition"
-                        >
-                          {copiedField === "ref" ? (
-                            <>
-                              <Check className="w-3 h-3 text-emerald-700" /> কপি
-                              হয়েছে
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3 h-3" /> রেফারেন্স কপি
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Step-by-Step Instructions */}
-                    <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 text-amber-950 space-y-2">
-                      <p className="font-extrabold text-xs text-amber-900 flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4 text-amber-700 shrink-0" />
-                        পেমেন্ট সম্পন্ন করার ৪টি সহজ ধাপ:
-                      </p>
-                      <ol className="list-decimal list-inside space-y-1 text-[11px] leading-relaxed text-amber-900/90 font-medium pl-1">
-                        <li>
-                          আপনার {isNagad ? "নগদ" : "বিকাশ"} অ্যাপে যান অথবা ডায়াল
-                          করুন ({isNagad ? "*167#" : "*247#"})।
-                        </li>
-                        <li>
-                          <strong>
-                            {targetAccountType === "merchant"
-                              ? "Make Payment (পেমেন্ট)"
-                              : "Send Money (সেন্ড মানি)"}
-                          </strong>{" "}
-                          অপশন সিলেক্ট করুন।
-                        </li>
-                        <li>
-                          প্রাপক নম্বরে <strong>{targetAccountNumber}</strong>{" "}
-                          বসিয়ে <strong>৳{pendingGatewayOrder.payableNow}</strong>{" "}
-                          পাঠান এবং রেফারেন্সে লিখুন{" "}
-                          <strong>{pendingGatewayOrder.order.orderCode}</strong>
-                          ।
-                        </li>
-                        <li>
-                          লেনদেন সফল হলে প্রাপ্ত <strong>Transaction ID (TrxID)</strong>{" "}
-                          ও আপনার মোবাইল নম্বরটি নিচে লিখে কনফার্ম করুন।
-                        </li>
-                      </ol>
-                    </div>
-
-                    {/* Inputs */}
-                    <div className="space-y-3.5">
-                      <div>
-                        <label className="block font-bold text-stone-700 mb-1">
-                          আপনার প্রেরক মোবাইল নম্বর (যে নম্বর থেকে টাকা পাঠিয়েছেন) *
-                        </label>
-                        <input
-                          type="tel"
-                          required
-                          value={senderPhone}
-                          onChange={(e) => setSenderPhone(e.target.value)}
-                          placeholder="e.g., 017XXXXXXXX"
-                          className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-mono focus:outline-none focus:border-[#0F3D2E]"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block font-bold text-stone-700 mb-1">
-                          Transaction ID (TrxID) *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={transactionId}
-                          onChange={(e) => setTransactionId(e.target.value)}
-                          placeholder="e.g., BKX8492019 বা 7GC89021"
-                          className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-mono uppercase tracking-wider focus:outline-none focus:border-[#0F3D2E]"
-                        />
-                        <p className="text-[10px] text-stone-500 mt-1">
-                          বিকাশ/নগদ ফিরতি SMS বা অ্যাপে প্রাপ্ত ট্রানজেকশন আইডি
-                          হুবহু এখানে লিখুন।
-                        </p>
-                      </div>
-                    </div>
-
-                    {trxError && (
-                      <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-bold flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-                        <span>{trxError}</span>
-                      </div>
-                    )}
-
-                    <div className="flex gap-2.5 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => setPendingGatewayOrder(null)}
-                        className="px-4 py-3 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold transition cursor-pointer"
-                      >
-                        বাতিল
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={verifyingPayment}
-                        className={`flex-1 py-3 px-5 rounded-xl text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer transition ${
-                          isBkash
-                            ? "bg-[#E2136E] hover:bg-[#c50f5e]"
-                            : isNagad
-                            ? "bg-[#E35124] hover:bg-[#c44119]"
-                            : "bg-[#1A4B8C] hover:bg-[#123668]"
-                        }`}
-                      >
-                        {verifyingPayment ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span>ভেরিফাই ও অর্ডার সংরক্ষণ হচ্ছে...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Lock className="w-4 h-4" />
-                            <span>কনফার্ম করুন ও অর্ডার সম্পন্ন করুন</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </form>
-                </>
-              );
-            })()}
-          </div>
-        </div>
-      )}
-
-      {/* SSLCommerz Hosted Checkout Redirection Overlay */}
-      {redirectingToGateway && (
+      {/* Official bKash / Nagad Hosted Checkout Redirection Overlay */}
+      {redirectingGateway && (
         <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-7 sm:p-9 max-w-md w-full shadow-2xl text-center space-y-4 border border-stone-200">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-blue-50 text-[#1A4B8C] flex items-center justify-center shadow-inner">
+            <div
+              className={`w-16 h-16 mx-auto rounded-2xl flex items-center justify-center shadow-inner ${
+                redirectingGateway === "bkash"
+                  ? "bg-pink-50 text-[#E2136E]"
+                  : "bg-orange-50 text-[#F7931E]"
+              }`}
+            >
               <Loader2 className="w-8 h-8 animate-spin" />
             </div>
             <div className="space-y-1.5">
               <h3 className="text-lg sm:text-xl font-extrabold text-stone-900">
-                SSLCommerz সুরক্ষিত পেমেন্টে নিয়ে যাওয়া হচ্ছে...
+                {redirectingGateway === "bkash"
+                  ? "bKash অফিসিয়াল পেমেন্ট গেটওয়েতে নিয়ে যাওয়া হচ্ছে..."
+                  : "Nagad অফিসিয়াল পেমেন্ট গেটওয়েতে নিয়ে যাওয়া হচ্ছে..."}
               </h3>
               <p className="text-xs text-stone-600 leading-relaxed">
-                অনুগ্রহ করে অপেক্ষা করুন। আপনাকে সরাসরি SSLCommerz-এর অফিসিয়াল সুরক্ষিত পেমেন্ট গেটওয়েতে রিডাইরেক্ট করা হচ্ছে।
+                অনুগ্রহ করে অপেক্ষা করুন। আপনাকে সরাসরি{" "}
+                {redirectingGateway === "bkash" ? "বিকাশ" : "নগদ"}-এর সুরক্ষিত
+                মার্চেন্ট পেমেন্ট পেজে রিডাইরেক্ট করা হচ্ছে।
               </p>
             </div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-800 text-[11px] font-bold">
               <Lock className="w-3.5 h-3.5 text-emerald-700" />
-              <span>PCI-DSS SAQ A কমপ্লায়েন্ট নিরাপদ পেমেন্ট</span>
+              <span>Zero-Client-Trust Server-to-Server Payment</span>
             </div>
           </div>
         </div>

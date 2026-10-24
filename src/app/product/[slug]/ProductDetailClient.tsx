@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 import { checkRateLimit, sanitizeText } from "@/lib/security";
-import { fetchOrderByCodeFromSupabase } from "@/services/supabaseSync";
+import { submitReviewViaEdgeApi } from "@/services/supabaseSync";
 import ProductCard from "@/components/storefront/ProductCard";
 
 export default function ProductDetailClient({
@@ -65,11 +65,13 @@ export default function ProductDetailClient({
 
   // Verified Order-ID Review Form State
   const [revOrderCode, setRevOrderCode] = useState("");
+  const [revPhoneLast4, setRevPhoneLast4] = useState("");
   const [revName, setRevName] = useState("");
   const [revDistrict, setRevDistrict] = useState("Dhaka");
   const [revRating, setRevRating] = useState(5);
   const [revComment, setRevComment] = useState("");
   const [revError, setRevError] = useState<string | null>(null);
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   if (!product) {
     return (
@@ -123,9 +125,17 @@ export default function ProductDetailClient({
     e.preventDefault();
     setRevError(null);
     const cleanCode = revOrderCode.trim().toUpperCase();
-    if (!/^SB-\d{4}-[A-Z0-9]{5}$/.test(cleanCode)) {
+    const cleanLast4 = revPhoneLast4.replace(/\D/g, "").slice(-4);
+    if (!/^SB-\d{4}-[A-Z0-9]{5,10}$/.test(cleanCode)) {
       setRevError(
-        "Please enter a valid Sadyer Bazar Order ID (e.g., SB-2610-5P9R7) to verify your purchase."
+        "Please enter a valid Sadyer Bazar Order ID (e.g., SB-2610-XXXXXXXXXX) to verify your purchase."
+      );
+      return;
+    }
+
+    if (cleanLast4.length !== 4) {
+      setRevError(
+        "Please enter the last 4 digits of the mobile number used for this order."
       );
       return;
     }
@@ -136,41 +146,55 @@ export default function ProductDetailClient({
       return;
     }
 
-    let matchedOrder = findOrderByCode(cleanCode);
-    if (!matchedOrder) {
-      const liveOrder = await fetchOrderByCodeFromSupabase(cleanCode);
-      if (liveOrder) matchedOrder = liveOrder;
-    }
-
-    if (!matchedOrder) {
-      setRevError(
-        "Order ID not found in our database. Only verified Sadyer Bazar customers can post a review."
-      );
-      return;
-    }
-
     const cleanComment = sanitizeText(revComment);
     if (cleanComment.length < 4) {
       setRevError("Please write a short review comment (at least 4 characters).");
       return;
     }
 
-    addProductReview({
-      id: `rev-${Date.now()}`,
-      productId: product.id,
-      orderCode: cleanCode,
-      customerName:
-        sanitizeText(revName) || matchedOrder.customerName || "Verified Buyer",
-      customerDistrict:
-        sanitizeText(revDistrict) || matchedOrder.customerDistrict || "Dhaka",
-      rating: revRating,
-      comment: cleanComment,
-      isVerifiedPurchase: true,
-      createdAt: new Date().toISOString(),
-    });
-    setRevOrderCode("");
-    setRevName("");
-    setRevComment("");
+    setSubmittingReview(true);
+    try {
+      const serverRes = await submitReviewViaEdgeApi({
+        productId: product.id,
+        orderCode: cleanCode,
+        phoneLast4: cleanLast4,
+        rating: revRating,
+        comment: cleanComment,
+      });
+
+      if (!serverRes.success) {
+        // Fallback only for local seed orders during offline preview
+        const matchedOrder = findOrderByCode(cleanCode);
+        if (
+          !matchedOrder ||
+          !matchedOrder.customerPhone.replace(/\D/g, "").endsWith(cleanLast4)
+        ) {
+          setRevError(
+            serverRes.error ||
+              "Order ID and phone last 4 digits did not match a verified purchase for this product."
+          );
+          return;
+        }
+      }
+
+      addProductReview({
+        id: `rev-${Date.now()}`,
+        productId: product.id,
+        orderCode: cleanCode,
+        customerName: sanitizeText(revName) || "Verified Buyer",
+        customerDistrict: sanitizeText(revDistrict) || "Dhaka",
+        rating: revRating,
+        comment: cleanComment,
+        isVerifiedPurchase: true,
+        createdAt: new Date().toISOString(),
+      });
+      setRevOrderCode("");
+      setRevPhoneLast4("");
+      setRevName("");
+      setRevComment("");
+    } finally {
+      setSubmittingReview(false);
+    }
   };
 
   // JSON-LD Product Schema for Google Rich Results
@@ -466,7 +490,7 @@ export default function ProductDetailClient({
                 Accepted Payments:
               </span>
               <span className="font-bold text-stone-800">
-                bKash AutoPay • SSLCommerz • Cash on Delivery
+                bKash Merchant • Nagad Merchant • Cash on Delivery
               </span>
             </div>
             <div className="flex items-center justify-between pt-1 border-t border-stone-200/60">
@@ -557,9 +581,9 @@ export default function ProductDetailClient({
           <p className="text-xs text-stone-500">
             Enter your Order ID (e.g.,{" "}
             <code className="font-mono font-bold text-stone-800">
-              SB-2610-8K4M2
+              SB-2610-XXXXXXXXXX
             </code>
-            ) to post a verified review.
+            ) and last 4 digits of your phone number to post a verified review.
           </p>
 
           {revError && (
@@ -581,10 +605,29 @@ export default function ProductDetailClient({
                   onChange={(e) =>
                     setRevOrderCode(e.target.value.toUpperCase())
                   }
-                  placeholder="SB-2610-8K4M2"
+                  placeholder="SB-2610-XXXXXXXXXX"
                   className="w-full px-3 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-mono uppercase"
                 />
               </div>
+              <div>
+                <label className="block font-bold text-stone-700 mb-1">
+                  Phone Last 4 Digits *
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={4}
+                  value={revPhoneLast4}
+                  onChange={(e) =>
+                    setRevPhoneLast4(e.target.value.replace(/\D/g, ""))
+                  }
+                  placeholder="7780"
+                  className="w-full px-3 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2.5">
               <div>
                 <label className="block font-bold text-stone-700 mb-1">
                   Your Name *
@@ -598,9 +641,6 @@ export default function ProductDetailClient({
                   className="w-full px-3 py-2.5 rounded-xl bg-stone-50 border border-stone-200"
                 />
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2.5">
               <div>
                 <label className="block font-bold text-stone-700 mb-1">
                   District / Area
@@ -621,8 +661,8 @@ export default function ProductDetailClient({
                   onChange={(e) => setRevRating(Number(e.target.value))}
                   className="w-full px-3 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-bold"
                 >
-                  <option value={5}>★★★★★ (5/5 Excellent)</option>
-                  <option value={4}>★★★★☆ (4/5 Great)</option>
+                  <option value={5}>★★★★★ (5/5)</option>
+                  <option value={4}>★★★★☆ (4/5)</option>
                 </select>
               </div>
             </div>
@@ -643,9 +683,12 @@ export default function ProductDetailClient({
 
             <button
               type="submit"
-              className="w-full py-3 rounded-xl bg-[#0F3D2E] hover:bg-[#165b44] text-white font-extrabold transition cursor-pointer"
+              disabled={submittingReview}
+              className="w-full py-3 rounded-xl bg-[#0F3D2E] hover:bg-[#165b44] disabled:opacity-60 text-white font-extrabold transition cursor-pointer"
             >
-              Submit Verified Review
+              {submittingReview
+                ? "Verifying Order on Server..."
+                : "Submit Verified Review"}
             </button>
           </form>
         </div>
