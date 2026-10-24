@@ -142,6 +142,17 @@ export function loadConfig(env: Env, requestUrl: string): Config {
 
   // Browser origins allowed to call the API
   const origins = new Set<string>([siteOrigin]);
+  try {
+    const reqUrl = new URL(requestUrl);
+    if (
+      reqUrl.protocol === "https:" &&
+      (reqUrl.hostname.endsWith(".workers.dev") || reqUrl.hostname.endsWith(".pages.dev"))
+    ) {
+      origins.add(reqUrl.origin);
+    }
+  } catch {
+    // Ignore malformed requestUrl in unit tests
+  }
   for (const raw of (env.ALLOWED_ORIGINS ?? "").split(",").map((s) => s.trim()).filter(Boolean)) {
     const u = parseUrl(raw, "ALLOWED_ORIGINS entry");
     if (isProduction && u.protocol !== "https:") {

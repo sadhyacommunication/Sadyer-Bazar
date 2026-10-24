@@ -100,9 +100,9 @@ function makeServiceRoleJwt() {
 {
   const prodEnv = {
     APP_ENV: "production",
-    SITE_URL: "https://sadhyerbazar.com",
+    NEXT_PUBLIC_SITE_URL: "https://sadhyerbazar.com",
     PAYMENT_MODE: "live",
-    RATE_LIMIT_SALT: "0123456789abcdef0123456789abcdef",
+    IP_HASH_SALT: "0123456789abcdef0123456789abcdef",
     NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
     NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon-key",
     SUPABASE_SERVICE_ROLE_KEY: makeServiceRoleJwt(),
