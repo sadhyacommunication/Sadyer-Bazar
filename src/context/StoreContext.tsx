@@ -2,6 +2,7 @@
 
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -175,6 +176,9 @@ interface StoreContextValue {
   // Batch Procurement Summary
   procurementSummary: ProcurementSummaryItem[];
 
+  // Refresh Live Storefront Catalog & Settings from Supabase
+  refreshLiveStore: () => Promise<void>;
+
   // Secure Admin Record Hydration
   hydrateAdminRecords: (
     adminOrders: Order[],
@@ -225,6 +229,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }, 3400);
   };
 
+  const refreshLiveStore = useCallback(async () => {
+    try {
+      const live = await fetchLiveStoreFromSupabase();
+      setSupabaseStatus(live.status);
+      if (live.status === "connected_live") {
+        if (live.settings) setSettings(live.settings);
+        if (live.products && live.products.length > 0)
+          setProducts(live.products);
+        if (live.reviews && live.reviews.length > 0) setReviews(live.reviews);
+      }
+    } catch {
+      // Ignore background refresh errors
+    }
+  }, []);
+
   useEffect(() => {
     try {
       // Purge any legacy PII caches from localStorage
@@ -258,28 +277,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
     setHydrated(true);
 
-    const loadFromSupabase = () => {
-      fetchLiveStoreFromSupabase().then((live) => {
-        setSupabaseStatus(live.status);
-        if (live.status === "connected_live") {
-          if (live.settings) setSettings(live.settings);
-          if (live.products && live.products.length > 0)
-            setProducts(live.products);
-          if (live.reviews && live.reviews.length > 0) setReviews(live.reviews);
-        }
-      });
-    };
-
-    loadFromSupabase();
+    void refreshLiveStore();
 
     const unsubscribe = subscribeToRealtimeStore(() => {
-      loadFromSupabase();
+      void refreshLiveStore();
     });
 
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [refreshLiveStore]);
 
   const syncDatabaseWithSupabase = async () => {
     setSupabaseStatus("checking");
@@ -909,6 +916,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         updateMessageStatus,
         deleteContactMessage,
         procurementSummary,
+        refreshLiveStore,
         hydrateAdminRecords,
       }}
     >

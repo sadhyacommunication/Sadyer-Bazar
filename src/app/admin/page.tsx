@@ -36,7 +36,7 @@ import {
   LogOut,
   RefreshCw,
 } from "lucide-react";
-import { useStore } from "@/context/StoreContext";
+import { rememberRecentOrderInSession, useStore } from "@/context/StoreContext";
 import { checkRateLimit } from "@/lib/security";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { fetchAuthenticatedAdminDataFromSupabase } from "@/services/supabaseSync";
@@ -48,6 +48,60 @@ import {
   Product,
   SiteSettings,
 } from "@/types";
+
+const PRESET_PRODUCT_IMAGES = [
+  {
+    label: "Jamuna Mixed Fish (যমুনা নদীর মাছ)",
+    value: "/images/products/jamuna-fish.jpg",
+  },
+  {
+    label: "Jamuna Big Fish (যমুনার বড় মাছ)",
+    value: "/images/products/jamuna-big-fish.jpg",
+  },
+  {
+    label: "Gawa Ghee (গাওয়া ঘি)",
+    value: "/images/products/gawa-ghee.jpg",
+  },
+  {
+    label: "Bogura Shahi Doi (বগুড়ার শাহী দই)",
+    value: "/images/products/bogura-doi.jpg",
+  },
+  {
+    label: "Deshi Chicken (দেশি মুরগি)",
+    value: "/images/products/deshi-chicken.jpg",
+  },
+  {
+    label: "Deshi Eggs (দেশি মুরগির ডিম)",
+    value: "/images/products/deshi-eggs.jpg",
+  },
+  {
+    label: "Full Fiber Red Rice (লাল চাল)",
+    value: "/images/products/red-rice.jpg",
+  },
+  {
+    label: "Pure Honey (খাঁটি প্রাকৃতিক মধু)",
+    value: "/images/products/sundarban-honey.jpg",
+  },
+];
+
+const getOrderStatusBadgeClass = (status: OrderStatus) => {
+  switch (status) {
+    case "pending":
+      return "bg-amber-100 text-amber-800 border border-amber-200";
+    case "confirmed":
+      return "bg-emerald-100 text-emerald-800 border border-emerald-200";
+    case "processing":
+      return "bg-indigo-100 text-indigo-800 border border-indigo-200";
+    case "shipped":
+      return "bg-blue-100 text-blue-800 border border-blue-200";
+    case "delivered":
+      return "bg-green-100 text-green-800 border border-green-200";
+    case "cancelled":
+      return "bg-rose-100 text-rose-800 border border-rose-200";
+    default:
+      return "bg-stone-100 text-stone-800 border border-stone-200";
+  }
+};
 
 type AdminTab =
   | "overview"
@@ -88,6 +142,7 @@ export default function AdminDashboardPage() {
     updateSiteSettings,
     supabaseStatus,
     syncDatabaseWithSupabase,
+    refreshLiveStore,
     showToast,
     hydrateAdminRecords,
   } = useStore();
@@ -106,7 +161,10 @@ export default function AdminDashboardPage() {
   const loadAdminRecords = useCallback(async () => {
     setRefreshingAdminData(true);
     try {
-      const adminData = await fetchAuthenticatedAdminDataFromSupabase();
+      const [adminData] = await Promise.all([
+        fetchAuthenticatedAdminDataFromSupabase(),
+        refreshLiveStore(),
+      ]);
       if (adminData.authorized) {
         hydrateAdminRecords(
           adminData.orders,
@@ -121,7 +179,7 @@ export default function AdminDashboardPage() {
     } finally {
       setRefreshingAdminData(false);
     }
-  }, [hydrateAdminRecords]);
+  }, [hydrateAdminRecords, refreshLiveStore]);
 
   useEffect(() => {
     let active = true;
@@ -212,6 +270,9 @@ export default function AdminDashboardPage() {
   const [prodCategorySlug, setProdCategorySlug] =
     useState("jamuna-river-fish");
   const [prodImage, setProdImage] = useState("/images/products/jamuna-fish.jpg");
+  const [prodImageMode, setProdImageMode] = useState<"preset" | "custom">(
+    "preset"
+  );
   const [prodShortDesc, setProdShortDesc] = useState("");
   const [prodOrigin, setProdOrigin] = useState("Sirajganj / Jamuna Basin");
   const [prodIsPreorder, setProdIsPreorder] = useState(true);
@@ -394,6 +455,7 @@ export default function AdminDashboardPage() {
     setProdTitleBn("");
     setProdCategorySlug("jamuna-river-fish");
     setProdImage("/images/products/jamuna-fish.jpg");
+    setProdImageMode("preset");
     setProdShortDesc("");
     setProdOrigin("Sirajganj / Jamuna River Basin");
     setProdIsPreorder(true);
@@ -412,6 +474,10 @@ export default function AdminDashboardPage() {
     setProdTitleBn(product.titleBn);
     setProdCategorySlug(product.categorySlug);
     setProdImage(product.primaryImage);
+    const isPreset = PRESET_PRODUCT_IMAGES.some(
+      (p) => p.value === product.primaryImage
+    );
+    setProdImageMode(isPreset ? "preset" : "custom");
     setProdShortDesc(product.shortDescription);
     setProdOrigin(product.originSource);
     setProdIsPreorder(product.isPreorder);
@@ -422,6 +488,28 @@ export default function AdminDashboardPage() {
     setVar2Label(product.variants[1]?.label || "1kg Pack");
     setVar2Price(product.variants[1]?.price || 950);
     setIsProductModalOpen(true);
+  };
+
+  const handleDeleteProduct = (prod: Product) => {
+    if (
+      typeof window !== "undefined" &&
+      window.confirm(
+        `Are you sure you want to delete "${prod.title}" (${prod.titleBn}) from the catalog?\n\nThis will remove it from the active storefront.`
+      )
+    ) {
+      deleteProduct(prod.id);
+    }
+  };
+
+  const handleDeleteCoupon = (coup: Coupon) => {
+    if (
+      typeof window !== "undefined" &&
+      window.confirm(
+        `Are you sure you want to delete promo code "${coup.code}"?\n\nCustomers will no longer be able to use this discount.`
+      )
+    ) {
+      deleteCoupon(coup.id);
+    }
   };
 
   const handleSaveProduct = (e: React.FormEvent) => {
@@ -888,7 +976,7 @@ export default function AdminDashboardPage() {
               onClick={() => void loadAdminRecords()}
               disabled={refreshingAdminData}
               className="px-3.5 py-2.5 rounded-2xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer"
-              title="Refresh Orders, Payment Attempts & Messages from Supabase"
+              title="Refresh Orders, Payment Attempts, Catalog & Settings from Supabase"
             >
               <RefreshCw
                 className={`w-4 h-4 ${
@@ -1189,6 +1277,13 @@ export default function AdminDashboardPage() {
                           {ord.orderCode}
                         </span>
                         <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${getOrderStatusBadgeClass(
+                            ord.orderStatus
+                          )}`}
+                        >
+                          {ord.orderStatus}
+                        </span>
+                        <span
                           className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
                             ord.deliveryZone === "inside_dhaka"
                               ? "bg-emerald-100 text-[#0F3D2E]"
@@ -1361,6 +1456,23 @@ export default function AdminDashboardPage() {
                         <Truck className="w-3.5 h-3.5" />
                         <span>Dispatch</span>
                       </button>
+
+                      <a
+                        href={`/track-order?code=${encodeURIComponent(ord.orderCode)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => {
+                          rememberRecentOrderInSession(
+                            ord.orderCode,
+                            ord.customerPhone.slice(-4)
+                          );
+                        }}
+                        className="px-3 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                        title="Open Customer Tracking Page in New Tab (Pre-authenticated)"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 text-stone-600" />
+                        <span>Track View</span>
+                      </a>
 
                       <button
                         onClick={() => setSelectedInvoiceOrder(ord)}
@@ -1588,7 +1700,7 @@ export default function AdminDashboardPage() {
                         <Edit3 className="w-3.5 h-3.5" /> Edit Price / Batch
                       </button>
                       <button
-                        onClick={() => deleteProduct(prod.id)}
+                        onClick={() => handleDeleteProduct(prod)}
                         className="p-1.5 rounded-xl text-stone-400 hover:text-red-600 cursor-pointer"
                         title="Delete product"
                       >
@@ -1752,8 +1864,9 @@ export default function AdminDashboardPage() {
                         {coup.isActive ? "Pause" : "Enable"}
                       </button>
                       <button
-                        onClick={() => deleteCoupon(coup.id)}
+                        onClick={() => handleDeleteCoupon(coup)}
                         className="p-1.5 text-stone-400 hover:text-red-600 cursor-pointer"
+                        title="Delete promo code"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -3046,39 +3159,92 @@ export default function AdminDashboardPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block font-bold text-stone-700 mb-1">
-                    Product Poster Image
-                  </label>
-                  <select
-                    value={prodImage}
-                    onChange={(e) => setProdImage(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-semibold"
-                  >
-                    <option value="/images/products/jamuna-fish.jpg">
-                      Jamuna Mixed Fish Poster (যমুনা নদীর মাছ)
-                    </option>
-                    <option value="/images/products/jamuna-big-fish.jpg">
-                      Jamuna Big Fish Poster (যমুনার বড় মাছ)
-                    </option>
-                    <option value="/images/products/gawa-ghee.jpg">
-                      Gawa Ghee Poster (গাওয়া ঘি)
-                    </option>
-                    <option value="/images/products/bogura-doi.jpg">
-                      Bogura Shahi Doi Poster (বগুড়ার শাহী দই)
-                    </option>
-                    <option value="/images/products/deshi-chicken.jpg">
-                      Deshi Chicken Poster (দেশি মুরগি)
-                    </option>
-                    <option value="/images/products/deshi-eggs.jpg">
-                      Deshi Eggs Poster (দেশি মুরগির ডিম)
-                    </option>
-                    <option value="/images/products/red-rice.jpg">
-                      Full Fiber Red Rice Poster (লাল চাল)
-                    </option>
-                    <option value="/images/products/sundarban-honey.jpg">
-                      Pure Honey Poster (খাঁটি প্রাকৃতিক মধু)
-                    </option>
-                  </select>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-stone-700">
+                      Product Poster Image *
+                    </label>
+                    <div className="flex items-center gap-1 bg-stone-100 p-0.5 rounded-lg">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProdImageMode("preset");
+                          if (
+                            !PRESET_PRODUCT_IMAGES.some(
+                              (p) => p.value === prodImage
+                            )
+                          ) {
+                            setProdImage(PRESET_PRODUCT_IMAGES[0].value);
+                          }
+                        }}
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer ${
+                          prodImageMode === "preset"
+                            ? "bg-white text-stone-900 shadow-xs"
+                            : "text-stone-500 hover:text-stone-800"
+                        }`}
+                      >
+                        Preset
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProdImageMode("custom")}
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer ${
+                          prodImageMode === "custom"
+                            ? "bg-white text-stone-900 shadow-xs"
+                            : "text-stone-500 hover:text-stone-800"
+                        }`}
+                      >
+                        Custom URL
+                      </button>
+                    </div>
+                  </div>
+
+                  {prodImageMode === "preset" ? (
+                    <select
+                      value={prodImage}
+                      onChange={(e) => setProdImage(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-semibold"
+                    >
+                      {PRESET_PRODUCT_IMAGES.map((preset) => (
+                        <option key={preset.value} value={preset.value}>
+                          {preset.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="url"
+                      required
+                      value={prodImage}
+                      onChange={(e) => setProdImage(e.target.value)}
+                      placeholder="https://... (Supabase, Cloudinary, CDN URL)"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-mono text-[11px]"
+                    />
+                  )}
+
+                  {/* Live Image Preview */}
+                  {prodImage && (
+                    <div className="flex items-center gap-3 mt-2 p-2 rounded-xl bg-stone-100 border border-stone-200">
+                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-white shrink-0 border border-stone-200">
+                        <img
+                          src={prodImage}
+                          alt="Poster Preview"
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src =
+                              "/images/products/jamuna-fish.jpg";
+                          }}
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-bold text-stone-700 truncate">
+                          Live Poster Preview
+                        </p>
+                        <p className="text-[10px] text-stone-500 truncate font-mono">
+                          {prodImage}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
