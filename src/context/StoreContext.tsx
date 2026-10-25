@@ -918,25 +918,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     );
   }, [orders]);
 
-  const hydrateAdminRecords = (
-    adminOrders: Order[],
-    adminMessages: ContactMessage[],
-    adminTransactions?: PaymentTransaction[],
-    adminAttempts?: PaymentAttemptRecord[],
-    adminCoupons?: Coupon[]
-  ) => {
-    setOrders(adminOrders);
-    setMessages(adminMessages);
-    if (adminTransactions) {
-      setTransactions(adminTransactions);
-    }
-    if (adminAttempts) {
-      setPaymentAttempts(adminAttempts);
-    }
-    if (adminCoupons && adminCoupons.length > 0) {
-      setCoupons(adminCoupons);
-    }
-  };
+  const hydrateAdminRecords = useCallback(
+    (
+      adminOrders: Order[],
+      adminMessages: ContactMessage[],
+      adminTransactions?: PaymentTransaction[],
+      adminAttempts?: PaymentAttemptRecord[],
+      adminCoupons?: Coupon[]
+    ) => {
+      setOrders(adminOrders);
+      setMessages(adminMessages);
+      if (adminTransactions) {
+        setTransactions(adminTransactions);
+      }
+      if (adminAttempts) {
+        setPaymentAttempts(adminAttempts);
+      }
+      if (adminCoupons && adminCoupons.length > 0) {
+        setCoupons(adminCoupons);
+      }
+    },
+    []
+  );
 
   return (
     <StoreContext.Provider

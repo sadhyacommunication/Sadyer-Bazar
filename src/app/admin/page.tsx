@@ -224,6 +224,14 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     let active = true;
+
+    // Safety timeout: Never leave user stuck on verifying session screen for > 5 seconds
+    const timeoutTimer = setTimeout(() => {
+      if (active) {
+        setCheckingSession(false);
+      }
+    }, 5000);
+
     const checkSession = async () => {
       try {
         // Purge any legacy client-side passkey session keys
@@ -239,32 +247,44 @@ export default function AdminDashboardPage() {
 
         const {
           data: { session },
+          error: sessionError,
         } = await supabase.auth.getSession();
-        if (!session?.user) {
+
+        if (sessionError || !session?.user) {
           if (active) setCheckingSession(false);
           return;
         }
 
-        const ok = await loadAdminRecords();
+        // If local session exists, unlock immediately so the dashboard renders instantly
         if (active) {
-          if (ok) {
-            setIsUnlocked(true);
-            setLoggedInEmail(session.user.email || "Authorized Admin");
-          } else {
-            await supabase.auth.signOut();
-            setPinError(
-              "Your account is not listed in public.admins. Please add your User ID to public.admins in Supabase."
-            );
-          }
+          setIsUnlocked(true);
+          setLoggedInEmail(session.user.email || "Authorized Admin");
           setCheckingSession(false);
         }
-      } catch {
+
+        // Verify public.admins membership and load fresh records in background
+        const ok = await loadAdminRecords();
+        if (active && !ok) {
+          await supabase.auth.signOut();
+          setIsUnlocked(false);
+          setPinError(
+            "Your account is not listed in public.admins. Please add your User ID to public.admins in Supabase."
+          );
+        }
+      } catch (err) {
+        console.error("Admin session verification error:", err);
+        if (active) setCheckingSession(false);
+      } finally {
+        clearTimeout(timeoutTimer);
         if (active) setCheckingSession(false);
       }
     };
+
     void checkSession();
+
     return () => {
       active = false;
+      clearTimeout(timeoutTimer);
     };
   }, [loadAdminRecords]);
 
@@ -800,6 +820,13 @@ export default function AdminDashboardPage() {
           <p className="text-sm font-bold text-stone-700">
             Verifying Supabase Admin Session...
           </p>
+          <button
+            type="button"
+            onClick={() => setCheckingSession(false)}
+            className="text-xs text-stone-400 hover:text-stone-700 hover:underline cursor-pointer pt-2"
+          >
+            Taking too long? Open Login Form →
+          </button>
         </div>
       </div>
     );
