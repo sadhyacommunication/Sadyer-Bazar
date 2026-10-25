@@ -3386,301 +3386,405 @@ export default function AdminDashboardPage() {
 
       {/* MODAL 3: ADD / EDIT PRODUCT */}
       {isProductModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/60 backdrop-blur-xs no-print">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
-              <h3 className="text-lg font-extrabold text-stone-900">
-                {editingProduct
-                  ? "Edit Product & Pricing"
-                  : "Add New Organic Product"}
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-stone-950/70 backdrop-blur-xs no-print">
+          <div className="bg-white rounded-3xl max-w-5xl w-full p-6 sm:p-8 md:p-10 shadow-2xl space-y-6 max-h-[92vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-stone-200 pb-4">
+              <div>
+                <span className="text-[11px] font-black uppercase tracking-wider text-[#C83E2B]">
+                  Catalog Management
+                </span>
+                <h3 className="text-xl sm:text-2xl font-extrabold text-stone-900">
+                  {editingProduct
+                    ? "Edit Product & Pricing Details"
+                    : "Add New Organic Product to Store"}
+                </h3>
+              </div>
               <button
                 onClick={() => setIsProductModalOpen(false)}
-                className="p-1.5 rounded-full hover:bg-stone-100 text-stone-500 cursor-pointer"
+                className="p-2 rounded-full hover:bg-stone-100 text-stone-500 hover:text-stone-800 transition cursor-pointer"
+                title="Close Window"
               >
-                <X className="w-5 h-5" />
+                <X className="w-6 h-6" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveProduct} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div>
-                  <label className="block font-bold text-stone-700 mb-1">
-                    Product Title (English) *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={prodTitle}
-                    onChange={(e) => setProdTitle(e.target.value)}
-                    placeholder="e.g., Jamuna River Fresh Pabda Fish"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-stone-700 mb-1">
-                    Product Title (বাংলা) *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={prodTitleBn}
-                    onChange={(e) => setProdTitleBn(e.target.value)}
-                    placeholder="e.g., যমুনার তাজা পাবদা মাছ"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200"
-                  />
-                </div>
-              </div>
+            <form onSubmit={handleSaveProduct} className="space-y-6 text-xs">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {/* LEFT COLUMN: Core Details & Pricing (7 Cols) */}
+                <div className="lg:col-span-7 space-y-4">
+                  <div className="bg-stone-50/70 p-4 rounded-2xl border border-stone-200 space-y-3.5">
+                    <h4 className="text-xs font-black uppercase text-stone-700 tracking-wider flex items-center gap-1.5">
+                      <Tag className="w-3.5 h-3.5 text-[#0F3D2E]" />
+                      Product Information
+                    </h4>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block font-bold text-stone-700">
-                      Category *
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => openCreateCategoryModal()}
-                      className="text-[10px] font-extrabold text-[#0F3D2E] hover:underline flex items-center gap-0.5 cursor-pointer"
-                    >
-                      <Plus className="w-3 h-3" />
-                      New Category
-                    </button>
-                  </div>
-                  <select
-                    value={prodCategorySlug}
-                    onChange={(e) => setProdCategorySlug(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-semibold"
-                  >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.slug}>
-                        {c.name} ({c.nameBn})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block font-bold text-stone-700">
-                      Product Poster Image *
-                    </label>
-                    <div className="flex items-center gap-1 bg-stone-100 p-0.5 rounded-lg">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setProdImageMode("preset");
-                          setProdImageError(false);
-                          if (
-                            !PRESET_PRODUCT_IMAGES.some(
-                              (p) => p.value === prodImage
-                            )
-                          ) {
-                            setProdImage(PRESET_PRODUCT_IMAGES[0].value);
-                          }
-                        }}
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer ${
-                          prodImageMode === "preset"
-                            ? "bg-white text-stone-900 shadow-xs"
-                            : "text-stone-500 hover:text-stone-800"
-                        }`}
-                      >
-                        Preset
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setProdImageMode("custom");
-                          setProdImageError(false);
-                        }}
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer ${
-                          prodImageMode === "custom"
-                            ? "bg-white text-stone-900 shadow-xs"
-                            : "text-stone-500 hover:text-stone-800"
-                        }`}
-                      >
-                        Custom URL
-                      </button>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div>
+                        <label className="block font-bold text-stone-700 mb-1">
+                          Product Title (English) *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={prodTitle}
+                          onChange={(e) => setProdTitle(e.target.value)}
+                          placeholder="e.g., Jamuna River Fresh Pabda Fish"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-stone-200 focus:border-[#0F3D2E] focus:outline-none font-semibold text-xs text-stone-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-stone-700 mb-1">
+                          Product Title (বাংলা) *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={prodTitleBn}
+                          onChange={(e) => setProdTitleBn(e.target.value)}
+                          placeholder="e.g., যমুনার তাজা পাবদা মাছ"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-stone-200 focus:border-[#0F3D2E] focus:outline-none font-semibold text-xs text-stone-900"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block font-bold text-stone-700">
+                            Category *
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => openCreateCategoryModal()}
+                            className="text-[10px] font-extrabold text-[#0F3D2E] hover:underline flex items-center gap-0.5 cursor-pointer"
+                          >
+                            <Plus className="w-3 h-3" />
+                            New Category
+                          </button>
+                        </div>
+                        <select
+                          value={prodCategorySlug}
+                          onChange={(e) => setProdCategorySlug(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-stone-200 font-semibold focus:border-[#0F3D2E] focus:outline-none text-xs text-stone-900"
+                        >
+                          {categories.map((c) => (
+                            <option key={c.id} value={c.slug}>
+                              {c.name} ({c.nameBn})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block font-bold text-stone-700 mb-1">
+                          Harvest / Origin Source
+                        </label>
+                        <input
+                          type="text"
+                          value={prodOrigin}
+                          onChange={(e) => setProdOrigin(e.target.value)}
+                          placeholder="e.g., Sirajganj, Jamuna River Basin"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-stone-200 focus:border-[#0F3D2E] focus:outline-none text-xs text-stone-900"
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  {prodImageMode === "preset" ? (
-                    <select
-                      value={prodImage}
-                      onChange={(e) => {
-                        setProdImage(e.target.value);
-                        setProdImageError(false);
-                      }}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-semibold"
-                    >
-                      {PRESET_PRODUCT_IMAGES.map((preset) => (
-                        <option key={preset.value} value={preset.value}>
-                          {preset.label}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="url"
-                      required
-                      value={prodImage}
-                      onChange={(e) => {
-                        setProdImage(e.target.value);
-                        setProdImageError(false);
-                      }}
-                      placeholder="https://ik.imagekit.io/... or https://..."
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-mono text-[11px]"
-                    />
-                  )}
+                  {/* Pricing & Weight Variants */}
+                  <div className="bg-stone-50/70 p-4 rounded-2xl border border-stone-200 space-y-3.5">
+                    <h4 className="text-xs font-black uppercase text-stone-700 tracking-wider flex items-center gap-1.5">
+                      <Scale className="w-3.5 h-3.5 text-[#0F3D2E]" />
+                      Weight Packs & Pricing
+                    </h4>
 
-                  {/* Live Image Preview (no random fallback!) */}
-                  {prodImage && (
-                    <div className="mt-2 p-2.5 rounded-xl bg-stone-100 border border-stone-200">
-                      <div className="flex items-center gap-3">
-                        <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-white shrink-0 border border-stone-200 flex items-center justify-center">
-                          {!prodImageError ? (
-                            <img
-                              key={prodImage}
-                              src={prodImage}
-                              alt="Poster Preview"
-                              className="w-full h-full object-cover"
-                              onLoad={() => setProdImageError(false)}
-                              onError={() => setProdImageError(true)}
-                            />
-                          ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center bg-rose-50 text-rose-500 text-[9px] font-bold">
-                              <AlertCircle className="w-4 h-4 mb-0.5" />
-                              Error
-                            </div>
-                          )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div className="p-3 bg-white rounded-xl border border-stone-200 space-y-2">
+                        <label className="block font-bold text-stone-700">
+                          Variant 1 (Default Pack) *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={var1Label}
+                          onChange={(e) => setVar1Label(e.target.value)}
+                          placeholder="e.g. 500g Pack / Jar"
+                          className="w-full px-3 py-2 rounded-lg bg-stone-50 border border-stone-200 text-xs"
+                        />
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-stone-500">Price: ৳</span>
+                          <input
+                            type="number"
+                            required
+                            min={1}
+                            value={var1Price}
+                            onChange={(e) => setVar1Price(Number(e.target.value))}
+                            className="flex-1 px-3 py-2 rounded-lg bg-stone-50 border border-stone-200 font-black text-sm text-[#0F3D2E]"
+                          />
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-[11px] font-bold text-stone-700 truncate">
-                              Live Poster Preview
-                            </p>
-                            {!prodImageError ? (
-                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
-                                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
-                                Valid
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-100 text-rose-700">
-                                <AlertCircle className="w-2.5 h-2.5 text-rose-600" />
-                                Load Failed
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[10px] text-stone-500 truncate font-mono mt-0.5">
-                            {prodImage}
-                          </p>
-                          {prodImageError && (
-                            <p className="text-[10px] text-rose-600 mt-0.5 font-medium">
-                              Could not load image from this URL. Please verify the URL.
-                            </p>
-                          )}
+                      </div>
+
+                      <div className="p-3 bg-white rounded-xl border border-stone-200 space-y-2">
+                        <label className="block font-bold text-stone-700">
+                          Variant 2 (Family Pack - Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={var2Label}
+                          onChange={(e) => setVar2Label(e.target.value)}
+                          placeholder="e.g. 1kg Family Pack"
+                          className="w-full px-3 py-2 rounded-lg bg-stone-50 border border-stone-200 text-xs"
+                        />
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-stone-500">Price: ৳</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={var2Price}
+                            onChange={(e) => setVar2Price(Number(e.target.value))}
+                            className="flex-1 px-3 py-2 rounded-lg bg-stone-50 border border-stone-200 font-black text-sm text-[#0F3D2E]"
+                          />
                         </div>
                       </div>
                     </div>
-                  )}
+                  </div>
+
+                  {/* Pre-Order Batch Mode Toggle */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-amber-50/80 border border-amber-200">
+                    <label className="flex items-center gap-2.5 font-bold text-amber-950 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={prodIsPreorder}
+                        onChange={(e) => setProdIsPreorder(e.target.checked)}
+                        className="w-4 h-4 accent-[#C83E2B]"
+                      />
+                      <span>Enable Pre-Order Batch Sourcing Mode</span>
+                    </label>
+                    {prodIsPreorder && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-bold text-amber-900 shrink-0">Batch Date:</span>
+                        <input
+                          type="text"
+                          value={prodDeliveryDate}
+                          onChange={(e) => setProdDeliveryDate(e.target.value)}
+                          placeholder="e.g. Friday Morning Batch"
+                          className="px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-xs font-bold text-amber-950"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1">
+                      Short Description / Sourcing Highlights
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={prodShortDesc}
+                      onChange={(e) => setProdShortDesc(e.target.value)}
+                      placeholder="e.g., Harvested fresh early morning from Jamuna river fishermen, shipped on ice..."
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 focus:border-[#0F3D2E] focus:outline-none text-xs text-stone-900"
+                    />
+                  </div>
+                </div>
+
+                {/* RIGHT COLUMN: Media & Image Preview (5 Cols) */}
+                <div className="lg:col-span-5 space-y-4">
+                  <div className="bg-stone-50/70 p-4 rounded-2xl border border-stone-200 space-y-3.5">
+                    <div className="flex items-center justify-between">
+                      <label className="block font-bold text-stone-800 text-xs flex items-center gap-1.5">
+                        <Package className="w-3.5 h-3.5 text-[#0F3D2E]" />
+                        Product Poster Image *
+                      </label>
+                      <div className="flex items-center gap-1 bg-stone-200/80 p-0.5 rounded-lg">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProdImageMode("preset");
+                            setProdImageError(false);
+                            if (
+                              !PRESET_PRODUCT_IMAGES.some(
+                                (p) => p.value === prodImage
+                              )
+                            ) {
+                              setProdImage(PRESET_PRODUCT_IMAGES[0].value);
+                            }
+                          }}
+                          className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition cursor-pointer ${
+                            prodImageMode === "preset"
+                              ? "bg-white text-stone-900 shadow-xs"
+                              : "text-stone-500 hover:text-stone-800"
+                          }`}
+                        >
+                          Preset
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProdImageMode("custom");
+                            setProdImageError(false);
+                          }}
+                          className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition cursor-pointer ${
+                            prodImageMode === "custom"
+                              ? "bg-white text-stone-900 shadow-xs"
+                              : "text-stone-500 hover:text-stone-800"
+                          }`}
+                        >
+                          Custom URL
+                        </button>
+                      </div>
+                    </div>
+
+                    {prodImageMode === "preset" ? (
+                      <select
+                        value={prodImage}
+                        onChange={(e) => {
+                          setProdImage(e.target.value);
+                          setProdImageError(false);
+                        }}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-stone-200 font-semibold focus:border-[#0F3D2E] focus:outline-none text-xs text-stone-900"
+                      >
+                        {PRESET_PRODUCT_IMAGES.map((preset) => (
+                          <option key={preset.value} value={preset.value}>
+                            {preset.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="space-y-1">
+                        <input
+                          type="url"
+                          required
+                          value={prodImage}
+                          onChange={(e) => {
+                            setProdImage(e.target.value);
+                            setProdImageError(false);
+                          }}
+                          placeholder="https://ik.imagekit.io/... or https://..."
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-stone-200 font-mono text-[11px] focus:border-[#0F3D2E] focus:outline-none"
+                        />
+                        <p className="text-[10px] text-stone-500">
+                          Supports ImageKit, Cloudinary, Supabase Storage, and all HTTPS image CDNs.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* EXPANDED LIVE POSTER PREVIEW */}
+                    <div className="rounded-2xl border border-stone-200 bg-white p-3.5 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-extrabold text-stone-700">
+                          Live Poster Preview
+                        </span>
+                        {!prodImageError ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            Image Valid
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
+                            <AlertCircle className="w-3 h-3 text-rose-600" />
+                            Load Failed
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Large Canvas Preview */}
+                      <div className="relative w-full h-52 rounded-xl overflow-hidden bg-stone-950/5 border border-stone-200 flex items-center justify-center">
+                        {!prodImageError ? (
+                          <img
+                            key={prodImage}
+                            src={prodImage}
+                            alt="Product Poster"
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-contain p-2"
+                            onLoad={() => setProdImageError(false)}
+                            onError={() => setProdImageError(true)}
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center p-6 text-center space-y-2 text-rose-600 bg-rose-50/50 w-full h-full">
+                            <AlertCircle className="w-8 h-8 text-rose-500" />
+                            <div className="space-y-0.5">
+                              <p className="text-xs font-extrabold text-rose-700">
+                                Image Load Failed
+                              </p>
+                              <p className="text-[10px] text-stone-500 max-w-xs">
+                                Could not display image from this URL. Make sure the URL is public and direct.
+                              </p>
+                            </div>
+                            {prodImage.startsWith("http") && (
+                              <a
+                                href={prodImage}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-rose-100 text-rose-800 text-[10px] font-bold hover:bg-rose-200 transition"
+                              >
+                                <ExternalLink className="w-3 h-3" /> Test Link in New Tab
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* URL Display & External Quick Test */}
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-100 text-[10px]">
+                        <span className="font-mono text-stone-400 truncate flex-1">
+                          {prodImage}
+                        </span>
+                        {!prodImageError && prodImage.startsWith("http") && (
+                          <a
+                            href={prodImage}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[#0F3D2E] hover:underline flex items-center gap-1 font-bold shrink-0"
+                          >
+                            <ExternalLink className="w-3 h-3" /> Open Full Image
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Batch Target Inventory / Booking */}
+                  <div className="p-4 rounded-2xl bg-stone-50/70 border border-stone-200 flex items-center justify-between gap-3">
+                    <div>
+                      <label className="block font-bold text-stone-700 text-xs">
+                        Target Sourcing Quantity (Units)
+                      </label>
+                      <span className="text-[10px] text-stone-500">
+                        Maximum capacity before batch shows as &quot;Fully Booked&quot;.
+                      </span>
+                    </div>
+                    <input
+                      type="number"
+                      min={1}
+                      value={prodTargetQty}
+                      onChange={(e) => setProdTargetQty(Number(e.target.value))}
+                      className="w-24 px-3 py-2 rounded-xl bg-white border border-stone-200 font-black text-sm text-center text-stone-900"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3.5 p-3.5 rounded-2xl bg-stone-50 border border-stone-200">
-                <div>
-                  <label className="block font-bold text-stone-700 mb-1">
-                    Variant 1 Label
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={var1Label}
-                    onChange={(e) => setVar1Label(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-white border border-stone-200"
-                  />
+              {/* Bottom Actions Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-stone-200">
+                <span className="text-stone-400 text-[11px]">
+                  All catalog updates are synchronized live with Supabase &amp; edge CDN.
+                </span>
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsProductModalOpen(false)}
+                    className="px-5 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold cursor-pointer transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 rounded-xl bg-[#0F3D2E] hover:bg-[#165640] text-white font-extrabold cursor-pointer transition shadow-md flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    {editingProduct ? "Save Product Changes" : "Publish Product"}
+                  </button>
                 </div>
-                <div>
-                  <label className="block font-bold text-stone-700 mb-1">
-                    Variant 1 Price (৳)
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    value={var1Price}
-                    onChange={(e) => setVar1Price(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg bg-white border border-stone-200 font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-stone-700 mb-1">
-                    Variant 2 Label
-                  </label>
-                  <input
-                    type="text"
-                    value={var2Label}
-                    onChange={(e) => setVar2Label(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-white border border-stone-200"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-stone-700 mb-1">
-                    Variant 2 Price (৳)
-                  </label>
-                  <input
-                    type="number"
-                    value={var2Price}
-                    onChange={(e) => setVar2Price(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg bg-white border border-stone-200 font-bold"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-amber-50 border border-amber-200">
-                <label className="flex items-center gap-2 font-bold text-amber-950 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={prodIsPreorder}
-                    onChange={(e) => setProdIsPreorder(e.target.checked)}
-                    className="w-4 h-4 accent-[#C83E2B]"
-                  />
-                  <span>Enable Pre-Order Batch Mode</span>
-                </label>
-                {prodIsPreorder && (
-                  <input
-                    type="text"
-                    value={prodDeliveryDate}
-                    onChange={(e) => setProdDeliveryDate(e.target.value)}
-                    placeholder="e.g. Friday Morning Batch"
-                    className="px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-xs font-bold"
-                  />
-                )}
-              </div>
-
-              <div>
-                <label className="block font-bold text-stone-700 mb-1">
-                  Short Description
-                </label>
-                <textarea
-                  rows={2}
-                  value={prodShortDesc}
-                  onChange={(e) => setProdShortDesc(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsProductModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl bg-stone-100 text-stone-700 font-bold cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-[#0F3D2E] text-white font-extrabold cursor-pointer"
-                >
-                  {editingProduct ? "Save Product Changes" : "Publish Product"}
-                </button>
               </div>
             </form>
           </div>
@@ -3689,17 +3793,22 @@ export default function AdminDashboardPage() {
 
       {/* MODAL 5: ADD / EDIT CATEGORY */}
       {isCategoryModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/60 backdrop-blur-xs no-print">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
-              <h3 className="text-lg font-extrabold text-stone-900">
-                {editingCategory ? "Edit Category Details" : "Add New Category"}
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-stone-950/70 backdrop-blur-xs no-print">
+          <div className="bg-white rounded-3xl max-w-2xl sm:max-w-3xl w-full p-6 sm:p-8 md:p-10 shadow-2xl space-y-6 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-4">
+              <div>
+                <span className="text-[11px] font-black uppercase tracking-wider text-[#C83E2B]">
+                  Department Manager
+                </span>
+                <h3 className="text-xl sm:text-2xl font-extrabold text-stone-900">
+                  {editingCategory ? "Edit Category Details" : "Add New Store Category"}
+                </h3>
+              </div>
               <button
                 onClick={() => setIsCategoryModalOpen(false)}
-                className="p-1.5 rounded-full hover:bg-stone-100 text-stone-500 cursor-pointer"
+                className="p-2 rounded-full hover:bg-stone-100 text-stone-500 hover:text-stone-800 transition cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-6 h-6" />
               </button>
             </div>
 
@@ -3725,7 +3834,7 @@ export default function AdminDashboardPage() {
                       }
                     }}
                     placeholder="e.g., Jamuna River Fish"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 focus:border-[#0F3D2E] focus:outline-none"
                   />
                 </div>
                 <div>
@@ -3738,7 +3847,7 @@ export default function AdminDashboardPage() {
                     value={catNameBn}
                     onChange={(e) => setCatNameBn(e.target.value)}
                     placeholder="e.g., যমুনা নদীর মাছ"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 focus:border-[#0F3D2E] focus:outline-none"
                   />
                 </div>
               </div>
@@ -3760,7 +3869,7 @@ export default function AdminDashboardPage() {
                       )
                     }
                     placeholder="e.g., jamuna-river-fish"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-mono text-[11px]"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-mono text-[11px] focus:border-[#0F3D2E] focus:outline-none"
                   />
                 </div>
                 <div>
@@ -3772,7 +3881,7 @@ export default function AdminDashboardPage() {
                     value={catBadgeText}
                     onChange={(e) => setCatBadgeText(e.target.value)}
                     placeholder="e.g., Best Seller, Pre-Order Catch"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 focus:border-[#0F3D2E] focus:outline-none"
                   />
                 </div>
               </div>
@@ -3797,7 +3906,7 @@ export default function AdminDashboardPage() {
                           setCatImageUrl(PRESET_CATEGORY_IMAGES[0].value);
                         }
                       }}
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer ${
+                      className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition cursor-pointer ${
                         catImageMode === "preset"
                           ? "bg-white text-stone-900 shadow-xs"
                           : "text-stone-500 hover:text-stone-800"
@@ -3811,7 +3920,7 @@ export default function AdminDashboardPage() {
                         setCatImageMode("custom");
                         setCatImageError(false);
                       }}
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer ${
+                      className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition cursor-pointer ${
                         catImageMode === "custom"
                           ? "bg-white text-stone-900 shadow-xs"
                           : "text-stone-500 hover:text-stone-800"
@@ -3829,7 +3938,7 @@ export default function AdminDashboardPage() {
                       setCatImageUrl(e.target.value);
                       setCatImageError(false);
                     }}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-semibold"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-semibold focus:border-[#0F3D2E] focus:outline-none"
                   >
                     {PRESET_CATEGORY_IMAGES.map((preset) => (
                       <option key={preset.value} value={preset.value}>
@@ -3847,27 +3956,28 @@ export default function AdminDashboardPage() {
                       setCatImageError(false);
                     }}
                     placeholder="https://ik.imagekit.io/... or https://..."
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-mono text-[11px]"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-mono text-[11px] focus:border-[#0F3D2E] focus:outline-none"
                   />
                 )}
 
                 {/* Live Preview for Category */}
                 {catImageUrl && (
-                  <div className="mt-2 p-2.5 rounded-xl bg-stone-100 border border-stone-200">
+                  <div className="mt-2 p-3 rounded-2xl bg-stone-100 border border-stone-200">
                     <div className="flex items-center gap-3">
-                      <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-white shrink-0 border border-stone-200 flex items-center justify-center">
+                      <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-white shrink-0 border border-stone-200 flex items-center justify-center">
                         {!catImageError ? (
                           <img
                             key={catImageUrl}
                             src={catImageUrl}
                             alt="Category Preview"
+                            referrerPolicy="no-referrer"
                             className="w-full h-full object-cover"
                             onLoad={() => setCatImageError(false)}
                             onError={() => setCatImageError(true)}
                           />
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center bg-rose-50 text-rose-500 text-[9px] font-bold">
-                            <AlertCircle className="w-4 h-4 mb-0.5" />
+                            <AlertCircle className="w-5 h-5 mb-0.5" />
                             Error
                           </div>
                         )}
@@ -3878,13 +3988,13 @@ export default function AdminDashboardPage() {
                             Live Banner Preview
                           </p>
                           {!catImageError ? (
-                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
-                              <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                               Valid
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-100 text-rose-700">
-                              <AlertCircle className="w-2.5 h-2.5 text-rose-600" />
+                            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
+                              <AlertCircle className="w-3 h-3 text-rose-600" />
                               Load Failed
                             </span>
                           )}
@@ -3907,7 +4017,7 @@ export default function AdminDashboardPage() {
                   value={catDescription}
                   onChange={(e) => setCatDescription(e.target.value)}
                   placeholder="Short description of this product department..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 focus:border-[#0F3D2E] focus:outline-none"
                 />
               </div>
 
