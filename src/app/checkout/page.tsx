@@ -452,9 +452,10 @@ export default function CheckoutPage() {
         );
       }
     } catch (err) {
-      setErrorMsg(
-        err instanceof Error ? err.message : "Failed to submit order"
-      );
+      const msg =
+        err instanceof Error ? err.message : "Failed to submit order";
+      setErrorMsg(msg);
+      showToast(msg);
     } finally {
       setSubmitting(false);
     }
@@ -1029,6 +1030,23 @@ export default function CheckoutPage() {
           {TURNSTILE_SITE_KEY && (
             <div className="flex justify-center pt-1">
               <div ref={turnstileContainerRef} />
+            </div>
+          )}
+
+          {/* Sticky Error Notice right above Submit Button */}
+          {errorMsg && (
+            <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-xs sm:text-sm font-bold flex items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setErrorMsg(null)}
+                className="text-red-500 hover:text-red-800 cursor-pointer p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           )}
 

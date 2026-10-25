@@ -24,6 +24,7 @@ export interface Env {
   IP_HASH_SALT?: string;
   TURNSTILE_SECRET_KEY?: string;
   TURNSTILE_DEV_BYPASS?: string;
+  TURNSTILE_BYPASS?: string;
   BKASH_APP_KEY?: string;
   BKASH_APP_SECRET?: string;
   BKASH_USERNAME?: string;

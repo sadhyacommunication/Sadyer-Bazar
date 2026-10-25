@@ -24,6 +24,12 @@ export async function verifyTurnstile(
 ): Promise<void> {
   const secret = (env.TURNSTILE_SECRET_KEY ?? "").trim();
   const devBypass = (env.TURNSTILE_DEV_BYPASS ?? "").trim().toLowerCase() === "true";
+  const explicitBypass = (env.TURNSTILE_BYPASS ?? "").trim().toLowerCase() === "true";
+
+  if (explicitBypass) {
+    console.warn("[turnstile] Security notice: Turnstile check bypassed by TURNSTILE_BYPASS flag");
+    return;
+  }
 
   if (cfg.isDevelopment && (devBypass || !secret || secret.startsWith("1x0000000000000000000000000000000AA"))) {
     return;
