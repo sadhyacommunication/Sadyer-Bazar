@@ -1,5 +1,6 @@
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
+  Category,
   ContactMessage,
   Coupon,
   Order,
@@ -83,6 +84,20 @@ function mapSettingsFromRow(row: Record<string, unknown>): SiteSettings {
     bkashEnabled: Boolean(row.bkash_enabled ?? true),
     codEnabled: Boolean(row.cod_enabled ?? true),
     updatedAt: String(row.updated_at || new Date().toISOString()),
+  };
+}
+
+function mapCategoryFromRow(row: Record<string, unknown>): Category {
+  return {
+    id: String(row.id),
+    name: String(row.name || ""),
+    nameBn: String(row.name_bn || row.name || ""),
+    slug: String(row.slug || ""),
+    description: String(row.description || ""),
+    imageUrl: String(row.image_url || "/images/products/jamuna-fish.jpg"),
+    badgeText: row.badge_text ? String(row.badge_text) : undefined,
+    sortOrder: Number(row.sort_order ?? 0),
+    isActive: row.is_active !== false,
   };
 }
 
@@ -443,6 +458,41 @@ export async function deleteProductFromSupabase(
     .from("products")
     .delete()
     .eq("id", productId);
+  return !error;
+}
+
+export async function upsertCategoryToSupabase(
+  category: Category
+): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return false;
+
+  const { error } = await supabase.from("categories").upsert({
+    id: category.id,
+    name: category.name,
+    name_bn: category.nameBn,
+    slug: category.slug,
+    description: category.description || "",
+    image_url: category.imageUrl || "/images/products/jamuna-fish.jpg",
+    badge_text: category.badgeText || null,
+    sort_order: category.sortOrder ?? 0,
+    is_active: category.isActive !== false,
+  });
+
+  return !error;
+}
+
+export async function deleteCategoryFromSupabase(
+  categoryId: string
+): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return false;
+
+  const { error } = await supabase
+    .from("categories")
+    .delete()
+    .eq("id", categoryId);
+
   return !error;
 }
 
@@ -983,6 +1033,7 @@ export async function fetchLiveStoreFromSupabase(): Promise<{
   status: SupabaseConnectionState;
   settings?: SiteSettings;
   products?: Product[];
+  categories?: Category[];
   reviews?: ProductReview[];
 }> {
   const supabase = getSupabaseClient();
@@ -1007,7 +1058,7 @@ export async function fetchLiveStoreFromSupabase(): Promise<{
       return { status: "offline" };
     }
 
-    const [prodRes, revRes] = await Promise.all([
+    const [prodRes, revRes, catRes] = await Promise.all([
       supabase
         .from("products")
         .select("*")
@@ -1016,6 +1067,10 @@ export async function fetchLiveStoreFromSupabase(): Promise<{
         .from("product_reviews")
         .select("*")
         .order("created_at", { ascending: false }),
+      supabase
+        .from("categories")
+        .select("*")
+        .order("sort_order", { ascending: true }),
     ]);
 
     const loadedProducts =
@@ -1023,12 +1078,18 @@ export async function fetchLiveStoreFromSupabase(): Promise<{
         ? prodRes.data.map((r) => mapProductFromRow(r as Record<string, unknown>))
         : INITIAL_PRODUCTS;
 
+    const loadedCategories =
+      catRes.data && catRes.data.length > 0
+        ? catRes.data.map((r) => mapCategoryFromRow(r as Record<string, unknown>))
+        : INITIAL_CATEGORIES;
+
     return {
       status: "connected_live",
       settings: settingsData
         ? mapSettingsFromRow(settingsData as unknown as Record<string, unknown>)
         : INITIAL_SITE_SETTINGS,
       products: loadedProducts,
+      categories: loadedCategories,
       reviews:
         revRes.data && revRes.data.length > 0
           ? revRes.data.map((r) => mapReviewFromRow(r as Record<string, unknown>))
@@ -1048,6 +1109,11 @@ export function subscribeToRealtimeStore(onUpdate: () => void): () => void {
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "products" },
+      () => onUpdate()
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "categories" },
       () => onUpdate()
     )
     .on(

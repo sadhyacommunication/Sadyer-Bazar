@@ -35,6 +35,7 @@ import {
   INITIAL_TRANSACTIONS,
 } from "@/services/seedData";
 import {
+  deleteCategoryFromSupabase,
   deleteContactMessageFromSupabase,
   deleteCouponFromSupabase,
   deleteProductFromSupabase,
@@ -45,6 +46,7 @@ import {
   seedFullDatabaseToSupabase,
   subscribeToRealtimeStore,
   SupabaseConnectionState,
+  upsertCategoryToSupabase,
   upsertContactMessageToSupabase,
   upsertCouponToSupabase,
   upsertProductToSupabase,
@@ -149,6 +151,13 @@ interface StoreContextValue {
   updateProduct: (updatedProduct: Product) => void;
   deleteProduct: (productId: string) => void;
 
+  // Admin Category Management Actions
+  addCategory: (newCategory: Category) => Promise<void>;
+  updateCategory: (updatedCategory: Category) => Promise<void>;
+  deleteCategory: (
+    categoryId: string
+  ) => Promise<{ success: boolean; error?: string }>;
+
   // Coupon Actions
   addCoupon: (coupon: Coupon) => void;
   toggleCouponStatus: (couponId: string) => void;
@@ -194,6 +203,7 @@ const StoreContext = createContext<StoreContextValue | undefined>(undefined);
 const STORAGE_KEYS = {
   CART: "sb_cart_v2",
   PRODUCTS: "sb_products_v2",
+  CATEGORIES: "sb_categories_v2",
   COUPONS: "sb_coupons_v2",
   REVIEWS: "sb_reviews_v2",
   SETTINGS: "sb_settings_v2",
@@ -205,7 +215,7 @@ const STORAGE_KEYS = {
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
-  const [categories] = useState<Category[]>(INITIAL_CATEGORIES);
+  const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
   const [coupons, setCoupons] = useState<Coupon[]>(INITIAL_COUPONS);
   const [reviews, setReviews] = useState<ProductReview[]>(INITIAL_REVIEWS);
   const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
@@ -237,6 +247,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (live.settings) setSettings(live.settings);
         if (live.products && live.products.length > 0)
           setProducts(live.products);
+        if (live.categories && live.categories.length > 0)
+          setCategories(live.categories);
         if (live.reviews && live.reviews.length > 0) setReviews(live.reviews);
       }
     } catch {
@@ -262,6 +274,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           (p) => !existingIds.has(p.id)
         );
         setProducts([...parsed, ...newlySeeded]);
+      }
+
+      const savedCategories = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
+      if (savedCategories) {
+        const parsed: Category[] = JSON.parse(savedCategories);
+        const existingIds = new Set(parsed.map((c) => c.id));
+        const newlySeeded = INITIAL_CATEGORIES.filter(
+          (c) => !existingIds.has(c.id)
+        );
+        setCategories([...parsed, ...newlySeeded]);
       }
 
       const savedCoupons = localStorage.getItem(STORAGE_KEYS.COUPONS);
@@ -317,6 +339,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
     } catch {}
   }, [products, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
+    } catch {}
+  }, [categories, hydrated]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -717,6 +746,45 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     showToast("Product removed from catalog.");
   };
 
+  const addCategory = async (newCategory: Category) => {
+    setCategories((prev) => [
+      ...prev.filter((c) => c.id !== newCategory.id),
+      newCategory,
+    ]);
+    showToast(`Category "${newCategory.name}" added successfully.`);
+    void upsertCategoryToSupabase(newCategory);
+  };
+
+  const updateCategory = async (updatedCategory: Category) => {
+    setCategories((prev) =>
+      prev.map((c) => (c.id === updatedCategory.id ? updatedCategory : c))
+    );
+    showToast(`Category "${updatedCategory.name}" updated successfully.`);
+    void upsertCategoryToSupabase(updatedCategory);
+  };
+
+  const deleteCategory = async (
+    categoryId: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const cat = categories.find((c) => c.id === categoryId);
+    if (!cat) return { success: false, error: "Category not found" };
+
+    const assignedCount = products.filter(
+      (p) => p.categoryId === categoryId || p.categorySlug === cat.slug
+    ).length;
+
+    if (assignedCount > 0) {
+      const msg = `Cannot delete "${cat.name}". ${assignedCount} products are currently in this category. Reassign or delete them first.`;
+      showToast(msg);
+      return { success: false, error: msg };
+    }
+
+    setCategories((prev) => prev.filter((c) => c.id !== categoryId));
+    showToast(`Category "${cat.name}" deleted.`);
+    void deleteCategoryFromSupabase(categoryId);
+    return { success: true };
+  };
+
   const addCoupon = (coupon: Coupon) => {
     setCoupons((prev) => [
       coupon,
@@ -905,6 +973,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         addProduct,
         updateProduct,
         deleteProduct,
+        addCategory,
+        updateCategory,
+        deleteCategory,
         addCoupon,
         toggleCouponStatus,
         deleteCoupon,

@@ -35,12 +35,14 @@ import {
   Loader2,
   LogOut,
   RefreshCw,
+  Layers,
 } from "lucide-react";
 import { rememberRecentOrderInSession, useStore } from "@/context/StoreContext";
 import { checkRateLimit } from "@/lib/security";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { fetchAuthenticatedAdminDataFromSupabase } from "@/services/supabaseSync";
 import {
+  Category,
   ContactMessage,
   Coupon,
   Order,
@@ -84,6 +86,41 @@ const PRESET_PRODUCT_IMAGES = [
   },
 ];
 
+const PRESET_CATEGORY_IMAGES = [
+  {
+    label: "Jamuna Mixed Fish (যমুনার মাছ)",
+    value: "/images/products/jamuna-fish.jpg",
+  },
+  {
+    label: "Jamuna Big Fish (যমুনার বড় মাছ)",
+    value: "/images/products/jamuna-big-fish.jpg",
+  },
+  {
+    label: "Pure Gawa Ghee (গাওয়া ঘি)",
+    value: "/images/products/gawa-ghee.jpg",
+  },
+  {
+    label: "Bogura Shahi Doi (বগুড়ার শাহী দই)",
+    value: "/images/products/bogura-doi.jpg",
+  },
+  {
+    label: "Deshi Meat & Poultry (মাংস ও মুরগি)",
+    value: "/images/products/deshi-chicken.jpg",
+  },
+  {
+    label: "Deshi Chicken Eggs (দেশি ডিম)",
+    value: "/images/products/deshi-eggs.jpg",
+  },
+  {
+    label: "Full Fiber Red Rice (লাল চাল)",
+    value: "/images/products/red-rice.jpg",
+  },
+  {
+    label: "Pure Honey (খাঁটি প্রাকৃতিক মধু)",
+    value: "/images/products/sundarban-honey.jpg",
+  },
+];
+
 const getOrderStatusBadgeClass = (status: OrderStatus) => {
   switch (status) {
     case "pending":
@@ -108,6 +145,7 @@ type AdminTab =
   | "orders"
   | "procurement"
   | "products"
+  | "categories"
   | "coupons"
   | "payments"
   | "messages"
@@ -136,6 +174,9 @@ export default function AdminDashboardPage() {
     addProduct,
     updateProduct,
     deleteProduct,
+    addCategory,
+    updateCategory,
+    deleteCategory,
     addCoupon,
     toggleCouponStatus,
     deleteCoupon,
@@ -273,6 +314,7 @@ export default function AdminDashboardPage() {
   const [prodImageMode, setProdImageMode] = useState<"preset" | "custom">(
     "preset"
   );
+  const [prodImageError, setProdImageError] = useState(false);
   const [prodShortDesc, setProdShortDesc] = useState("");
   const [prodOrigin, setProdOrigin] = useState("Sirajganj / Jamuna Basin");
   const [prodIsPreorder, setProdIsPreorder] = useState(true);
@@ -284,6 +326,24 @@ export default function AdminDashboardPage() {
   const [var1Price, setVar1Price] = useState(550);
   const [var2Label, setVar2Label] = useState("1kg Pack");
   const [var2Price, setVar2Price] = useState(1050);
+
+  // Category Modal State (Create / Edit)
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [catName, setCatName] = useState("");
+  const [catNameBn, setCatNameBn] = useState("");
+  const [catSlug, setCatSlug] = useState("");
+  const [catDescription, setCatDescription] = useState("");
+  const [catImageUrl, setCatImageUrl] = useState(
+    "/images/products/jamuna-fish.jpg"
+  );
+  const [catImageMode, setCatImageMode] = useState<"preset" | "custom">(
+    "preset"
+  );
+  const [catImageError, setCatImageError] = useState(false);
+  const [catBadgeText, setCatBadgeText] = useState("");
+  const [catSortOrder, setCatSortOrder] = useState<number>(1);
+  const [catIsActive, setCatIsActive] = useState<boolean>(true);
 
   // Settings Form State (Synced live with Supabase settings)
   const [settingsForm, setSettingsForm] = useState<SiteSettings>(settings);
@@ -453,9 +513,10 @@ export default function AdminDashboardPage() {
     setEditingProduct(null);
     setProdTitle("");
     setProdTitleBn("");
-    setProdCategorySlug("jamuna-river-fish");
-    setProdImage("/images/products/jamuna-fish.jpg");
+    setProdCategorySlug(categories[0]?.slug || "jamuna-river-fish");
+    setProdImage(PRESET_PRODUCT_IMAGES[0].value);
     setProdImageMode("preset");
+    setProdImageError(false);
     setProdShortDesc("");
     setProdOrigin("Sirajganj / Jamuna River Basin");
     setProdIsPreorder(true);
@@ -478,6 +539,7 @@ export default function AdminDashboardPage() {
       (p) => p.value === product.primaryImage
     );
     setProdImageMode(isPreset ? "preset" : "custom");
+    setProdImageError(false);
     setProdShortDesc(product.shortDescription);
     setProdOrigin(product.originSource);
     setProdIsPreorder(product.isPreorder);
@@ -501,6 +563,97 @@ export default function AdminDashboardPage() {
     }
   };
 
+  // Category Actions
+  const openCreateCategoryModal = () => {
+    setEditingCategory(null);
+    setCatName("");
+    setCatNameBn("");
+    setCatSlug("");
+    setCatDescription("");
+    setCatImageUrl(PRESET_CATEGORY_IMAGES[0].value);
+    setCatImageMode("preset");
+    setCatImageError(false);
+    setCatBadgeText("");
+    setCatSortOrder(categories.length + 1);
+    setCatIsActive(true);
+    setIsCategoryModalOpen(true);
+  };
+
+  const openEditCategoryModal = (cat: Category) => {
+    setEditingCategory(cat);
+    setCatName(cat.name);
+    setCatNameBn(cat.nameBn);
+    setCatSlug(cat.slug);
+    setCatDescription(cat.description || "");
+    setCatImageUrl(cat.imageUrl || PRESET_CATEGORY_IMAGES[0].value);
+    const isPreset = PRESET_CATEGORY_IMAGES.some(
+      (p) => p.value === cat.imageUrl
+    );
+    setCatImageMode(isPreset ? "preset" : "custom");
+    setCatImageError(false);
+    setCatBadgeText(cat.badgeText || "");
+    setCatSortOrder(cat.sortOrder ?? 1);
+    setCatIsActive(cat.isActive !== false);
+    setIsCategoryModalOpen(true);
+  };
+
+  const handleSaveCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!catName.trim() || !catNameBn.trim()) {
+      showToast("Please provide both English and Bengali category names.");
+      return;
+    }
+
+    const autoSlug = (catSlug || catName)
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+
+    const categoryObj: Category = {
+      id: editingCategory ? editingCategory.id : `cat-${Date.now()}`,
+      name: catName.trim(),
+      nameBn: catNameBn.trim(),
+      slug: autoSlug || `cat-${Date.now().toString().slice(-4)}`,
+      description:
+        catDescription.trim() ||
+        `${catName.trim()} (${catNameBn.trim()}) available at Sadyer Bazar.`,
+      imageUrl: catImageUrl.trim() || PRESET_CATEGORY_IMAGES[0].value,
+      badgeText: catBadgeText.trim() || undefined,
+      sortOrder: Number(catSortOrder) || 1,
+      isActive: catIsActive,
+    };
+
+    if (editingCategory) {
+      await updateCategory(categoryObj);
+    } else {
+      await addCategory(categoryObj);
+    }
+    setIsCategoryModalOpen(false);
+  };
+
+  const handleDeleteCategory = async (cat: Category) => {
+    const assignedCount = products.filter(
+      (p) => p.categoryId === cat.id || p.categorySlug === cat.slug
+    ).length;
+
+    if (assignedCount > 0) {
+      alert(
+        `Cannot delete "${cat.name}".\n\nThere are ${assignedCount} products currently assigned to this category.\n\nPlease reassign or delete those products before removing this category.`
+      );
+      return;
+    }
+
+    if (
+      typeof window !== "undefined" &&
+      window.confirm(
+        `Are you sure you want to delete category "${cat.name}" (${cat.nameBn})?\n\nThis will remove it from the catalog and store navigation.`
+      )
+    ) {
+      await deleteCategory(cat.id);
+    }
+  };
+
   const handleDeleteCoupon = (coup: Coupon) => {
     if (
       typeof window !== "undefined" &&
@@ -515,7 +668,12 @@ export default function AdminDashboardPage() {
   const handleSaveProduct = (e: React.FormEvent) => {
     e.preventDefault();
     const cat =
-      categories.find((c) => c.slug === prodCategorySlug) || categories[0];
+      categories.find((c) => c.slug === prodCategorySlug) ||
+      categories[0] || {
+        id: "cat-general",
+        name: "General",
+        slug: prodCategorySlug || "general",
+      };
     const slug = prodTitle
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
@@ -851,6 +1009,11 @@ export default function AdminDashboardPage() {
                 icon: Package,
               },
               {
+                id: "categories",
+                label: `Categories (${categories.length})`,
+                icon: Layers,
+              },
+              {
                 id: "coupons",
                 label: `Promo Codes (${coupons.length})`,
                 icon: Tag,
@@ -962,10 +1125,14 @@ export default function AdminDashboardPage() {
                 "Automated Pre-Order Batch Buying / Procurement List"}
               {activeTab === "products" &&
                 "Product, Variant & Pre-Order Batch Manager"}
+              {activeTab === "categories" &&
+                "Store Category & Department Manager"}
               {activeTab === "coupons" &&
                 "Promo Code & Campaign Discount Manager"}
               {activeTab === "payments" &&
                 "Payment Ledger & Gateway Attempts (bKash, Nagad & COD)"}
+              {activeTab === "messages" &&
+                "Customer Inquiries & Helpdesk Messages"}
               {activeTab === "settings" &&
                 "Inside / Outside Dhaka Delivery Charges & Site Settings"}
             </h1>
@@ -1710,6 +1877,130 @@ export default function AdminDashboardPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* TAB: STORE CATEGORY & DEPARTMENT MANAGER */}
+        {activeTab === "categories" && (
+          <div className="bg-white rounded-3xl border border-stone-200/90 p-6 space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-extrabold text-stone-900">
+                  Store Categories & Departments ({categories.length})
+                </h2>
+                <p className="text-xs text-stone-500">
+                  Manage store product groupings, bilingual titles, banners, display badges, and ordering.
+                </p>
+              </div>
+              <button
+                onClick={openCreateCategoryModal}
+                className="px-4 py-2.5 rounded-2xl bg-[#0F3D2E] text-white text-xs font-extrabold flex items-center gap-1.5 cursor-pointer shadow-xs hover:bg-[#165640] transition"
+              >
+                <Plus className="w-4 h-4" /> Add Category
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {categories.map((cat) => {
+                const assignedProducts = products.filter(
+                  (p) => p.categoryId === cat.id || p.categorySlug === cat.slug
+                );
+                return (
+                  <div
+                    key={cat.id}
+                    className="p-5 rounded-2xl border border-stone-200/90 bg-[#FAF8F5]/80 hover:bg-[#FAF8F5] transition flex flex-col justify-between space-y-4 shadow-2xs"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-3.5">
+                        <div className="w-16 h-16 rounded-xl overflow-hidden bg-stone-950 p-0.5 border border-stone-200 shrink-0">
+                          <img
+                            src={cat.imageUrl}
+                            alt={cat.name}
+                            className="w-full h-full object-cover rounded-lg"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src =
+                                "/images/products/jamuna-fish.jpg";
+                            }}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-xs font-black text-[#C83E2B] truncate">
+                              {cat.nameBn}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                                cat.isActive
+                                  ? "bg-emerald-100 text-[#0F3D2E] border border-emerald-200"
+                                  : "bg-stone-200 text-stone-600 border border-stone-300"
+                              }`}
+                            >
+                              {cat.isActive ? "Active" : "Hidden"}
+                            </span>
+                          </div>
+                          <h3 className="text-sm font-extrabold text-stone-900 truncate mt-0.5">
+                            {cat.name}
+                          </h3>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            <span className="px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 text-[10px] font-mono border border-stone-200 truncate max-w-[140px]">
+                              {cat.slug}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200 text-[10px] font-bold">
+                              Order #{cat.sortOrder ?? 1}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {cat.description && (
+                        <p className="text-xs text-stone-600 line-clamp-2">
+                          {cat.description}
+                        </p>
+                      )}
+
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-200/60 text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <Package className="w-3.5 h-3.5 text-stone-500" />
+                          <span className="font-bold text-stone-700">
+                            {assignedProducts.length} Product{assignedProducts.length === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                        {cat.badgeText && (
+                          <span className="px-2 py-0.5 rounded-full bg-[#0F3D2E]/10 text-[#0F3D2E] text-[10px] font-extrabold border border-[#0F3D2E]/20">
+                            ★ {cat.badgeText}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-stone-200">
+                      <button
+                        onClick={() => openEditCategoryModal(cat)}
+                        className="flex-1 py-1.5 px-3 rounded-xl bg-white border border-stone-200 hover:border-[#0F3D2E] hover:text-[#0F3D2E] text-xs font-bold text-stone-800 flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs transition"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" /> Edit Category
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCategory(cat)}
+                        disabled={assignedProducts.length > 0}
+                        className={`p-2 rounded-xl text-xs font-bold transition flex items-center justify-center ${
+                          assignedProducts.length > 0
+                            ? "bg-stone-100 text-stone-300 cursor-not-allowed"
+                            : "bg-stone-100 hover:bg-rose-50 text-stone-400 hover:text-rose-600 cursor-pointer"
+                        }`}
+                        title={
+                          assignedProducts.length > 0
+                            ? `Cannot delete while ${assignedProducts.length} products belong to this category`
+                            : "Delete category"
+                        }
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -3143,9 +3434,19 @@ export default function AdminDashboardPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
-                  <label className="block font-bold text-stone-700 mb-1">
-                    Category
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-stone-700">
+                      Category *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => openCreateCategoryModal()}
+                      className="text-[10px] font-extrabold text-[#0F3D2E] hover:underline flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" />
+                      New Category
+                    </button>
+                  </div>
                   <select
                     value={prodCategorySlug}
                     onChange={(e) => setProdCategorySlug(e.target.value)}
@@ -3168,6 +3469,7 @@ export default function AdminDashboardPage() {
                         type="button"
                         onClick={() => {
                           setProdImageMode("preset");
+                          setProdImageError(false);
                           if (
                             !PRESET_PRODUCT_IMAGES.some(
                               (p) => p.value === prodImage
@@ -3186,7 +3488,10 @@ export default function AdminDashboardPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setProdImageMode("custom")}
+                        onClick={() => {
+                          setProdImageMode("custom");
+                          setProdImageError(false);
+                        }}
                         className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer ${
                           prodImageMode === "custom"
                             ? "bg-white text-stone-900 shadow-xs"
@@ -3201,7 +3506,10 @@ export default function AdminDashboardPage() {
                   {prodImageMode === "preset" ? (
                     <select
                       value={prodImage}
-                      onChange={(e) => setProdImage(e.target.value)}
+                      onChange={(e) => {
+                        setProdImage(e.target.value);
+                        setProdImageError(false);
+                      }}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-semibold"
                     >
                       {PRESET_PRODUCT_IMAGES.map((preset) => (
@@ -3215,33 +3523,62 @@ export default function AdminDashboardPage() {
                       type="url"
                       required
                       value={prodImage}
-                      onChange={(e) => setProdImage(e.target.value)}
-                      placeholder="https://... (Supabase, Cloudinary, CDN URL)"
+                      onChange={(e) => {
+                        setProdImage(e.target.value);
+                        setProdImageError(false);
+                      }}
+                      placeholder="https://ik.imagekit.io/... or https://..."
                       className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-mono text-[11px]"
                     />
                   )}
 
-                  {/* Live Image Preview */}
+                  {/* Live Image Preview (no random fallback!) */}
                   {prodImage && (
-                    <div className="flex items-center gap-3 mt-2 p-2 rounded-xl bg-stone-100 border border-stone-200">
-                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-white shrink-0 border border-stone-200">
-                        <img
-                          src={prodImage}
-                          alt="Poster Preview"
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).src =
-                              "/images/products/jamuna-fish.jpg";
-                          }}
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[11px] font-bold text-stone-700 truncate">
-                          Live Poster Preview
-                        </p>
-                        <p className="text-[10px] text-stone-500 truncate font-mono">
-                          {prodImage}
-                        </p>
+                    <div className="mt-2 p-2.5 rounded-xl bg-stone-100 border border-stone-200">
+                      <div className="flex items-center gap-3">
+                        <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-white shrink-0 border border-stone-200 flex items-center justify-center">
+                          {!prodImageError ? (
+                            <img
+                              key={prodImage}
+                              src={prodImage}
+                              alt="Poster Preview"
+                              className="w-full h-full object-cover"
+                              onLoad={() => setProdImageError(false)}
+                              onError={() => setProdImageError(true)}
+                            />
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center bg-rose-50 text-rose-500 text-[9px] font-bold">
+                              <AlertCircle className="w-4 h-4 mb-0.5" />
+                              Error
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-[11px] font-bold text-stone-700 truncate">
+                              Live Poster Preview
+                            </p>
+                            {!prodImageError ? (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
+                                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                                Valid
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-100 text-rose-700">
+                                <AlertCircle className="w-2.5 h-2.5 text-rose-600" />
+                                Load Failed
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-stone-500 truncate font-mono mt-0.5">
+                            {prodImage}
+                          </p>
+                          {prodImageError && (
+                            <p className="text-[10px] text-rose-600 mt-0.5 font-medium">
+                              Could not load image from this URL. Please verify the URL.
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -3343,6 +3680,278 @@ export default function AdminDashboardPage() {
                   className="px-5 py-2.5 rounded-xl bg-[#0F3D2E] text-white font-extrabold cursor-pointer"
                 >
                   {editingProduct ? "Save Product Changes" : "Publish Product"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: ADD / EDIT CATEGORY */}
+      {isCategoryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/60 backdrop-blur-xs no-print">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+              <h3 className="text-lg font-extrabold text-stone-900">
+                {editingCategory ? "Edit Category Details" : "Add New Category"}
+              </h3>
+              <button
+                onClick={() => setIsCategoryModalOpen(false)}
+                className="p-1.5 rounded-full hover:bg-stone-100 text-stone-500 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCategory} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">
+                    Category Name (English) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={catName}
+                    onChange={(e) => {
+                      setCatName(e.target.value);
+                      if (!editingCategory && !catSlug) {
+                        setCatSlug(
+                          e.target.value
+                            .toLowerCase()
+                            .replace(/[^a-z0-9]+/g, "-")
+                            .replace(/(^-|-$)/g, "")
+                        );
+                      }
+                    }}
+                    placeholder="e.g., Jamuna River Fish"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">
+                    Category Name (বাংলা) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={catNameBn}
+                    onChange={(e) => setCatNameBn(e.target.value)}
+                    placeholder="e.g., যমুনা নদীর মাছ"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">
+                    Slug / URL Identifier *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={catSlug}
+                    onChange={(e) =>
+                      setCatSlug(
+                        e.target.value
+                          .toLowerCase()
+                          .replace(/[^a-z0-9]+/g, "-")
+                      )
+                    }
+                    placeholder="e.g., jamuna-river-fish"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-mono text-[11px]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">
+                    Badge Text (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={catBadgeText}
+                    onChange={(e) => setCatBadgeText(e.target.value)}
+                    placeholder="e.g., Best Seller, Pre-Order Catch"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200"
+                  />
+                </div>
+              </div>
+
+              {/* Category Image Selection */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold text-stone-700">
+                    Category Banner Image *
+                  </label>
+                  <div className="flex items-center gap-1 bg-stone-100 p-0.5 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCatImageMode("preset");
+                        setCatImageError(false);
+                        if (
+                          !PRESET_CATEGORY_IMAGES.some(
+                            (p) => p.value === catImageUrl
+                          )
+                        ) {
+                          setCatImageUrl(PRESET_CATEGORY_IMAGES[0].value);
+                        }
+                      }}
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer ${
+                        catImageMode === "preset"
+                          ? "bg-white text-stone-900 shadow-xs"
+                          : "text-stone-500 hover:text-stone-800"
+                      }`}
+                    >
+                      Preset
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCatImageMode("custom");
+                        setCatImageError(false);
+                      }}
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer ${
+                        catImageMode === "custom"
+                          ? "bg-white text-stone-900 shadow-xs"
+                          : "text-stone-500 hover:text-stone-800"
+                      }`}
+                    >
+                      Custom URL
+                    </button>
+                  </div>
+                </div>
+
+                {catImageMode === "preset" ? (
+                  <select
+                    value={catImageUrl}
+                    onChange={(e) => {
+                      setCatImageUrl(e.target.value);
+                      setCatImageError(false);
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-semibold"
+                  >
+                    {PRESET_CATEGORY_IMAGES.map((preset) => (
+                      <option key={preset.value} value={preset.value}>
+                        {preset.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="url"
+                    required
+                    value={catImageUrl}
+                    onChange={(e) => {
+                      setCatImageUrl(e.target.value);
+                      setCatImageError(false);
+                    }}
+                    placeholder="https://ik.imagekit.io/... or https://..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-mono text-[11px]"
+                  />
+                )}
+
+                {/* Live Preview for Category */}
+                {catImageUrl && (
+                  <div className="mt-2 p-2.5 rounded-xl bg-stone-100 border border-stone-200">
+                    <div className="flex items-center gap-3">
+                      <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-white shrink-0 border border-stone-200 flex items-center justify-center">
+                        {!catImageError ? (
+                          <img
+                            key={catImageUrl}
+                            src={catImageUrl}
+                            alt="Category Preview"
+                            className="w-full h-full object-cover"
+                            onLoad={() => setCatImageError(false)}
+                            onError={() => setCatImageError(true)}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-rose-50 text-rose-500 text-[9px] font-bold">
+                            <AlertCircle className="w-4 h-4 mb-0.5" />
+                            Error
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-[11px] font-bold text-stone-700 truncate">
+                            Live Banner Preview
+                          </p>
+                          {!catImageError ? (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
+                              <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                              Valid
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-100 text-rose-700">
+                              <AlertCircle className="w-2.5 h-2.5 text-rose-600" />
+                              Load Failed
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-stone-500 truncate font-mono mt-0.5">
+                          {catImageUrl}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block font-bold text-stone-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  rows={2}
+                  value={catDescription}
+                  onChange={(e) => setCatDescription(e.target.value)}
+                  placeholder="Short description of this product department..."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3.5 items-center p-3.5 rounded-2xl bg-stone-50 border border-stone-200">
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">
+                    Sort Order
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={catSortOrder}
+                    onChange={(e) => setCatSortOrder(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-stone-200 font-bold"
+                  />
+                </div>
+                <div className="pt-4">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={catIsActive}
+                      onChange={(e) => setCatIsActive(e.target.checked)}
+                      className="w-4 h-4 text-[#0F3D2E] rounded accent-[#0F3D2E]"
+                    />
+                    <span className="font-bold text-stone-800 text-xs">
+                      Active / Visible in Store
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-stone-100 text-stone-700 font-bold cursor-pointer hover:bg-stone-200 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-[#0F3D2E] text-white font-extrabold cursor-pointer hover:bg-[#165640] transition shadow-xs"
+                >
+                  {editingCategory ? "Save Category Changes" : "Create Category"}
                 </button>
               </div>
             </form>
