@@ -174,8 +174,8 @@ export default function HomePage() {
 
       {/* 2. LIVE PRE-ORDER CATCH BOARD (Existing Section Kept Intact) */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 relative z-10">
-        <div className="bg-white rounded-3xl border-2 border-[#0F3D2E]/15 shadow-xl p-6 sm:p-8">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-stone-200/80">
+        <div className="bg-white rounded-3xl border-2 border-[#0F3D2E]/15 shadow-xl p-4 sm:p-6 lg:p-8">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 sm:gap-6 pb-6 border-b border-stone-200/80">
             <div className="space-y-1.5">
               <div className="inline-flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-[#C83E2B]">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#C83E2B] animate-ping" />
@@ -191,25 +191,25 @@ export default function HomePage() {
             </div>
 
             {/* Live Countdown Clock */}
-            <div className="flex items-center gap-3 bg-stone-950 text-white px-5 py-3.5 rounded-2xl shrink-0 self-start lg:self-center">
-              <Clock className="w-5 h-5 text-amber-400 shrink-0" />
-              <div className="text-xs font-semibold text-stone-300 mr-1">
-                Batch Cut-Off In:
+            <div className="w-full sm:w-auto max-w-full bg-stone-950 text-white px-3.5 py-3 sm:px-5 sm:py-3.5 rounded-2xl flex flex-col sm:flex-row items-center justify-between sm:justify-start gap-2.5 sm:gap-3.5 self-stretch sm:self-start lg:self-center shrink-0">
+              <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-stone-300">
+                <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0" />
+                <span className="whitespace-nowrap">Batch Cut-Off In:</span>
               </div>
-              <div className="flex items-center gap-1.5 font-mono text-sm sm:text-base font-extrabold">
-                <span className="px-2 py-1 rounded-lg bg-white/10 text-amber-300">
+              <div className="flex items-center justify-center gap-1 sm:gap-1.5 font-mono text-xs sm:text-base font-extrabold">
+                <span className="px-2 py-1 rounded-lg bg-white/10 text-amber-300 min-w-[34px] sm:min-w-[38px] text-center">
                   {String(timeLeft.days).padStart(2, "0")}d
                 </span>
-                <span>:</span>
-                <span className="px-2 py-1 rounded-lg bg-white/10 text-amber-300">
+                <span className="text-stone-400 font-bold">:</span>
+                <span className="px-2 py-1 rounded-lg bg-white/10 text-amber-300 min-w-[34px] sm:min-w-[38px] text-center">
                   {String(timeLeft.hours).padStart(2, "0")}h
                 </span>
-                <span>:</span>
-                <span className="px-2 py-1 rounded-lg bg-white/10 text-amber-300">
+                <span className="text-stone-400 font-bold">:</span>
+                <span className="px-2 py-1 rounded-lg bg-white/10 text-amber-300 min-w-[34px] sm:min-w-[38px] text-center">
                   {String(timeLeft.minutes).padStart(2, "0")}m
                 </span>
-                <span>:</span>
-                <span className="px-2 py-1 rounded-lg bg-[#C83E2B] text-white">
+                <span className="text-stone-400 font-bold">:</span>
+                <span className="px-2 py-1 rounded-lg bg-[#C83E2B] text-white min-w-[34px] sm:min-w-[38px] text-center shadow-xs">
                   {String(timeLeft.seconds).padStart(2, "0")}s
                 </span>
               </div>
