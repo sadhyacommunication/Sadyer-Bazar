@@ -448,9 +448,9 @@ export default function Footer() {
         </div>
 
         {/* Bottom Minimal Copyright Bar */}
-        <div className="border-t border-emerald-900/90 bg-emerald-950/70 py-5 px-4 text-center text-xs text-emerald-300/70">
-          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3 px-4">
-            <span className="text-center md:text-left">
+        <div className="border-t border-emerald-900/90 bg-emerald-950/70 py-5 px-4 pb-28 sm:pb-5 text-center text-xs text-emerald-300/70">
+          <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-3 px-4">
+            <span className="text-center lg:text-left lg:pl-48">
               © {new Date().getFullYear()} Sadyer Bazar (সাধ্যের বাজার). All rights reserved.
             </span>
             <div className="text-xs text-emerald-300/90">
@@ -511,15 +511,15 @@ export default function Footer() {
         )}`}
         target="_blank"
         rel="noopener noreferrer"
-        className={`fixed left-4 z-40 inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-xl border border-white/20 transition no-print ${
+        className={`fixed left-4 z-40 inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-xl border border-white/20 transition-all duration-200 hover:scale-105 no-print ${
           pathname !== "/checkout"
-            ? "bottom-18 sm:bottom-5"
-            : "bottom-5"
+            ? "bottom-20 sm:bottom-4"
+            : "bottom-4"
         }`}
+        title="Chat with Sadyer Bazar on WhatsApp"
       >
-        <MessageCircle className="w-4 h-4 fill-current" />
-        <span className="hidden xs:inline">WhatsApp:</span>
-        <span>{settings.supportPhone}</span>
+        <MessageCircle className="w-4 h-4 fill-current shrink-0" />
+        <span className="tabular-nums">{settings.supportPhone}</span>
       </a>
 
       {/* Mobile Sticky Bottom Thumb Navigation Dock (When Cart is Empty & not on checkout or PDP) */}
