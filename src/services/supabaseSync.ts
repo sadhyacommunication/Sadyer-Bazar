@@ -1105,7 +1105,7 @@ export function subscribeToRealtimeStore(onUpdate: () => void): () => void {
   if (!supabase) return () => {};
 
   const channel = supabase
-    .channel("sadyer-bazar-realtime-sync")
+    .channel("sadhyer-bazar-realtime-sync")
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "products" },

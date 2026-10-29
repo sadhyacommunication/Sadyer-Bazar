@@ -147,7 +147,7 @@ export default function DepartmentShowcase({
               </span>
               <span className="inline-flex items-center gap-1.5 text-emerald-300">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>১০০% খাঁটি ও পরীক্ষিত • Sadyer Bazar Verified</span>
+                <span>১০০% খাঁটি ও পরীক্ষিত • Sadhyer Bazar Verified</span>
               </span>
             </div>
           </div>

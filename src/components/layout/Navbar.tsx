@@ -114,7 +114,7 @@ export default function Navbar() {
             <div>
               <div className="flex items-center gap-1 sm:gap-1.5">
                 <span className="text-lg sm:text-2xl font-extrabold tracking-tight text-[#0F3D2E]">
-                  Sadyer
+                  Sadhyer
                 </span>
                 <span className="text-lg sm:text-2xl font-extrabold tracking-tight text-[#C83E2B]">
                   Bazar

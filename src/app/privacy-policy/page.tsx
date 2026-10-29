@@ -133,7 +133,7 @@ export default function PrivacyPolicyPage() {
                 ১. পরিচিতি ও ডেটা কন্ট্রোলার (Introduction & Scope)
               </h2>
               <p className="text-stone-700">
-                সাধ্যের বাজার (<strong>Sadyer Bazar</strong>) একটি নিবন্ধিত ই-কমার্স ও খাদ্য সরবরাহ প্রতিষ্ঠান,
+                সাধ্যের বাজার (<strong>Sadhyer Bazar</strong>) একটি নিবন্ধিত ই-কমার্স ও খাদ্য সরবরাহ প্রতিষ্ঠান,
                 যা সরাসরি যমুনা নদীর তাজা মাছ, ঐতিহ্যবাহী বগুড়ার ঘি-দই এবং গ্রামবাংলার খাঁটি কৃষি খাদ্যপণ্য
                 সরাসরি ভোক্তাদের দোরগোড়ায় পৌঁছে দেয়।
               </p>
@@ -364,7 +364,7 @@ export default function PrivacyPolicyPage() {
               <div className="p-5 rounded-2xl bg-stone-50 border border-stone-200 space-y-2 text-xs">
                 <div className="flex items-center space-x-2 text-stone-900 font-bold text-sm">
                   <Building2 className="w-4 h-4 text-[#0F3D2E]" />
-                  <span>সাধ্যের বাজার (Sadyer Bazar) — ডেটা সুরক্ষা ও কমপ্লায়েন্স সেল</span>
+                  <span>সাধ্যের বাজার (Sadhyer Bazar) — ডেটা সুরক্ষা ও কমপ্লায়েন্স সেল</span>
                 </div>
                 <p className="text-stone-600">
                   <strong>পদবি:</strong> Data Protection & Grievance Redressal Officer

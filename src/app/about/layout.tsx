@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     "সাধ্যের বাজার পরিচিতি",
     "যমুনা নদীর জেলে সোর্সিং",
     "বগুড়ার খাঁটি ঘি কারিগর",
-    "About Sadyer Bazar",
+    "About Sadhyer Bazar",
     "Direct source food Bangladesh",
   ],
   alternates: {
@@ -19,13 +19,13 @@ export const metadata: Metadata = {
     description:
       "ভেজালমুক্ত খাঁটি খাবারের স্বাদ ফিরিয়ে আনার এক আন্তরিক যাত্রা। আমাদের নিজস্ব ৪টি সোর্সিং হাব ও মান নিয়ন্ত্রণ।",
     url: "https://sadhyerbazar.com/about",
-    siteName: "Sadyer Bazar (সাধ্যের বাজার)",
+    siteName: "Sadhyer Bazar (সাধ্যের বাজার)",
     images: [
       {
         url: "/images/banners/jamuna-fisherman-banner.jpg",
         width: 1200,
         height: 675,
-        alt: "About Sadyer Bazar Story",
+        alt: "About Sadhyer Bazar Story",
       },
     ],
   },
@@ -46,7 +46,7 @@ export default function AboutLayout({
       "সাধ্যের বাজারের শুরুর কথা, যমুনা নদীর জেলে ও বগুড়ার খামারিদের থেকে সরাসরি সংগ্রহের গল্প।",
     mainEntity: {
       "@type": "Organization",
-      name: "সাধ্যের বাজার (Sadyer Bazar)",
+      name: "সাধ্যের বাজার (Sadhyer Bazar)",
       url: baseUrl,
       logo: `${baseUrl}/images/hero-banner-bn.jpg`,
     },

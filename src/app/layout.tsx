@@ -17,13 +17,13 @@ export const metadata: Metadata = {
   ),
   title: {
     default:
-      "Sadyer Bazar (সাধ্যের বাজার) | Fresh Jamuna River Fish, Pure Gawa Ghee & Bogura Doi",
-    template: "%s | Sadyer Bazar (সাধ্যের বাজার)",
+      "Sadhyer Bazar (সাধ্যের বাজার) | Fresh Jamuna River Fish, Pure Gawa Ghee & Bogura Doi",
+    template: "%s | Sadhyer Bazar (সাধ্যের বাজার)",
   },
   description:
     "Order 100% chemical-free wild Jamuna River Fish (যমুনা নদীর মাছ), Sirajganj Pure Gawa Ghee (গাওয়া ঘি), Authentic Bogura Shahi Doi (বগুড়ার দই), Free-Range Deshi Chicken, Eggs, Kataribhog, Basmati & Full-Fiber Red Rice with nationwide home delivery across Bangladesh.",
   keywords: [
-    "Sadyer Bazar",
+    "Sadhyer Bazar",
     "সাধ্যের বাজার",
     "Jamuna river fish online Bangladesh",
     "যমুনা নদীর মাছ",
@@ -57,9 +57,9 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_BD",
-    siteName: "Sadyer Bazar (সাধ্যের বাজার)",
+    siteName: "Sadhyer Bazar (সাধ্যের বাজার)",
     title:
-      "Sadyer Bazar (সাধ্যের বাজার) — Fresh Jamuna River Fish & Pure Organic Food",
+      "Sadhyer Bazar (সাধ্যের বাজার) — Fresh Jamuna River Fish & Pure Organic Food",
     description:
       "Direct from Jamuna River fishermen & rural homesteads to your doorstep. Pre-order fresh river catch, Gawa Ghee, Bogura Doi & organic staples.",
     images: [
@@ -67,7 +67,7 @@ export const metadata: Metadata = {
         url: "/images/hero-banner-bn.jpg",
         width: 1200,
         height: 675,
-        alt: "Sadyer Bazar (সাধ্যের বাজার) Fresh River Fish & Organic Food",
+        alt: "Sadhyer Bazar (সাধ্যের বাজার) Fresh River Fish & Organic Food",
       },
     ],
   },
@@ -77,7 +77,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title:
-      "Sadyer Bazar (সাধ্যের বাজার) — Fresh Jamuna River Fish & Pure Organic Food",
+      "Sadhyer Bazar (সাধ্যের বাজার) — Fresh Jamuna River Fish & Pure Organic Food",
     description:
       "Direct from Jamuna River fishermen & rural homesteads to your doorstep. Pre-order fresh river catch, Gawa Ghee, Bogura Doi & organic staples.",
     images: ["/images/hero-banner-bn.jpg"],
@@ -103,7 +103,7 @@ export default function RootLayout({
   const websiteSchema = {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    name: "Sadyer Bazar (সাধ্যের বাজার)",
+    name: "Sadhyer Bazar (সাধ্যের বাজার)",
     url: "https://sadhyerbazar.com",
     description:
       "100% formalin-free Jamuna River fish, pure Gawa Ghee, and authentic Bogura Shahi Doi online store in Bangladesh.",
@@ -121,8 +121,8 @@ export default function RootLayout({
   const storeSchema = {
     "@context": "https://schema.org",
     "@type": "GroceryStore",
-    name: "Sadyer Bazar (সাধ্যের বাজার)",
-    alternateName: "Sadyer Bazar",
+    name: "Sadhyer Bazar (সাধ্যের বাজার)",
+    alternateName: "Sadhyer Bazar",
     description:
       "Nationwide pre-order and home delivery of wild Jamuna River fish, pure Gawa Ghee, authentic Bogura Shahi Doi, village Deshi chicken, eggs, and heritage organic rice.",
     telephone: "+8801713477780",
@@ -170,11 +170,11 @@ export default function RootLayout({
     },
     brand: {
       "@type": "Brand",
-      name: "Sadyer Bazar (সাধ্যের বাজার)",
+      name: "Sadhyer Bazar (সাধ্যের বাজার)",
       alternateName: "সাধ্যের বাজার",
     },
     sameAs: [
-      "https://facebook.com/sadyerbazar",
+      "https://facebook.com/sadhyerbazar",
       "https://wa.me/8801713477780",
     ],
   };

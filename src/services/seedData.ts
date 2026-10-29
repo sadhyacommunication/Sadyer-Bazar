@@ -133,7 +133,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       "Rich in Calcium, Omega-3 & Vitamin A",
       "Same-Day Dawn Catch Dispatch",
     ],
-    seoTitle: "Buy Fresh Jamuna River Small Fish Online in Bangladesh | Sadyer Bazar",
+    seoTitle: "Buy Fresh Jamuna River Small Fish Online in Bangladesh | Sadhyer Bazar",
     seoDescription:
       "Pre-order authentic wild-caught Jamuna River small fish (যমুনা নদীর মাছ). Zero formalin, thermal ice-box nationwide home delivery.",
     searchKeywords: [
@@ -198,7 +198,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       "Rich Granular Texture (দানাদার গাওয়া ঘি)",
       "Lab Tested — Zero Dalda or Adulteration",
     ],
-    seoTitle: "Pure Gawa Ghee Price in Bangladesh (500g & 1kg Glass Jar) | Sadyer Bazar",
+    seoTitle: "Pure Gawa Ghee Price in Bangladesh (500g & 1kg Glass Jar) | Sadhyer Bazar",
     seoDescription:
       "Order 100% pure granular Sirajganj Gawa Ghee (গাওয়া ঘি) in 500g or 1kg glass jars. Nationwide home delivery across Bangladesh.",
     searchKeywords: [
@@ -268,7 +268,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       "Traditional Earthen Clay Sora (মাটির সরা)",
       "Thick Caramelized Malai Layer on Top",
     ],
-    seoTitle: "Original Bogurar Shahi Doi Online Home Delivery | Sadyer Bazar",
+    seoTitle: "Original Bogurar Shahi Doi Online Home Delivery | Sadhyer Bazar",
     seoDescription:
       "Pre-order authentic Bogura Shahi Mishti Doi (বগুড়ার দই) in traditional clay pots. Fresh batch delivery from Bogura to your doorstep.",
     searchKeywords: [
@@ -340,7 +340,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       "Zero Antibiotics, Steroids or Farm Feed",
       "Freshly Halal Slaughtered on Delivery Morning",
     ],
-    seoTitle: "Buy Fresh Free-Range Deshi Chicken Online in BD | Sadyer Bazar",
+    seoTitle: "Buy Fresh Free-Range Deshi Chicken Online in BD | Sadhyer Bazar",
     seoDescription:
       "Order authentic rural free-range Deshi Chicken (দেশি মুরগি) online. Custom curry cuts, Halal processed, fresh home delivery.",
     searchKeywords: [
@@ -404,7 +404,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       "No Hormone or Synthetic Layer Feed",
       "Shock-Proof Safe Cushion Packaging",
     ],
-    seoTitle: "Original Deshi Chicken Eggs Price in Bangladesh | Sadyer Bazar",
+    seoTitle: "Original Deshi Chicken Eggs Price in Bangladesh | Sadhyer Bazar",
     seoDescription:
       "Buy 100% authentic village free-range Deshi Chicken Eggs (দেশি মুরগির ডিম) online with shock-proof home delivery.",
     searchKeywords: [
@@ -468,7 +468,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       "100% Unpolished Intact Bran Fiber",
       "Zero Wax Polishing or Chemical Bleaching",
     ],
-    seoTitle: "Premium Full Fiber Red Rice (লাল চাল) Online in BD | Sadyer Bazar",
+    seoTitle: "Premium Full Fiber Red Rice (লাল চাল) Online in BD | Sadhyer Bazar",
     seoDescription:
       "Shop unpolished Full-Fiber Red Rice (প্রিমিয়াম ফুল ফাইবার লাল চাল) rich in fiber and antioxidants. Nationwide delivery.",
     searchKeywords: [
@@ -552,7 +552,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       "Custom Cut & Vacuum Hygienic Pack",
       "Rich in Natural Omega-3 Oils",
     ],
-    seoTitle: "Jamuna River Big Ayer & Boal Fish Pre-Order BD | Sadyer Bazar",
+    seoTitle: "Jamuna River Big Ayer & Boal Fish Pre-Order BD | Sadhyer Bazar",
     seoDescription:
       "Pre-order wild Jamuna River Ayer and Boal fish (যমুনার তাজা বড় মাছ). Fresh dawn catch delivered on ice.",
     searchKeywords: [
@@ -616,9 +616,9 @@ export const INITIAL_PRODUCTS: Product[] = [
       "Zero Sugar Syrup Adulteration",
       "Rich in Natural Enzymes & Antioxidants",
     ],
-    seoTitle: "Buy Pure Sundarban Raw Honey Online in BD | Sadyer Bazar",
+    seoTitle: "Buy Pure Sundarban Raw Honey Online in BD | Sadhyer Bazar",
     seoDescription:
-      "Order 100% raw wild Sundarban Honey (খাঁটি প্রাকৃতিক মধু) in 500g and 1kg glass jars from Sadyer Bazar.",
+      "Order 100% raw wild Sundarban Honey (খাঁটি প্রাকৃতিক মধু) in 500g and 1kg glass jars from Sadhyer Bazar.",
     searchKeywords: [
       "honey",
       "modhu",
@@ -689,7 +689,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       "Zero Formalin or Cold-Storage Freezing",
       "High Protein & Heart-Healthy Omega-3",
     ],
-    seoTitle: "Buy Wild Jamuna River Chital & Rui Fish Online BD | Sadyer Bazar",
+    seoTitle: "Buy Wild Jamuna River Chital & Rui Fish Online BD | Sadhyer Bazar",
     seoDescription:
       "Pre-order authentic wild Jamuna River Chital and Deshi Rui fish (যমুনার তাজা চিতল ও রুই মাছ). Fresh dawn catch delivered in ice boxes.",
     searchKeywords: [
@@ -758,7 +758,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       "No Artificial Weight-Gel Injection",
       "Same-Day Thermal Box Dispatch",
     ],
-    seoTitle: "Buy Wild Jamuna River Galda Chingri & Baila Fish | Sadyer Bazar",
+    seoTitle: "Buy Wild Jamuna River Galda Chingri & Baila Fish | Sadhyer Bazar",
     seoDescription:
       "Pre-order fresh wild Jamuna River Galda Chingri and Baila fish (যমুনার তাজা গলদা চিংড়ি ও বেলে মাছ). Chemical-free nationwide delivery.",
     searchKeywords: [
@@ -829,7 +829,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       "Expertly Flame-Cleaned (লোম পরিষ্কার করা)",
       "Fresh Halal Slaughter on Dispatch Morning",
     ],
-    seoTitle: "Buy Fresh Village Deshi Duck Meat (দেশি হাঁসের মাংস) | Sadyer Bazar",
+    seoTitle: "Buy Fresh Village Deshi Duck Meat (দেশি হাঁসের মাংস) | Sadhyer Bazar",
     seoDescription:
       "Order authentic Chalan Beel free-range Deshi Duck meat (গ্রামের আসল দেশি হাঁসের মাংস) online. Cleaned with skin & curry-cut.",
     searchKeywords: [
@@ -893,7 +893,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       "100% Wetland Free-Foraging Ducks",
       "Shock-Proof Cushioned Box Delivery",
     ],
-    seoTitle: "Buy Chalan Beel Deshi Duck Eggs (দেশি হাঁসের ডিম) | Sadyer Bazar",
+    seoTitle: "Buy Chalan Beel Deshi Duck Eggs (দেশি হাঁসের ডিম) | Sadhyer Bazar",
     seoDescription:
       "Order fresh Chalan Beel free-range Deshi Duck Eggs (চলনবিলের দেশি হাঁসের ডিম) online with safe shock-proof delivery.",
     searchKeywords: [
@@ -956,7 +956,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       "Naturally Fragrant & Slender Grains",
       "100% Free from Chemical Wax & Artificial Aroma",
     ],
-    seoTitle: "Buy Original Dinajpur Kataribhog Rice Online in BD | Sadyer Bazar",
+    seoTitle: "Buy Original Dinajpur Kataribhog Rice Online in BD | Sadhyer Bazar",
     seoDescription:
       "Order authentic Dinajpur Aromatic Kataribhog Rice (দিনাজপুরের সুগন্ধি কাটারিভোগ চাল). Zero wax polish, nationwide home delivery.",
     searchKeywords: [
@@ -1030,9 +1030,9 @@ export const INITIAL_PRODUCTS: Product[] = [
       "2x Grain Elongation Without Breaking",
       "Fluffy, Non-Sticky & Easy to Digest",
     ],
-    seoTitle: "Premium Extra-Long Grain Basmati Rice Price in BD | Sadyer Bazar",
+    seoTitle: "Premium Extra-Long Grain Basmati Rice Price in BD | Sadhyer Bazar",
     seoDescription:
-      "Shop 12-month aged Royal Extra-Long Grain Basmati Rice (প্রিমিয়াম বাসমতি চাল) for Kacchi Biryani and Shahi Polao at Sadyer Bazar.",
+      "Shop 12-month aged Royal Extra-Long Grain Basmati Rice (প্রিমিয়াম বাসমতি চাল) for Kacchi Biryani and Shahi Polao at Sadhyer Bazar.",
     searchKeywords: [
       "basmati rice",
       "bashmoti chal",
@@ -1092,11 +1092,11 @@ export const INITIAL_PRODUCTS: Product[] = [
     nutritionHighlights: [
       "100% Stone-Free & Unbleached",
       "Intense Natural Polao & Payesh Aroma",
-      "Pairs Perfectly with Sadyer Bazar Gawa Ghee",
+      "Pairs Perfectly with Sadhyer Bazar Gawa Ghee",
     ],
-    seoTitle: "Buy Pure Aromatic Chinigura Polao Rice Online BD | Sadyer Bazar",
+    seoTitle: "Buy Pure Aromatic Chinigura Polao Rice Online BD | Sadhyer Bazar",
     seoDescription:
-      "Order stone-free, naturally fragrant Bogura Chinigura Polao Rice (খাঁটি সুগন্ধি চিনিগুড়া পোলাও চাল) from Sadyer Bazar.",
+      "Order stone-free, naturally fragrant Bogura Chinigura Polao Rice (খাঁটি সুগন্ধি চিনিগুড়া পোলাও চাল) from Sadhyer Bazar.",
     searchKeywords: [
       "chinigura rice",
       "polao chal",
@@ -1160,7 +1160,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       "Traditional Earthen Clay Pot (মাটির সরা)",
       "Zero Artificial Cream, Starch or Preservatives",
     ],
-    seoTitle: "Buy Authentic Bogura Shahi Khirsha Online in BD | Sadyer Bazar",
+    seoTitle: "Buy Authentic Bogura Shahi Khirsha Online in BD | Sadhyer Bazar",
     seoDescription:
       "Pre-order authentic Bogura Special Clay-Pot Shahi Khirsha (বগুড়ার স্পেশাল শাহী ক্ষীরসা) made from 100% pure reduced cow milk.",
     searchKeywords: [
@@ -1223,7 +1223,7 @@ export const INITIAL_ORDERS: Order[] = [
     orderStatus: "shipped",
     hasPreorderItems: true,
     transactionId: "BKS982341KL",
-    courierName: "Sadyer Bazar Chilled Rider (Dhaka Express)",
+    courierName: "Sadhyer Bazar Chilled Rider (Dhaka Express)",
     trackingReference: "SBR-DHK-4091",
     riderName: "Md. Rafiqul Islam",
     riderPhone: "01713477780",
@@ -1274,7 +1274,7 @@ export const INITIAL_ORDERS: Order[] = [
     subtotal: 1900,
     deliveryCharge: 130,
     discountAmount: 100,
-    couponCode: "SADYER100",
+    couponCode: "SADHYER100",
     weightAdjustmentAmount: 85,
     weightAdjustmentNote:
       "Deshi Chicken weighed 1,020g net on digital scale (+120g above 900g estimate)",
@@ -1442,6 +1442,16 @@ export const INITIAL_TRANSACTIONS: PaymentTransaction[] = [
 ];
 
 export const INITIAL_COUPONS: Coupon[] = [
+  {
+    id: "coup-sadhyer100",
+    code: "SADHYER100",
+    title: "৳100 Welcome Discount (Min Order ৳1,200)",
+    discountType: "flat",
+    discountValue: 100,
+    minOrderAmount: 1200,
+    isActive: true,
+    usageCount: 34,
+  },
   {
     id: "coup-sadyer100",
     code: "SADYER100",

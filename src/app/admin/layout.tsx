@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Admin Portal | Sadyer Bazar",
+  title: "Admin Portal | Sadhyer Bazar",
   robots: {
     index: false,
     follow: false,

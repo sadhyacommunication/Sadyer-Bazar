@@ -133,7 +133,7 @@ export default function TermsAndConditionsPage() {
                 ১. সাধারণ পরিচিতি ও শর্তাবলীর গ্রহণযোগ্যতা (Introduction & Acceptance)
               </h2>
               <p className="text-stone-700">
-                সাধ্যের বাজার (<strong>Sadyer Bazar</strong>) বাংলাদেশের একটি নিবন্ধিত অনলাইন কৃষিপণ্য ও
+                সাধ্যের বাজার (<strong>Sadhyer Bazar</strong>) বাংলাদেশের একটি নিবন্ধিত অনলাইন কৃষিপণ্য ও
                 তাজা খাদ্য বিপণন প্ল্যাটফর্ম। এই ওয়েবসাইট (
                 <Link
                   href="/"
@@ -378,7 +378,7 @@ export default function TermsAndConditionsPage() {
               <div className="p-5 rounded-2xl bg-stone-50 border border-stone-200 space-y-2 text-xs">
                 <div className="flex items-center space-x-2 text-stone-900 font-bold text-sm">
                   <Building2 className="w-4 h-4 text-[#0F3D2E]" />
-                  <span>সাধ্যের বাজার (Sadyer Bazar) — লিগ্যাল ও কমপ্লায়েন্স বিভাগ</span>
+                  <span>সাধ্যের বাজার (Sadhyer Bazar) — লিগ্যাল ও কমপ্লায়েন্স বিভাগ</span>
                 </div>
                 <p className="text-stone-600">
                   <strong>সেন্ট্রাল অফিস:</strong> তেজগাঁও শিল্প এলাকা, ঢাকা-১২০৮, বাংলাদেশ।

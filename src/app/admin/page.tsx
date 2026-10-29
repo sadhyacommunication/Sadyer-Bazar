@@ -308,7 +308,7 @@ export default function AdminDashboardPage() {
   // Cold-Chain Courier & Rider Assignment Modal State (Step 4)
   const [logisticsOrder, setLogisticsOrder] = useState<Order | null>(null);
   const [courierName, setCourierName] = useState(
-    "Sadyer Bazar Chilled Rider (Dhaka Express)"
+    "Sadhyer Bazar Chilled Rider (Dhaka Express)"
   );
   const [trackingRef, setTrackingRef] = useState("");
   const [riderName, setRiderName] = useState("");
@@ -500,7 +500,7 @@ export default function AdminDashboardPage() {
       o.courierName || "",
       o.trackingReference || "",
     ]);
-    downloadCsv(`sadyer-bazar-orders-${new Date().toISOString().slice(0, 10)}.csv`, [
+    downloadCsv(`sadhyer-bazar-orders-${new Date().toISOString().slice(0, 10)}.csv`, [
       headers,
       ...rows,
     ]);
@@ -524,7 +524,7 @@ export default function AdminDashboardPage() {
       String(item.orderCount),
     ]);
     downloadCsv(
-      `sadyer-bazar-procurement-${new Date().toISOString().slice(0, 10)}.csv`,
+      `sadhyer-bazar-procurement-${new Date().toISOString().slice(0, 10)}.csv`,
       [headers, ...rows]
     );
   };
@@ -637,7 +637,7 @@ export default function AdminDashboardPage() {
       slug: autoSlug || `cat-${Date.now().toString().slice(-4)}`,
       description:
         catDescription.trim() ||
-        `${catName.trim()} (${catNameBn.trim()}) available at Sadyer Bazar.`,
+        `${catName.trim()} (${catNameBn.trim()}) available at Sadhyer Bazar.`,
       imageUrl: catImageUrl.trim() || PRESET_CATEGORY_IMAGES[0].value,
       badgeText: catBadgeText.trim() || undefined,
       sortOrder: Number(catSortOrder) || 1,
@@ -711,7 +711,7 @@ export default function AdminDashboardPage() {
         : `${slug}-${Date.now().toString().slice(-3)}`,
       shortDescription:
         prodShortDesc ||
-        `100% pure & chemical-free ${prodTitle} (${prodTitleBn}) from Sadyer Bazar.`,
+        `100% pure & chemical-free ${prodTitle} (${prodTitleBn}) from Sadhyer Bazar.`,
       description:
         prodShortDesc ||
         `Authentic ${prodTitle} (${prodTitleBn}) sourced directly from rural producers and dispatched fresh across Bangladesh.`,
@@ -733,7 +733,7 @@ export default function AdminDashboardPage() {
         "Direct Source Harvest",
         "Insulated Nationwide Home Delivery",
       ],
-      seoTitle: `${prodTitle} (${prodTitleBn}) | Sadyer Bazar`,
+      seoTitle: `${prodTitle} (${prodTitleBn}) | Sadhyer Bazar`,
       seoDescription: prodShortDesc,
       searchKeywords: [
         prodTitle.toLowerCase(),
@@ -841,7 +841,7 @@ export default function AdminDashboardPage() {
               <Lock className="w-7 h-7" />
             </div>
             <h1 className="text-2xl font-extrabold text-stone-900">
-              Sadyer Bazar Admin Security Gate
+              Sadhyer Bazar Admin Security Gate
             </h1>
             <p className="text-xs text-stone-500">
               Supabase Auth + <code className="font-mono">public.admins</code>{" "}
@@ -990,7 +990,7 @@ export default function AdminDashboardPage() {
               </div>
               <div>
                 <span className="text-base font-extrabold text-white block leading-none">
-                  Sadyer Bazar
+                  Sadhyer Bazar
                 </span>
                 <span className="text-[11px] text-emerald-300 font-medium truncate max-w-[140px] block">
                   {loggedInEmail || "Admin Session"}
@@ -1534,7 +1534,7 @@ export default function AdminDashboardPage() {
                           </span>
                           <a
                             href={`https://wa.me/88${ord.customerPhone.replace(/\D/g, "")}?text=${encodeURIComponent(
-                              `আসসালামু আলাইকুম ${ord.customerName}, সাধ্যের বাজার (Sadyer Bazar) থেকে আপনার অর্ডার ${ord.orderCode} কনফার্ম করার জন্য যোগাযোগ করছি।`
+                              `আসসালামু আলাইকুম ${ord.customerName}, সাধ্যের বাজার (Sadhyer Bazar) থেকে আপনার অর্ডার ${ord.orderCode} কনফার্ম করার জন্য যোগাযোগ করছি।`
                             )}`}
                             target="_blank"
                             rel="noreferrer"
@@ -1634,7 +1634,7 @@ export default function AdminDashboardPage() {
                           setCourierName(
                             ord.courierName ||
                               (ord.deliveryZone === "inside_dhaka"
-                                ? "Sadyer Bazar Chilled Rider (Dhaka Express)"
+                                ? "Sadhyer Bazar Chilled Rider (Dhaka Express)"
                                 : "Steadfast Cold-Chain Express")
                           );
                           setTrackingRef(
@@ -3336,8 +3336,8 @@ export default function AdminDashboardPage() {
                   onChange={(e) => setCourierName(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 font-bold"
                 >
-                  <option value="Sadyer Bazar Chilled Rider (Dhaka Express)">
-                    Sadyer Bazar Chilled Rider (Dhaka Express)
+                  <option value="Sadhyer Bazar Chilled Rider (Dhaka Express)">
+                    Sadhyer Bazar Chilled Rider (Dhaka Express)
                   </option>
                   <option value="Steadfast Cold-Chain Express">
                     Steadfast Cold-Chain Express
@@ -4103,7 +4103,7 @@ export default function AdminDashboardPage() {
             <div className="flex items-center justify-between border-b border-stone-200 pb-4">
               <div>
                 <h3 className="text-lg font-black text-[#0F3D2E]">
-                  Sadyer Bazar (সাধ্যের বাজার) — Delivery Label
+                  Sadhyer Bazar (সাধ্যের বাজার) — Delivery Label
                 </h3>
                 <p className="text-xs text-stone-500">
                   Hotline: {settings.supportPhone}

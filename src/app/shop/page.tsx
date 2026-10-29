@@ -202,7 +202,7 @@ export default function ShopPage() {
     <Suspense
       fallback={
         <div className="max-w-7xl mx-auto px-4 py-16 text-center text-sm text-stone-500">
-          Loading Sadyer Bazar Catalog...
+          Loading Sadhyer Bazar Catalog...
         </div>
       }
     >

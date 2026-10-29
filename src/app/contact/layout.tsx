@@ -7,18 +7,18 @@ export const metadata: Metadata = {
   keywords: [
     "সাধ্যের বাজার ফোন নম্বর",
     "সাধ্যের বাজার কাস্টমার কেয়ার",
-    "Sadyer Bazar contact hotline",
-    "Sadyer Bazar customer support",
+    "Sadhyer Bazar contact hotline",
+    "Sadhyer Bazar customer support",
   ],
   alternates: {
     canonical: "https://sadhyerbazar.com/contact",
   },
   openGraph: {
-    title: "যোগাযোগ ও হেল্পডেস্ক | সাধ্যের বাজার (Sadyer Bazar)",
+    title: "যোগাযোগ ও হেল্পডেস্ক | সাধ্যের বাজার (Sadhyer Bazar)",
     description:
       "আপনার যেকোনো প্রশ্ন, বাল্ক অর্ডার কিংবা মাছের কাটিং পছন্দের জন্য সরাসরি যোগাযোগ করুন।",
     url: "https://sadhyerbazar.com/contact",
-    siteName: "Sadyer Bazar (সাধ্যের বাজার)",
+    siteName: "Sadhyer Bazar (সাধ্যের বাজার)",
   },
 };
 

@@ -120,7 +120,7 @@ export default function FamilyComboBuilder() {
                 Active Promo Codes at Checkout:
               </span>
               <span className="font-mono font-bold text-white">
-                SADYER100 • JAMUNA10 • FAMILYBOX8
+                SADHYER100 • JAMUNA10 • FAMILYBOX8
               </span>
             </div>
           </div>

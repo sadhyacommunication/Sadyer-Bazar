@@ -23,13 +23,13 @@ export const metadata: Metadata = {
     description:
       "১০০% কেমিক্যাল ও ফরমালিনমুক্ত যমুনার মাছ, খাঁটি ঘি, বগুড়ার দই ও আদি শস্যের অনলাইন ক্যাটালগ।",
     url: "https://sadhyerbazar.com/shop",
-    siteName: "Sadyer Bazar (সাধ্যের বাজার)",
+    siteName: "Sadhyer Bazar (সাধ্যের বাজার)",
     images: [
       {
         url: "/images/banners/jamuna-fisherman-banner.jpg",
         width: 1200,
         height: 675,
-        alt: "Sadyer Bazar Organic Food Catalog",
+        alt: "Sadhyer Bazar Organic Food Catalog",
       },
     ],
   },

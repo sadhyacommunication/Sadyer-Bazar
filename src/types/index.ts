@@ -103,7 +103,7 @@ export interface Product {
 
 export interface Coupon {
   id: string;
-  code: string; // e.g. "SADYER100", "JAMUNA10"
+  code: string; // e.g. "SADHYER100", "JAMUNA10"
   title: string;
   discountType: "flat" | "percentage";
   discountValue: number;

@@ -190,7 +190,7 @@ export default function HeroSlider() {
         })}
       </div>
 
-      {/* Top Floating Badges: Live Sadyer Bazar Guarantee & Slide Counter */}
+      {/* Top Floating Badges: Live Sadhyer Bazar Guarantee & Slide Counter */}
       <div className="absolute top-4 inset-x-4 sm:inset-x-6 flex items-center justify-between pointer-events-none z-20">
         <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-stone-950/65 backdrop-blur-md text-emerald-300 text-xs font-semibold border border-white/10 shadow-xs">
           <Sparkles className="w-3.5 h-3.5 text-amber-400" />

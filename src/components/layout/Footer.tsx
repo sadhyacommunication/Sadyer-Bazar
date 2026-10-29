@@ -109,7 +109,7 @@ export default function Footer() {
               </div>
               <div>
                 <span className="text-xl font-extrabold text-white">
-                  Sadyer Bazar
+                  Sadhyer Bazar
                 </span>
                 <p className="text-xs text-emerald-300">
                   সাধ্যের বাজার — খাঁটি অর্গানিক পণ্য
@@ -451,7 +451,7 @@ export default function Footer() {
         <div className="border-t border-emerald-900/90 bg-emerald-950/70 py-5 px-4 pb-28 sm:pb-5 text-center text-xs text-emerald-300/70">
           <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-3 px-4">
             <span className="text-center lg:text-left lg:pl-48">
-              © {new Date().getFullYear()} Sadyer Bazar (সাধ্যের বাজার). All rights reserved.
+              © {new Date().getFullYear()} Sadhyer Bazar (সাধ্যের বাজার). All rights reserved.
             </span>
             <div className="text-xs text-emerald-300/90">
               developed by{" "}
@@ -507,7 +507,7 @@ export default function Footer() {
       {/* Floating WhatsApp & Direct Call Quick Pill */}
       <a
         href={`https://wa.me/${settings.whatsappNumber}?text=${encodeURIComponent(
-          "Hello Sadyer Bazar! I would like to pre-order fresh products."
+          "Hello Sadhyer Bazar! I would like to pre-order fresh products."
         )}`}
         target="_blank"
         rel="noopener noreferrer"
@@ -516,7 +516,7 @@ export default function Footer() {
             ? "bottom-20 sm:bottom-4"
             : "bottom-4"
         }`}
-        title="Chat with Sadyer Bazar on WhatsApp"
+        title="Chat with Sadhyer Bazar on WhatsApp"
       >
         <MessageCircle className="w-4 h-4 fill-current shrink-0" />
         <span className="tabular-nums">{settings.supportPhone}</span>

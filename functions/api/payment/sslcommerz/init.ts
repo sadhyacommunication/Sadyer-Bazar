@@ -212,7 +212,7 @@ export async function onRequestPost(context: {
     params.set("ship_country", "Bangladesh");
     params.set("ship_postcode", "1200");
 
-    params.set("product_name", `Sadyer Bazar Order ${order.order_code}`);
+    params.set("product_name", `Sadhyer Bazar Order ${order.order_code}`);
     params.set("product_category", "Organic Food & Groceries");
     params.set("product_profile", "physical-goods");
 

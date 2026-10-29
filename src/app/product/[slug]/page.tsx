@@ -22,7 +22,7 @@ export async function generateMetadata({
 
   if (!product) {
     return {
-      title: "Product Not Found | Sadyer Bazar",
+      title: "Product Not Found | Sadhyer Bazar",
     };
   }
 
@@ -49,7 +49,7 @@ export async function generateMetadata({
       product.categoryName,
       ...product.searchKeywords,
       "সাধ্যের বাজার",
-      "Sadyer Bazar",
+      "Sadhyer Bazar",
       "Bangladesh organic food",
       "Home delivery Dhaka",
     ],
@@ -60,7 +60,7 @@ export async function generateMetadata({
       title,
       description,
       url: `${baseUrl}/product/${product.slug}`,
-      siteName: "Sadyer Bazar (সাধ্যের বাজার)",
+      siteName: "Sadhyer Bazar (সাধ্যের বাজার)",
       locale: "en_BD",
       type: "website",
       images: ogImages,
@@ -99,7 +99,7 @@ export default async function ProductDetailPage({
         category: product.categoryName,
         brand: {
           "@type": "Brand",
-          name: "সাধ্যের বাজার (Sadyer Bazar)",
+          name: "সাধ্যের বাজার (Sadhyer Bazar)",
         },
         offers: {
           "@type": "Offer",
@@ -117,7 +117,7 @@ export default async function ProductDetailPage({
               : "https://schema.org/OutOfStock",
           seller: {
             "@type": "Organization",
-            name: "Sadyer Bazar (সাধ্যের বাজার)",
+            name: "Sadhyer Bazar (সাধ্যের বাজার)",
           },
         },
         aggregateRating: {

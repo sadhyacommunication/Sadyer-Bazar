@@ -85,7 +85,7 @@ const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512
     <circle cx="365" cy="140" r="30" fill="url(#crimsonGrad)" />
     <circle cx="355" cy="132" r="8" fill="#FFFFFF" opacity="0.65" />
 
-    <!-- 4. Monogram "SB" (Sadyer Bazar) in Authentic Clean Typography at Lower Center -->
+    <!-- 4. Monogram "SB" (Sadhyer Bazar) in Authentic Clean Typography at Lower Center -->
     <g transform="translate(256, 400)">
       <!-- Background Plinth for readability -->
       <rect x="-96" y="-38" width="192" height="42" rx="21" fill="#072219" opacity="0.85" stroke="url(#goldGrad)" stroke-width="2" />
@@ -145,7 +145,7 @@ function buildIcoBuffer(pngBuffers) {
 }
 
 async function generateFavicons() {
-  console.log("🎨 Generating Sadyer Bazar Brand Favicons & Icons...");
+  console.log("🎨 Generating Sadhyer Bazar Brand Favicons & Icons...");
 
   const svgBuffer = Buffer.from(svgContent, "utf-8");
 
@@ -184,8 +184,8 @@ async function generateFavicons() {
 
   // 4. Web App Manifest (site.webmanifest)
   const manifest = {
-    name: "Sadyer Bazar (সাধ্যের বাজার)",
-    short_name: "Sadyer Bazar",
+    name: "Sadhyer Bazar (সাধ্যের বাজার)",
+    short_name: "Sadhyer Bazar",
     description: "Pure Organic Food, Fresh Jamuna River Fish & Nationwide Pre-Order Platform",
     start_url: "/",
     display: "standalone",

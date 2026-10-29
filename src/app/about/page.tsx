@@ -190,7 +190,7 @@ export default function AboutPage() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 mt-12 space-y-16 sm:space-y-24">
-        {/* Origin Story: How Sadyer Bazar was born */}
+        {/* Origin Story: How Sadhyer Bazar was born */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
           <div className="lg:col-span-6 space-y-4">
             <span className="text-xs font-bold uppercase tracking-wider text-[#C83E2B]">
@@ -464,7 +464,7 @@ export default function AboutPage() {
                 রেজিস্টার্ড ট্রেড নাম
               </span>
               <strong className="text-stone-900 text-sm block mt-0.5">
-                সাধ্যের বাজার (Sadyer Bazar)
+                সাধ্যের বাজার (Sadhyer Bazar)
               </strong>
               <span className="text-stone-500 block text-[11px] mt-1">
                 E-Commerce & Organic Agro Sourcing

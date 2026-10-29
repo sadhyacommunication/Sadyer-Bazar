@@ -460,7 +460,7 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
           <div className="text-center max-w-2xl mx-auto space-y-3">
             <span className="px-3.5 py-1 rounded-full bg-amber-400/20 text-amber-300 text-xs font-bold uppercase tracking-wider">
-              Why 10,000+ Families Trust Sadyer Bazar
+              Why 10,000+ Families Trust Sadhyer Bazar
             </span>
             <h2 className="text-2xl sm:text-4xl font-extrabold">
               From Jamuna River & Village Homesteads Straight to Your Kitchen

@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     description:
       "যমুনা নদী থেকে ভোরের বুনো শিকার সরাসরি আপনার রান্নাঘরে। ফরমালিনমুক্ত ও নিজস্ব কোল্ড-চেইনে ডেলিভারি।",
     url: "https://sadhyerbazar.com/pre-orders",
-    siteName: "Sadyer Bazar (সাধ্যের বাজার)",
+    siteName: "Sadhyer Bazar (সাধ্যের বাজার)",
     images: [
       {
         url: "/images/products/jamuna-big-fish.jpg",

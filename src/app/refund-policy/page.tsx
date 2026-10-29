@@ -133,7 +133,7 @@ export default function RefundPolicyPage() {
                 ১. আমাদের ১০০% সন্তুষ্টি প্রতিশ্রুতি (Our Quality & Freshness Guarantee)
               </h2>
               <p className="text-stone-700">
-                সাধ্যের বাজার (<strong>Sadyer Bazar</strong>) গ্রাহকদের খাবার টেবিলে ১০০% খাঁটি, ফরমালিনমুক্ত
+                সাধ্যের বাজার (<strong>Sadhyer Bazar</strong>) গ্রাহকদের খাবার টেবিলে ১০০% খাঁটি, ফরমালিনমুক্ত
                 ও প্রাকৃতিক খাদ্যপণ্য পৌঁছে দিতে প্রতিজ্ঞাবদ্ধ। পচনশীল জৈব খাদ্যপণ্য (যেমন: যমুনা নদীর দেশি মাছ,
                 বগুড়ার তাজা দই, সনাতন গাওয়া ঘি, দেশি হাঁস-মুরগি) সরবরাহের ক্ষেত্রে কোনো ত্রুটি হলে
                 গ্রাহককে ভোগান্তিতে না ফেলে দ্রুত সমাধান করাই আমাদের বাণিজ্যিক নীতি।
@@ -405,7 +405,7 @@ export default function RefundPolicyPage() {
               <div className="p-5 rounded-2xl bg-stone-50 border border-stone-200 space-y-2 text-xs">
                 <div className="flex items-center space-x-2 text-stone-900 font-bold text-sm">
                   <Building2 className="w-4 h-4 text-[#0F3D2E]" />
-                  <span>সাধ্যের বাজার (Sadyer Bazar) — কাস্টমার রিলেশনস ও রিফান্ড সেল</span>
+                  <span>সাধ্যের বাজার (Sadhyer Bazar) — কাস্টমার রিলেশনস ও রিফান্ড সেল</span>
                 </div>
                 <p className="text-stone-600">
                   <strong>সেন্ট্রাল অফিস:</strong> তেজগাঁও শিল্প এলাকা, ঢাকা-১২০৮, বাংলাদেশ।

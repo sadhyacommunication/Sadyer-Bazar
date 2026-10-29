@@ -1,5 +1,5 @@
 # =============================================================================
-# Sadyer Bazar (সাধ্যের বাজার) — Cloudflare Workers + Static Assets Configuration
+# Sadhyer Bazar (সাধ্যের বাজার) — Cloudflare Workers + Static Assets Configuration
 #
 # Build command  : npm run build
 # Deploy command : npx wrangler deploy

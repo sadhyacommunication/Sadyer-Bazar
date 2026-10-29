@@ -128,7 +128,7 @@ export default function ProductDetailClient({
     const cleanLast4 = revPhoneLast4.replace(/\D/g, "").slice(-4);
     if (!/^SB-\d{4}-[A-Z0-9]{5,10}$/.test(cleanCode)) {
       setRevError(
-        "Please enter a valid Sadyer Bazar Order ID (e.g., SB-2610-XXXXXXXXXX) to verify your purchase."
+        "Please enter a valid Sadhyer Bazar Order ID (e.g., SB-2610-XXXXXXXXXX) to verify your purchase."
       );
       return;
     }
@@ -206,7 +206,7 @@ export default function ProductDetailClient({
     description: product.seoDescription || product.shortDescription,
     brand: {
       "@type": "Brand",
-      name: "Sadyer Bazar (সাধ্যের বাজার)",
+      name: "Sadhyer Bazar (সাধ্যের বাজার)",
     },
     offers: {
       "@type": "Offer",

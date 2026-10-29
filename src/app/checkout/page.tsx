@@ -912,7 +912,7 @@ export default function CheckoutPage() {
                 type="text"
                 value={couponInput}
                 onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-                placeholder="e.g. SADYER100 or FAMILYBOX8"
+                placeholder="e.g. SADHYER100 or FAMILYBOX8"
                 className="flex-1 px-3.5 py-2 rounded-xl bg-white border border-stone-200 text-xs font-mono uppercase focus:outline-none focus:border-[#0F3D2E]"
               />
               <button

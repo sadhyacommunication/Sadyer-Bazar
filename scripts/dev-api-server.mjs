@@ -162,6 +162,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, "127.0.0.1", () => {
   console.log(
-    `⚡ [Sadyer Bazar Edge API] Listening on http://127.0.0.1:${PORT} (loaded .env / .env.local / .dev.vars)`
+    `⚡ [Sadhyer Bazar Edge API] Listening on http://127.0.0.1:${PORT} (loaded .env / .env.local / .dev.vars)`
   );
 });
