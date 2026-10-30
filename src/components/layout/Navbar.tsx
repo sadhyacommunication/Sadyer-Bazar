@@ -120,8 +120,8 @@ export default function Navbar() {
                   Bazar
                 </span>
               </div>
-              <p className="text-[10px] sm:text-[11px] text-stone-500 font-medium tracking-wide leading-none">
-                Pure Jamuna Fish & Organic Food
+              <p className="text-[9px] xs:text-[10px] sm:text-[11px] text-stone-500 font-medium tracking-tight sm:tracking-wide leading-none">
+                Village Freshness in the City, at Your Home
               </p>
             </div>
           </Link>

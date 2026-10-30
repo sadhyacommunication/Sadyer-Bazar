@@ -1,4 +1,4 @@
-# Sadhyer Bazar (সাধ্যের বাজার) — Organic Food & Nationwide Pre-Order Platform
+# Sadhyer Bazar (সাধ্যের বাজার) — গ্রামের পণ্য শহরে, আপনার ঘরে (Village Freshness in the City, at Your Home)
 
 An enterprise-grade, ultra-clean e-commerce and nationwide pre-order management platform built for **Sadhyer Bazar (সাধ্যের বাজার)** using **Next.js (App Router), TypeScript, Tailwind CSS, and Supabase**, architected for **Cloudflare Pages** deployment.
 

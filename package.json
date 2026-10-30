@@ -2,7 +2,7 @@
   "name": "sadyer-bazar",
   "version": "1.0.0",
   "private": true,
-  "description": "Sadhyer Bazar (সাধ্যের বাজার) — Pure Organic Food, Fresh Jamuna River Fish & Nationwide Pre-Order Platform",
+  "description": "Sadhyer Bazar (সাধ্যের বাজার) — গ্রামের পণ্য শহরে, আপনার ঘরে (Village Freshness in the City, at Your Home)",
   "scripts": {
     "dev": "node scripts/dev-runner.mjs",
     "dev:next": "next dev",

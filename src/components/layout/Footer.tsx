@@ -112,7 +112,7 @@ export default function Footer() {
                   Sadhyer Bazar
                 </span>
                 <p className="text-xs text-emerald-300">
-                  সাধ্যের বাজার — খাঁটি অর্গানিক পণ্য
+                  গ্রামের পণ্য শহরে, আপনার ঘরে
                 </p>
               </div>
             </div>

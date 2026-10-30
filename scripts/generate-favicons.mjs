@@ -186,7 +186,7 @@ async function generateFavicons() {
   const manifest = {
     name: "Sadhyer Bazar (সাধ্যের বাজার)",
     short_name: "Sadhyer Bazar",
-    description: "Pure Organic Food, Fresh Jamuna River Fish & Nationwide Pre-Order Platform",
+    description: "গ্রামের পণ্য শহরে, আপনার ঘরে — Village Freshness in the City, at Your Home",
     start_url: "/",
     display: "standalone",
     background_color: "#FAF8F5",

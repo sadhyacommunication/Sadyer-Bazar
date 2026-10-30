@@ -59,7 +59,7 @@ export const metadata: Metadata = {
     locale: "en_BD",
     siteName: "Sadhyer Bazar (সাধ্যের বাজার)",
     title:
-      "Sadhyer Bazar (সাধ্যের বাজার) — Fresh Jamuna River Fish & Pure Organic Food",
+      "Sadhyer Bazar (সাধ্যের বাজার) — গ্রামের পণ্য শহরে, আপনার ঘরে",
     description:
       "Direct from Jamuna River fishermen & rural homesteads to your doorstep. Pre-order fresh river catch, Gawa Ghee, Bogura Doi & organic staples.",
     images: [
@@ -67,7 +67,7 @@ export const metadata: Metadata = {
         url: "/images/hero-banner-bn.jpg",
         width: 1200,
         height: 675,
-        alt: "Sadhyer Bazar (সাধ্যের বাজার) Fresh River Fish & Organic Food",
+        alt: "Sadhyer Bazar (সাধ্যের বাজার) — গ্রামের পণ্য শহরে, আপনার ঘরে",
       },
     ],
   },
@@ -77,7 +77,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title:
-      "Sadhyer Bazar (সাধ্যের বাজার) — Fresh Jamuna River Fish & Pure Organic Food",
+      "Sadhyer Bazar (সাধ্যের বাজার) — গ্রামের পণ্য শহরে, আপনার ঘরে",
     description:
       "Direct from Jamuna River fishermen & rural homesteads to your doorstep. Pre-order fresh river catch, Gawa Ghee, Bogura Doi & organic staples.",
     images: ["/images/hero-banner-bn.jpg"],
