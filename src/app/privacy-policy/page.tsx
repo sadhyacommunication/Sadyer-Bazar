@@ -370,7 +370,10 @@ export default function PrivacyPolicyPage() {
                   <strong>পদবি:</strong> Data Protection & Grievance Redressal Officer
                 </p>
                 <p className="text-stone-600">
-                  <strong>সেন্ট্রাল অফিস:</strong> তেজগাঁও শিল্প এলাকা, ঢাকা-১২০৮, বাংলাদেশ।
+                  <strong>ঢাকা প্রধান কার্যালয়:</strong> বাড়ি ৯০, রোড ২, ব্লক এ, নিকেতন, গুলশান, ঢাকা।
+                </p>
+                <p className="text-stone-600">
+                  <strong>গ্রামের ওয়্যারহাউজ/স্টোর:</strong> ধুনট সদর, ধুনট বাজার, বগুড়া।
                 </p>
                 <p className="text-stone-600">
                   <strong>হটলাইন:</strong>{" "}
@@ -381,12 +384,12 @@ export default function PrivacyPolicyPage() {
                 </p>
                 <p className="text-stone-600">
                   <strong>অফিসিয়াল ইমেইল:</strong>{" "}
-                  <a href="mailto:privacy@sadhya.com.bd" className="text-[#0F3D2E] font-bold hover:underline">
-                    privacy@sadhya.com.bd
+                  <a href="mailto:privacy@sadhyerbazar.com" className="text-[#0F3D2E] font-bold hover:underline">
+                    privacy@sadhyerbazar.com
                   </a>{" "}
                   /{" "}
-                  <a href="mailto:support@sadhya.com.bd" className="text-[#0F3D2E] hover:underline">
-                    support@sadhya.com.bd
+                  <a href="mailto:support@sadhyerbazar.com" className="text-[#0F3D2E] hover:underline">
+                    support@sadhyerbazar.com
                   </a>
                 </p>
               </div>

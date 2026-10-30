@@ -135,15 +135,15 @@ export default function RootLayout({
     paymentAccepted: "bKash, SSLCommerz, Nagad, Cash on Delivery",
     address: {
       "@type": "PostalAddress",
-      streetAddress: "Tejgaon Industrial Area",
-      addressLocality: "Dhaka",
-      postalCode: "1208",
+      streetAddress: "বাড়ি ৯০, রোড ২, ব্লক এ, নিকেতন, গুলশান",
+      addressLocality: "Gulshan, Dhaka",
+      postalCode: "1212",
       addressCountry: "BD",
     },
     geo: {
       "@type": "GeoCoordinates",
-      latitude: "23.7639",
-      longitude: "90.3889",
+      latitude: "23.7749",
+      longitude: "90.4079",
     },
     openingHoursSpecification: [
       {

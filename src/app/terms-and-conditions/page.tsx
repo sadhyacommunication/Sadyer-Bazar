@@ -381,7 +381,10 @@ export default function TermsAndConditionsPage() {
                   <span>সাধ্যের বাজার (Sadhyer Bazar) — লিগ্যাল ও কমপ্লায়েন্স বিভাগ</span>
                 </div>
                 <p className="text-stone-600">
-                  <strong>সেন্ট্রাল অফিস:</strong> তেজগাঁও শিল্প এলাকা, ঢাকা-১২০৮, বাংলাদেশ।
+                  <strong>ঢাকা প্রধান কার্যালয়:</strong> বাড়ি ৯০, রোড ২, ব্লক এ, নিকেতন, গুলশান, ঢাকা।
+                </p>
+                <p className="text-stone-600">
+                  <strong>গ্রামের ওয়্যারহাউজ/স্টোর:</strong> ধুনট সদর, ধুনট বাজার, বগুড়া।
                 </p>
                 <p className="text-stone-600">
                   <strong>হটলাইন:</strong>{" "}
@@ -392,8 +395,8 @@ export default function TermsAndConditionsPage() {
                 </p>
                 <p className="text-stone-600">
                   <strong>অফিসিয়াল ইমেইল:</strong>{" "}
-                  <a href="mailto:support@sadhya.com.bd" className="text-[#0F3D2E] font-bold hover:underline">
-                    support@sadhya.com.bd
+                  <a href="mailto:support@sadhyerbazar.com" className="text-[#0F3D2E] font-bold hover:underline">
+                    support@sadhyerbazar.com
                   </a>
                 </p>
               </div>

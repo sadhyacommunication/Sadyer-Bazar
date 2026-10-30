@@ -121,14 +121,22 @@ export default function Footer() {
               Ghee, authentic Bogura Shahi Doi, village Deshi chicken, eggs, and
               full-fiber red rice across Bangladesh.
             </p>
-            <div className="pt-1 space-y-1.5 text-xs text-emerald-200">
+            <div className="pt-1 space-y-2 text-xs text-emerald-200">
               <p className="flex items-center gap-2">
-                <PhoneCall className="w-4 h-4 text-amber-400" />
+                <PhoneCall className="w-4 h-4 text-amber-400 shrink-0" />
                 Hotline: <strong>{settings.supportPhone}</strong>
               </p>
-              <p className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-amber-400" />
-                Sourcing Hub: Sirajganj, Bogura & Dhaka Dispatch Center
+              <p className="flex items-start gap-2">
+                <MapPin className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <span>
+                  <strong className="text-white">ঢাকা প্রধান কার্যালয়:</strong> বাড়ি ৯০, রোড ২, ব্লক এ, নিকেতন, গুলশান
+                </span>
+              </p>
+              <p className="flex items-start gap-2">
+                <MapPin className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <span>
+                  <strong className="text-white">গ্রামের ওয়্যারহাউজ/স্টোর:</strong> ধুনট সদর, ধুনট বাজার, বগুড়া
+                </span>
               </p>
             </div>
           </div>

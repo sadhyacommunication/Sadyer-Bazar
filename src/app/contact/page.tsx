@@ -211,12 +211,12 @@ export default function ContactPage() {
             <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center mb-3">
               <MapPin className="w-5 h-5" />
             </div>
-            <h3 className="font-bold text-stone-900 text-sm">সোর্সিং ও কালেকশন হাব</h3>
+            <h3 className="font-bold text-stone-900 text-sm">গ্রামের ওয়্যারহাউজ ও স্টোর</h3>
             <p className="text-xs text-stone-600 mt-1.5 leading-snug">
-              <strong>যমুনা হাব:</strong> কাজীপুর ঘাট, সিরাজগঞ্জ
+              ধুনট সদর, ধুনট বাজার, বগুড়া
             </p>
-            <p className="text-xs text-stone-600 mt-1 leading-snug">
-              <strong>মিষ্টি ও ঘি হাব:</strong> শেরপুর রোড, বগুড়া
+            <p className="text-xs text-stone-500 mt-1 leading-snug">
+              সিরাজগঞ্জ ও বগুড়া সোর্সিং হাব
             </p>
             <div className="flex items-center space-x-1 text-[11px] text-amber-700 font-medium mt-2">
               <Fish className="w-3 h-3" />
@@ -229,17 +229,17 @@ export default function ContactPage() {
             <div className="w-11 h-11 rounded-xl bg-rose-50 text-[#C83E2B] flex items-center justify-center mb-3">
               <Truck className="w-5 h-5" />
             </div>
-            <h3 className="font-bold text-stone-900 text-sm">ঢাকা সেন্ট্রাল ডিসপ্যাচ</h3>
+            <h3 className="font-bold text-stone-900 text-sm">ঢাকা প্রধান কার্যালয়</h3>
             <p className="text-xs text-stone-600 mt-1.5 leading-snug">
-              তেজগাঁও শিল্প এলাকা, ঢাকা-১২০৮
+              বাড়ি ৯০, রোড ২, ব্লক এ, নিকেতন, গুলশান
             </p>
             <div className="flex items-center space-x-1 text-xs text-stone-500 mt-2">
               <Mail className="w-3.5 h-3.5 text-stone-400" />
               <a
-                href="mailto:support@sadhya.com.bd"
+                href="mailto:support@sadhyerbazar.com"
                 className="hover:text-[#C83E2B] transition"
               >
-                support@sadhya.com.bd
+                support@sadhyerbazar.com
               </a>
             </div>
             <div className="flex items-center space-x-1 text-[11px] text-stone-400 mt-1">

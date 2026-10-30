@@ -473,25 +473,25 @@ export default function AboutPage() {
 
             <div className="p-4 rounded-xl bg-stone-50 border border-stone-200/80">
               <span className="text-stone-400 uppercase font-bold block text-[10px]">
-                সেন্ট্রাল ডিসপ্যাচ ও প্রধান অফিস
+                ঢাকা প্রধান কার্যালয়
               </span>
               <strong className="text-stone-900 text-sm block mt-0.5">
-                তেজগাঁও শিল্প এলাকা, ঢাকা-১২০৮
+                বাড়ি ৯০, রোড ২, ব্লক এ, নিকেতন, গুলশান
               </strong>
               <span className="text-stone-500 block text-[11px] mt-1">
-                কোল্ড স্টোরেজ ও প্যাকেজিং হাব
+                কোল্ড-চেইন ডিসপ্যাচ ও কর্পোরেট অফিস
               </span>
             </div>
 
             <div className="p-4 rounded-xl bg-stone-50 border border-stone-200/80">
               <span className="text-stone-400 uppercase font-bold block text-[10px]">
-                নদী ও খামার কালেকশন পয়েন্ট
+                গ্রামের ওয়্যারহাউজ ও স্টোর
               </span>
               <strong className="text-stone-900 text-sm block mt-0.5">
-                কাজীপুর ঘাট (সিরাজগঞ্জ) ও শেরপুর (বগুড়া)
+                ধুনট সদর, ধুনট বাজার, বগুড়া
               </strong>
               <span className="text-stone-500 block text-[11px] mt-1">
-                সরাসরি নদী ও দুগ্ধ খামার হাব
+                সরাসরি নদী ও প্রান্তিক খামার সোর্সিং হাব
               </span>
             </div>
 
@@ -515,10 +515,10 @@ export default function AboutPage() {
                 অফিসিয়াল ইমেইল
               </span>
               <a
-                href="mailto:support@sadhya.com.bd"
+                href="mailto:support@sadhyerbazar.com"
                 className="text-[#0F3D2E] text-sm font-bold block mt-0.5 hover:underline"
               >
-                support@sadhya.com.bd
+                support@sadhyerbazar.com
               </a>
               <span className="text-stone-500 block text-[11px] mt-1">
                 কর্পোরেট ও সাধারণ জিজ্ঞাসা
