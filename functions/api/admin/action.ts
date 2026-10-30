@@ -11,10 +11,34 @@
  */
 import { z } from "zod";
 import { requireAdmin } from "../../_lib/adminAuth";
-import { loadConfig } from "../../_lib/env";
+import { Config, loadConfig } from "../../_lib/env";
 import { HttpError, json, readJsonBody } from "../../_lib/http";
 import { rpc } from "../../_lib/supabase";
 import type { PagesContext } from "../../_lib/types";
+import {
+  heroSettingsInputSchema,
+  heroSlideInputSchema,
+} from "../../../src/lib/hero/schema";
+
+async function cleanupStorageUrl(cfg: Config, publicUrl: string): Promise<void> {
+  try {
+    const bucketMarker = "/storage/v1/object/public/site-media/";
+    const idx = publicUrl.indexOf(bucketMarker);
+    if (idx === -1) return;
+    const objectPath = publicUrl.slice(idx + bucketMarker.length);
+    if (!objectPath || objectPath.includes("..")) return;
+
+    await fetch(`${cfg.supabaseUrl}/storage/v1/object/site-media/${objectPath}`, {
+      method: "DELETE",
+      headers: {
+        apikey: cfg.serviceRoleKey,
+        Authorization: `Bearer ${cfg.serviceRoleKey}`,
+      },
+    });
+  } catch (err) {
+    console.error("[storage cleanup] error deleting orphaned image:", err);
+  }
+}
 
 const actionSchema = z.discriminatedUnion("action", [
   z.object({
@@ -53,6 +77,31 @@ const actionSchema = z.discriminatedUnion("action", [
     attemptId: z.string().uuid(),
     resolution: z.enum(["refunded", "dismissed"]),
     note: z.string().trim().max(200).optional().default(""),
+  }),
+  z.object({
+    action: z.literal("hero_save_slide"),
+    slide: heroSlideInputSchema,
+  }),
+  z.object({
+    action: z.literal("hero_delete_slide"),
+    id: z.string().uuid(),
+  }),
+  z.object({
+    action: z.literal("hero_reorder"),
+    ids: z.array(z.string().uuid()).min(1).max(20),
+  }),
+  z.object({
+    action: z.literal("hero_set_active"),
+    id: z.string().uuid(),
+    isActive: z.boolean(),
+  }),
+  z.object({
+    action: z.literal("hero_save_settings"),
+    settings: heroSettingsInputSchema,
+  }),
+  z.object({
+    action: z.literal("hero_reset_defaults"),
+    confirm: z.literal(true),
   }),
 ]);
 
@@ -123,5 +172,71 @@ export const onRequestPost = async (ctx: PagesContext): Promise<Response> => {
       });
       return json({ success: true });
     }
+    case "hero_save_slide": {
+      const result = await rpc<{ slide: unknown; orphanedImageUrl?: string | null }>(
+        cfg,
+        "admin_hero_save_slide",
+        {
+          p_actor: admin.userId,
+          p_slide: d.slide,
+        }
+      );
+      if (result?.orphanedImageUrl && ctx.waitUntil) {
+        ctx.waitUntil(cleanupStorageUrl(cfg, result.orphanedImageUrl));
+      }
+      return json({ success: true, result });
+    }
+    case "hero_delete_slide": {
+      const result = await rpc<{ deleted: boolean; orphanedImageUrl?: string | null }>(
+        cfg,
+        "admin_hero_delete_slide",
+        {
+          p_actor: admin.userId,
+          p_id: d.id,
+        }
+      );
+      if (result?.orphanedImageUrl && ctx.waitUntil) {
+        ctx.waitUntil(cleanupStorageUrl(cfg, result.orphanedImageUrl));
+      }
+      return json({ success: true, result });
+    }
+    case "hero_reorder": {
+      const result = await rpc(cfg, "admin_hero_reorder", {
+        p_actor: admin.userId,
+        p_ids: d.ids,
+      });
+      return json({ success: true, result });
+    }
+    case "hero_set_active": {
+      const result = await rpc(cfg, "admin_hero_set_active", {
+        p_actor: admin.userId,
+        p_id: d.id,
+        p_active: d.isActive,
+      });
+      return json({ success: true, result });
+    }
+    case "hero_save_settings": {
+      const result = await rpc(cfg, "admin_hero_save_settings", {
+        p_actor: admin.userId,
+        p_settings: d.settings,
+      });
+      return json({ success: true, result });
+    }
+    case "hero_reset_defaults": {
+      const result = await rpc<{ reset: boolean; orphanedImageUrls?: string[] }>(
+        cfg,
+        "admin_hero_reset_defaults",
+        {
+          p_actor: admin.userId,
+        }
+      );
+      if (Array.isArray(result?.orphanedImageUrls) && ctx.waitUntil) {
+        for (const url of result.orphanedImageUrls) {
+          ctx.waitUntil(cleanupStorageUrl(cfg, url));
+        }
+      }
+      return json({ success: true, result });
+    }
   }
+  throw new HttpError(400, "unknown_action", "Unknown action");
 };

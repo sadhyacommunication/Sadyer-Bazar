@@ -24,6 +24,14 @@ await db.exec(`
     SELECT nullif(nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub', '')::uuid $$;
   GRANT USAGE ON SCHEMA public, auth TO anon, authenticated, service_role;
   GRANT EXECUTE ON FUNCTION auth.uid() TO anon, authenticated, service_role;
+  -- minimal Supabase Storage stand-in (real Storage has the same RLS-on-storage.objects model)
+  CREATE SCHEMA storage;
+  CREATE TABLE storage.buckets (id text PRIMARY KEY, name text, public boolean DEFAULT false, file_size_limit bigint, allowed_mime_types text[]);
+  CREATE TABLE storage.objects (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), bucket_id text REFERENCES storage.buckets (id), name text, owner uuid);
+  ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+  GRANT USAGE ON SCHEMA storage TO anon, authenticated, service_role;
+  GRANT ALL ON storage.objects TO anon, authenticated, service_role;
+  GRANT SELECT ON storage.buckets TO anon, authenticated, service_role;
 `);
 
 // legacy state: original schema.sql (with its insecure policies/functions) then our migrations
@@ -39,14 +47,14 @@ await db.exec(`
    VALUES ('c1','SAVE10','10%','percentage',10,100);
   UPDATE site_settings SET inside_dhaka_fee=70, outside_dhaka_fee=130, free_delivery_threshold=3000, preorder_advance_percent=25;
 `);
-for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown"]) {
+for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown", "06_hero_cms"]) {
   const file = fs.readdirSync(`${root}/migrations`).find((n) => n.includes(f));
   try { await db.exec(read(`migrations/${file}`)); console.log(`applied ${file}`); }
   catch (e) { console.log(`MIGRATION FAILED ${file}: ${e.message}`); process.exit(2); }
 }
 await db.exec("UPDATE coupons SET max_uses = 2 WHERE id = 'c1'");
 // idempotency: re-running every migration must succeed too
-for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown"]) {
+for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown", "06_hero_cms"]) {
   const file = fs.readdirSync(`${root}/migrations`).find((n) => n.includes(f));
   try { await db.exec(read(`migrations/${file}`)); } catch (e) { check(`re-run ${file}`, false, e.message); }
 }
@@ -270,6 +278,172 @@ check("per-IP velocity limit blocks the 11th order in an hour", velocity.slice(0
 const phoneFlood = [];
 for (let i = 0; i < 6; i++) phoneFlood.push(await mkOrder({ method: "cod", plan: "cod", phone: "01799990000" }));
 check("per-phone velocity limit blocks the 6th order in 3 hours", phoneFlood.slice(0, 5).every((x) => x.ok) && !phoneFlood[5].ok, phoneFlood[5].err);
+
+// ---- 6. Hero banner CMS ----------------------------------------------------------------------------
+console.log("\n=== hero banner CMS ===");
+const J = JSON.stringify;
+const nonAdmin = "00000000-0000-0000-0000-000000000001";
+const heroGood = {
+  imageUrl: "https://abc.supabase.co/storage/v1/object/public/site-media/hero/a1.webp",
+  imageAlt: "alt text", imagePosition: "center", badgeText: "Badge", badgeIcon: "fish",
+  title: "New slide", subtitle: "sub", ctaText: "Shop", ctaLink: "/shop", isActive: true,
+};
+const heroCount = async (role, sub = null) => (await as(role, "SELECT count(*)::int AS n FROM hero_slides", [], sub));
+
+check("hero: 4 default slides + settings seeded",
+  (await svc("SELECT count(*)::int AS n FROM hero_slides")).rows[0].n === 4 &&
+  (await svc("SELECT count(*)::int AS n FROM hero_settings")).rows[0].n === 1);
+let c = await heroCount("anon");
+check("hero: anon can read the visible slides", c.ok && c.rows[0].n === 4, JSON.stringify(c.rows ?? c.err));
+check("hero: anon can read hero settings", (await as("anon", "SELECT headline FROM hero_settings")).ok);
+
+let hs = await fn("admin_hero_save_slide", actor, J(heroGood));
+check("hero: admin creates a slide (appended last)", hs.ok && hs.r.slide.sortOrder === 5 && hs.r.slide.title === "New slide", hs.err);
+const slideId = hs.r?.slide?.id;
+
+const rejects = async (label, patch) => {
+  const r = await fn("admin_hero_save_slide", actor, J({ ...heroGood, ...patch }));
+  check(`hero: rejects ${label}`, !r.ok && !/violates|constraint/i.test(r.err ?? ""), r.err);
+};
+await rejects("javascript: link", { ctaLink: "javascript:alert(1)" });
+await rejects("protocol-relative link", { ctaLink: "//evil.example/x" });
+await rejects("http (non-TLS) link", { ctaLink: "http://evil.example" });
+await rejects("path-traversal image path", { imageUrl: "/images/../etc/passwd" });
+await rejects("data: URI image", { imageUrl: "data:image/svg+xml;base64,PHN2Zz4=" });
+await rejects("image URL pointing outside the site-media bucket", { imageUrl: "https://abc.supabase.co/storage/v1/object/public/other-bucket/x.png" });
+await rejects("empty title", { title: "   " });
+await rejects("over-long title (121)", { title: "x".repeat(121) });
+await rejects("unknown badge icon", { badgeIcon: "skull" });
+await rejects("button text without a link", { ctaLink: "" });
+await rejects("end date before start date", { startsAt: "2030-01-02T00:00:00Z", endsAt: "2030-01-01T00:00:00Z" });
+await rejects("garbage id", { id: "not-a-uuid" });
+r = await fn("admin_hero_save_slide", null, J(heroGood));
+check("hero: admin identity required", !r.ok, r.err);
+r = await fn("admin_hero_save_slide", actor, J({ ...heroGood, title: "<b>Hi</b><script>", ctaText: "", ctaLink: "" }));
+check("hero: angle brackets stripped from text", r.ok && !/[<>]/.test(r.r.slide.title), r.ok ? r.r.slide.title : r.err);
+await fn("admin_hero_delete_slide", actor, r.r.slide.id);
+
+// update + orphan detection
+const newImg = "https://abc.supabase.co/storage/v1/object/public/site-media/hero/b2.webp";
+r = await fn("admin_hero_save_slide", actor, J({ ...heroGood, id: slideId, imageUrl: newImg, title: "Edited" }));
+check("hero: update works and reports the replaced upload as orphaned", r.ok && r.r.slide.title === "Edited" && r.r.orphanedImageUrl === heroGood.imageUrl, r.err ?? JSON.stringify(r.r));
+r = await fn("admin_hero_save_slide", actor, J({ ...heroGood, id: slideId, imageUrl: "/images/banners/hero-jamuna-river-dawn.jpg" }));
+check("hero: swapping to a built-in image reports the old upload as orphaned", r.ok && r.r.orphanedImageUrl === newImg, r.err ?? JSON.stringify(r.r));
+r = await fn("admin_hero_save_slide", actor, J({ ...heroGood, id: slideId, imageUrl: "/images/banners/hero-gawa-ghee-bogura-doi.jpg" }));
+check("hero: built-in /images/ assets are never reported as orphans", r.ok && r.r.orphanedImageUrl === null, r.err ?? JSON.stringify(r.r));
+r = await fn("admin_hero_save_slide", actor, J({ ...heroGood, id: "11111111-1111-1111-1111-111111111111" }));
+check("hero: updating a missing slide fails cleanly", !r.ok && /not found/i.test(r.err), r.err);
+
+// visibility
+await fn("admin_hero_set_active", actor, slideId, false);
+c = await heroCount("anon");
+check("hero: hidden slide is invisible to the public", c.rows[0].n === 4, c.rows[0].n);
+c = await heroCount("authenticated", nonAdmin);
+check("hero: non-admin signed-in user cannot see hidden slides", c.rows[0].n === 4, c.rows[0].n);
+c = await heroCount("authenticated", actor);
+check("hero: admin sees hidden slides (to manage them)", c.rows[0].n === 5, c.rows[0].n);
+await fn("admin_hero_set_active", actor, slideId, true);
+r = await fn("admin_hero_save_slide", actor, J({ ...heroGood, startsAt: "2999-01-01T00:00:00Z", title: "Future" }));
+c = await heroCount("anon");
+check("hero: scheduled-for-the-future slide is not public yet", r.ok && c.rows[0].n === 5, c.rows[0].n);
+await fn("admin_hero_delete_slide", actor, r.r.slide.id);
+r = await fn("admin_hero_save_slide", actor, J({ ...heroGood, endsAt: "2001-01-01T00:00:00Z", title: "Expired" }));
+c = await heroCount("anon");
+check("hero: expired slide disappears from the public", r.ok && c.rows[0].n === 5, c.rows[0].n);
+await fn("admin_hero_delete_slide", actor, r.r.slide.id);
+
+// reorder
+let ids = (await svc("SELECT id FROM hero_slides ORDER BY sort_order")).rows.map((x) => x.id);
+const reversed = [...ids].reverse();
+r = await fn("admin_hero_reorder", actor, `{${reversed.join(",")}}`);
+let after = (await svc("SELECT id FROM hero_slides ORDER BY sort_order")).rows.map((x) => x.id);
+check("hero: reorder applies the requested order", r.ok && J(after) === J(reversed), r.err);
+r = await fn("admin_hero_reorder", actor, `{${ids.slice(1).join(",")}}`);
+check("hero: reorder with a missing slide is rejected", !r.ok, r.err);
+r = await fn("admin_hero_reorder", actor, `{${[ids[0], ...ids.slice(0, -1)].join(",")}}`);
+check("hero: reorder with duplicates is rejected", !r.ok, r.err);
+
+// delete + renumber
+r = await fn("admin_hero_delete_slide", actor, slideId);
+const orders = (await svc("SELECT sort_order FROM hero_slides ORDER BY sort_order")).rows.map((x) => x.sort_order);
+check("hero: delete removes the slide and keeps sort_order gap-free", r.ok && r.r.deleted === true && J(orders) === "[1,2,3,4]", r.err ?? J(orders));
+r = await fn("admin_hero_delete_slide", actor, slideId);
+check("hero: deleting twice fails cleanly", !r.ok && /not found/i.test(r.err), r.err);
+
+// max slides
+let heroLast;
+for (let i = 0; i < 9; i++) heroLast = await fn("admin_hero_save_slide", actor, J({ ...heroGood, title: `Bulk ${i}` }));
+check("hero: slide count is capped at 12", !heroLast.ok && /at most 12/.test(heroLast.err), heroLast.err);
+await svc("DELETE FROM hero_slides WHERE title LIKE 'Bulk %'");
+
+// settings
+const goodSettings = {
+  showHeadline: true, headline: "H", subheadline: "S", showGuarantee: true, guaranteeText: "G", showCounter: false,
+  autoplay: true, autoplaySeconds: 6, showTrustItems: true,
+  trustItems: [{ icon: "leaf", title: "T1", subtitle: "s1" }, { icon: "truck", title: "T2", subtitle: "" }],
+};
+r = await fn("admin_hero_save_settings", actor, J(goodSettings));
+const heroSaved = (await svc("SELECT * FROM hero_settings")).rows[0];
+check("hero: settings saved", r.ok && heroSaved.headline === "H" && Number(heroSaved.autoplay_seconds) === 6 && heroSaved.show_counter === false && heroSaved.trust_items.length === 2, r.err);
+const badSettings = async (label, patch) => {
+  const x = await fn("admin_hero_save_settings", actor, J({ ...goodSettings, ...patch }));
+  check(`hero: settings reject ${label}`, !x.ok && !/violates|constraint/i.test(x.err ?? ""), x.err);
+};
+await badSettings("slide duration of 1s", { autoplaySeconds: 1 });
+await badSettings("slide duration of 99s", { autoplaySeconds: 99 });
+await badSettings("7 highlights", { trustItems: Array.from({ length: 7 }, () => ({ icon: "leaf", title: "t", subtitle: "" })) });
+await badSettings("unknown highlight icon", { trustItems: [{ icon: "skull", title: "t", subtitle: "" }] });
+await badSettings("highlight without a title", { trustItems: [{ icon: "leaf", title: "", subtitle: "" }] });
+await badSettings("non-boolean flag", { autoplay: "yes" });
+await badSettings("over-long headline", { headline: "x".repeat(161) });
+
+// direct API writes are impossible, even for admins
+for (const [who, sub] of [["anon", null], ["authenticated", nonAdmin], ["authenticated", actor]]) {
+  const who2 = sub === actor ? "admin" : sub ? "non-admin" : "anon";
+  let x = await as(who, "UPDATE hero_slides SET title='pwn'", [], sub);
+  check(`hero: ${who2} cannot UPDATE hero_slides directly`, !x.ok, x.err);
+  x = await as(who, "INSERT INTO hero_slides (image_url,title) VALUES ('/images/a.jpg','x')", [], sub);
+  check(`hero: ${who2} cannot INSERT hero_slides directly`, !x.ok, x.err);
+  x = await as(who, "DELETE FROM hero_slides", [], sub);
+  check(`hero: ${who2} cannot DELETE hero_slides directly`, !x.ok, x.err);
+  x = await as(who, "UPDATE hero_settings SET headline='pwn'", [], sub);
+  check(`hero: ${who2} cannot UPDATE hero_settings directly`, !x.ok, x.err);
+}
+r = await as("anon", "SELECT public.admin_hero_save_slide(null, '{}'::jsonb)");
+check("hero: anon cannot call admin_hero_save_slide", !r.ok, r.err);
+r = await as("authenticated", "SELECT public.admin_hero_delete_slide(gen_random_uuid(), gen_random_uuid())", [], actor);
+check("hero: even an admin session cannot call the RPCs from the browser", !r.ok, r.err);
+r = await svc("INSERT INTO hero_slides (image_url,title,cta_link) VALUES ('/images/a.jpg','x','javascript:alert(1)')");
+check("hero: table CHECK rejects unsafe links even for the service role", !r.ok && /check/i.test(r.err), r.err);
+r = await svc("INSERT INTO hero_slides (image_url,title) VALUES ('https://evil.example/x.png','x')");
+check("hero: table CHECK rejects foreign image hosts even for the service role", !r.ok && /check/i.test(r.err), r.err);
+
+// reset to defaults
+await fn("admin_hero_save_slide", actor, J({ ...heroGood, title: "Temp" }));
+r = await fn("admin_hero_reset_defaults", actor);
+const afterReset = (await svc("SELECT count(*)::int AS n, (SELECT headline FROM hero_settings) AS h FROM hero_slides")).rows[0];
+check("hero: restore-defaults brings back the 4 original slides + copy", r.ok && afterReset.n === 4 && afterReset.h.startsWith("সাধ্যের বাজার") && r.r.orphanedImageUrls.includes(heroGood.imageUrl), r.err ?? J(afterReset));
+
+// audit trail
+const aud = (await svc("SELECT count(*)::int AS n FROM admin_audit_log WHERE action LIKE 'hero.%' AND actor = $1", [actor])).rows[0].n;
+check("hero: every admin change is audited", aud >= 10, aud);
+
+// storage policies (bucket `site-media`)
+const heroObj = (name) => `INSERT INTO storage.objects (bucket_id, name) VALUES ('site-media', '${name}')`;
+check("hero: storage bucket is public, image-only and size-capped",
+  (await svc("SELECT 1 FROM storage.buckets WHERE id='site-media' AND public AND file_size_limit = 3145728 AND NOT ('image/svg+xml' = ANY(allowed_mime_types))")).rows.length === 1);
+r = await as("authenticated", heroObj("hero/ok.webp"), [], actor);
+check("hero: admin can upload to site-media/hero/", r.ok, r.err);
+r = await as("authenticated", heroObj("other/x.webp"), [], actor);
+check("hero: admin cannot upload outside hero/", !r.ok, r.err);
+r = await as("authenticated", heroObj("hero/evil.webp"), [], nonAdmin);
+check("hero: non-admin user cannot upload", !r.ok, r.err);
+r = await as("anon", heroObj("hero/evil.webp"));
+check("hero: anon cannot upload", !r.ok, r.err);
+r = await as("authenticated", "DELETE FROM storage.objects WHERE name='hero/ok.webp'", [], nonAdmin);
+check("hero: non-admin cannot delete uploads", r.ok && (await svc("SELECT 1 FROM storage.objects WHERE name='hero/ok.webp'")).rows.length === 1);
+r = await as("authenticated", "DELETE FROM storage.objects WHERE name='hero/ok.webp'", [], actor);
+check("hero: admin can delete uploads", r.ok && (await svc("SELECT 1 FROM storage.objects WHERE name='hero/ok.webp'")).rows.length === 0);
 
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -47,7 +47,15 @@ BEGIN
       ('authN non-admin UPDATE products',              'authenticated', 'UPDATE public.products SET title = ''hack''',                                             'zero'),
       ('authN non-admin INSERT coupons',               'authenticated', 'INSERT INTO public.coupons (id,code,title,discount_type,discount_value) VALUES (''x'',''X'',''x'',''flat'',1)', 'deny'),
       ('authN non-admin INSERT admins (self-promote)', 'authenticated', 'INSERT INTO public.admins (user_id) VALUES (gen_random_uuid())',                          'deny'),
-      ('authN non-admin SELECT bkash_app_key',         'authenticated', 'SELECT bkash_app_key FROM public.site_settings',                                          'deny')
+      ('authN non-admin SELECT bkash_app_key',         'authenticated', 'SELECT bkash_app_key FROM public.site_settings',                                          'deny'),
+      ('anon  UPDATE hero_slides (deface homepage)',   'anon',          'UPDATE public.hero_slides SET title = ''hacked''',                                        'deny'),
+      ('anon  INSERT hero_slides',                     'anon',          'INSERT INTO public.hero_slides (image_url, title) VALUES (''/images/x.jpg'', ''x'')',     'deny'),
+      ('anon  DELETE hero_slides',                     'anon',          'DELETE FROM public.hero_slides',                                                          'deny'),
+      ('anon  UPDATE hero_settings',                   'anon',          'UPDATE public.hero_settings SET headline = ''hacked''',                                   'deny'),
+      ('authN non-admin UPDATE hero_slides',           'authenticated', 'UPDATE public.hero_slides SET title = ''hacked''',                                        'deny'),
+      ('authN non-admin DELETE hero_slides',           'authenticated', 'DELETE FROM public.hero_slides',                                                          'deny'),
+      ('anon  POSITIVE: read visible hero slides',     'anon',          'SELECT id FROM public.hero_slides LIMIT 1',                                               'allow'),
+      ('anon  POSITIVE: read hero settings',           'anon',          'SELECT headline FROM public.hero_settings',                                               'allow')
     ) AS x(name, role, stmt, expect)
   LOOP
     v_out := NULL; v_state := NULL; v_rows := NULL;
@@ -111,7 +119,7 @@ SELECT 'write-guard trigger on ' || c.relname,
 FROM pg_class c
 LEFT JOIN pg_trigger g ON g.tgrelid = c.oid AND g.tgname = 'trg_forbid_api_writes' AND NOT g.tgisinternal
 WHERE c.relnamespace = 'public'::regnamespace
-  AND c.relname IN ('orders', 'order_items', 'payment_transactions', 'payment_attempts', 'processed_webhook_events');
+  AND c.relname IN ('orders', 'order_items', 'payment_transactions', 'payment_attempts', 'processed_webhook_events', 'hero_slides', 'hero_settings');
 
 INSERT INTO attack_results
 SELECT 'RLS enabled on ' || c.relname,

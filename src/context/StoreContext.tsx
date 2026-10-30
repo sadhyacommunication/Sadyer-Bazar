@@ -14,6 +14,8 @@ import {
   ContactMessage,
   ContactMessageStatus,
   Coupon,
+  HeroSettings,
+  HeroSlide,
   Order,
   OrderStatus,
   PaymentStatus,
@@ -52,6 +54,22 @@ import {
   upsertProductToSupabase,
   upsertSettingsToSupabase,
 } from "@/services/supabaseSync";
+import {
+  DEFAULT_HERO_SETTINGS,
+  DEFAULT_HERO_SLIDES,
+  mapHeroSettings,
+  mapHeroSlides,
+} from "@/lib/hero/content";
+import type { HeroSettingsInput, HeroSlideInput } from "@/lib/hero/schema";
+import {
+  deleteHeroSlide as apiDeleteHeroSlide,
+  fetchPublicHero,
+  reorderHeroSlides as apiReorderHeroSlides,
+  resetHeroDefaults as apiResetHeroDefaults,
+  saveHeroSettings as apiSaveHeroSettings,
+  saveHeroSlide as apiSaveHeroSlide,
+  setHeroSlideActive as apiSetHeroSlideActive,
+} from "@/services/heroApi";
 
 const RECENT_ORDERS_SESSION_KEY = "sb_recent_orders";
 
@@ -196,6 +214,26 @@ interface StoreContextValue {
     adminAttempts?: PaymentAttemptRecord[],
     adminCoupons?: Coupon[]
   ) => void;
+
+  // Dynamic Hero Banner & Section CMS
+  heroSlides: HeroSlide[];
+  heroSettings: HeroSettings;
+  heroLoading: boolean;
+  heroStatus: "live" | "fallback";
+  refreshHero: () => Promise<void>;
+  saveHeroSlide: (
+    slide: HeroSlideInput
+  ) => Promise<{ success: boolean; result?: HeroSlide; error?: string }>;
+  deleteHeroSlide: (id: string) => Promise<{ success: boolean; error?: string }>;
+  reorderHeroSlides: (ids: string[]) => Promise<{ success: boolean; error?: string }>;
+  setHeroSlideActive: (
+    id: string,
+    isActive: boolean
+  ) => Promise<{ success: boolean; error?: string }>;
+  saveHeroSettings: (
+    settings: HeroSettingsInput
+  ) => Promise<{ success: boolean; error?: string }>;
+  resetHeroDefaults: () => Promise<{ success: boolean; error?: string }>;
 }
 
 const StoreContext = createContext<StoreContextValue | undefined>(undefined);
@@ -207,6 +245,8 @@ const STORAGE_KEYS = {
   COUPONS: "sb_coupons_v2",
   REVIEWS: "sb_reviews_v2",
   SETTINGS: "sb_settings_v2",
+  HERO_SLIDES: "sb_hero_slides_v1",
+  HERO_SETTINGS: "sb_hero_settings_v1",
   // Legacy PII keys to purge from localStorage
   LEGACY_ORDERS: "sb_orders_v2",
   LEGACY_TRANSACTIONS: "sb_transactions_v2",
@@ -223,6 +263,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     useState<PaymentTransaction[]>(INITIAL_TRANSACTIONS);
   const [paymentAttempts, setPaymentAttempts] = useState<PaymentAttemptRecord[]>([]);
   const [settings, setSettings] = useState<SiteSettings>(INITIAL_SITE_SETTINGS);
+  const [heroSlides, setHeroSlides] = useState<HeroSlide[]>(DEFAULT_HERO_SLIDES);
+  const [heroSettings, setHeroSettings] = useState<HeroSettings>(DEFAULT_HERO_SETTINGS);
+  const [heroLoading, setHeroLoading] = useState<boolean>(false);
+  const [heroStatus, setHeroStatus] = useState<"live" | "fallback">("fallback");
   const [messages, setMessages] =
     useState<ContactMessage[]>(INITIAL_CONTACT_MESSAGES);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -239,6 +283,32 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }, 3400);
   };
 
+  const refreshHero = useCallback(async () => {
+    try {
+      setHeroLoading(true);
+      const res = await fetchPublicHero();
+      if (res.status === "ok") {
+        if (res.slides && res.slides.length > 0) {
+          setHeroSlides(res.slides);
+          try {
+            localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(res.slides));
+          } catch {}
+        }
+        if (res.settings) {
+          setHeroSettings(res.settings);
+          try {
+            localStorage.setItem(STORAGE_KEYS.HERO_SETTINGS, JSON.stringify(res.settings));
+          } catch {}
+        }
+        setHeroStatus("live");
+      }
+    } catch {
+      // Ignore background hero errors
+    } finally {
+      setHeroLoading(false);
+    }
+  }, []);
+
   const refreshLiveStore = useCallback(async () => {
     try {
       const live = await fetchLiveStoreFromSupabase();
@@ -251,10 +321,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           setCategories(live.categories);
         if (live.reviews && live.reviews.length > 0) setReviews(live.reviews);
       }
+      void refreshHero();
     } catch {
       // Ignore background refresh errors
     }
-  }, []);
+  }, [refreshHero]);
 
   useEffect(() => {
     try {
@@ -294,6 +365,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
       const savedSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
       if (savedSettings) setSettings(JSON.parse(savedSettings));
+
+      const savedHeroSlides = localStorage.getItem(STORAGE_KEYS.HERO_SLIDES);
+      if (savedHeroSlides) {
+        try {
+          const parsed = mapHeroSlides(JSON.parse(savedHeroSlides));
+          if (parsed.length > 0) setHeroSlides(parsed);
+        } catch {}
+      }
+
+      const savedHeroSettings = localStorage.getItem(STORAGE_KEYS.HERO_SETTINGS);
+      if (savedHeroSettings) {
+        try {
+          setHeroSettings(mapHeroSettings(JSON.parse(savedHeroSettings)));
+        } catch {}
+      }
     } catch {
       // Ignore storage parse issues
     }
@@ -367,6 +453,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
     } catch {}
   }, [settings, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(heroSlides));
+    } catch {}
+  }, [heroSlides, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      localStorage.setItem(STORAGE_KEYS.HERO_SETTINGS, JSON.stringify(heroSettings));
+    } catch {}
+  }, [heroSettings, hydrated]);
 
   const addToCart = (
     product: Product,
@@ -941,6 +1041,89 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const saveHeroSlide = async (slide: HeroSlideInput) => {
+    const res = await apiSaveHeroSlide(slide);
+    if (res.success && res.result) {
+      const saved = res.result;
+      setHeroSlides((prev) => {
+        const idx = prev.findIndex((s) => s.id === saved.id);
+        const next = idx >= 0 ? prev.map((s, i) => (i === idx ? saved : s)) : [...prev, saved];
+        return next.sort((a, b) => a.sortOrder - b.sortOrder);
+      });
+      showToast(`Slide "${saved.title}" saved successfully!`);
+      return { success: true, result: saved };
+    }
+    showToast(res.error || "Failed to save hero slide.");
+    return res;
+  };
+
+  const deleteHeroSlide = async (id: string) => {
+    const res = await apiDeleteHeroSlide(id);
+    if (res.success) {
+      setHeroSlides((prev) => prev.filter((s) => s.id !== id));
+      showToast("Slide deleted.");
+      return { success: true };
+    }
+    showToast(res.error || "Failed to delete slide.");
+    return res;
+  };
+
+  const reorderHeroSlides = async (ids: string[]) => {
+    const res = await apiReorderHeroSlides(ids);
+    if (res.success) {
+      setHeroSlides((prev) => {
+        const map = new Map(prev.map((s) => [s.id, s]));
+        const reordered = ids
+          .map((id, index) => {
+            const item = map.get(id);
+            return item ? { ...item, sortOrder: index + 1 } : null;
+          })
+          .filter((x): x is HeroSlide => x !== null);
+        return reordered;
+      });
+      showToast("Slide order updated.");
+      return { success: true };
+    }
+    showToast(res.error || "Failed to reorder slides.");
+    return res;
+  };
+
+  const setHeroSlideActive = async (id: string, isActive: boolean) => {
+    const res = await apiSetHeroSlideActive(id, isActive);
+    if (res.success) {
+      setHeroSlides((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, isActive } : s))
+      );
+      showToast(isActive ? "Slide is now visible." : "Slide is now hidden.");
+      return { success: true };
+    }
+    showToast(res.error || "Failed to update slide status.");
+    return res;
+  };
+
+  const saveHeroSettings = async (nextSettings: HeroSettingsInput) => {
+    const res = await apiSaveHeroSettings(nextSettings);
+    if (res.success) {
+      setHeroSettings(mapHeroSettings(nextSettings));
+      showToast("Hero settings updated successfully!");
+      return { success: true };
+    }
+    showToast(res.error || "Failed to save hero settings.");
+    return res;
+  };
+
+  const resetHeroDefaults = async () => {
+    const res = await apiResetHeroDefaults();
+    if (res.success) {
+      setHeroSlides(DEFAULT_HERO_SLIDES);
+      setHeroSettings(DEFAULT_HERO_SETTINGS);
+      showToast("Restored factory default hero slides & copy!");
+      return { success: true };
+    }
+    showToast(res.error || "Failed to restore defaults.");
+    return res;
+  };
+
   return (
     <StoreContext.Provider
       value={{
@@ -992,6 +1175,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         procurementSummary,
         refreshLiveStore,
         hydrateAdminRecords,
+        heroSlides,
+        heroSettings,
+        heroLoading,
+        heroStatus,
+        refreshHero,
+        saveHeroSlide,
+        deleteHeroSlide,
+        reorderHeroSlides,
+        setHeroSlideActive,
+        saveHeroSettings,
+        resetHeroDefaults,
       }}
     >
       {children}

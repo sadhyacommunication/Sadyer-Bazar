@@ -23,11 +23,12 @@ import { useStore } from "@/context/StoreContext";
 import ProductCard from "@/components/storefront/ProductCard";
 import FamilyComboBuilder from "@/components/storefront/FamilyComboBuilder";
 import DepartmentShowcase from "@/components/storefront/DepartmentShowcase";
-import HeroSlider from "@/components/storefront/HeroSlider";
+import HeroSlider, { renderHeroIcon } from "@/components/storefront/HeroSlider";
+import { applyHeroPlaceholders } from "@/lib/hero/content";
 
 export default function HomePage() {
   const router = useRouter();
-  const { products, categories, settings } = useStore();
+  const { products, categories, settings, heroSettings } = useStore();
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [quickTrackCode, setQuickTrackCode] = useState("");
 
@@ -100,75 +101,46 @@ export default function HomePage() {
       <section className="relative overflow-hidden bg-[#0F3D2E] text-white pt-4 pb-8 sm:py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-3 sm:space-y-4">
           {/* High-Impact Semantic SEO H1 Headline Header */}
-          <div className="text-center space-y-1 pt-1 pb-1">
-            <h1 className="text-lg sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight drop-shadow-md">
-              সাধ্যের বাজার — যমুনা নদীর তাজা দেশি মাছ, খাঁটি গাওয়া ঘি ও বগুড়ার দই
-            </h1>
-            <p className="text-xs sm:text-sm text-emerald-200/90 font-medium max-w-3xl mx-auto">
-              ১০০% কেমিক্যাল ও ফরমালিনমুক্ত • নদী ও প্রান্তিক খামার থেকে সরাসরি নিজস্ব কোল্ড-চেইনে হোম ডেলিভারি
-            </p>
-          </div>
+          {heroSettings.showHeadline && (
+            <div className="text-center space-y-1 pt-1 pb-1">
+              <h1 className="text-lg sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight drop-shadow-md">
+                {heroSettings.headline}
+              </h1>
+              {heroSettings.subheadline && (
+                <p className="text-xs sm:text-sm text-emerald-200/90 font-medium max-w-3xl mx-auto">
+                  {heroSettings.subheadline}
+                </p>
+              )}
+            </div>
+          )}
 
           <HeroSlider />
 
           {/* Quick Natural Organic Trust Highlights */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3.5 text-xs">
-            <div className="bg-emerald-950/60 border border-emerald-800/50 rounded-2xl p-3 sm:px-4 sm:py-3.5 flex items-center gap-3 shadow-xs">
-              <div className="w-9 h-9 rounded-xl bg-emerald-800/80 text-amber-300 flex items-center justify-center shrink-0">
-                <Leaf className="w-4 h-4 text-emerald-300" />
-              </div>
-              <div>
-                <strong className="text-white block font-bold text-xs sm:text-sm">
-                  ১০০% ফরমালিনমুক্ত
-                </strong>
-                <span className="text-emerald-200/80 text-[11px] block">
-                  যমুনা নদী ও গ্রাম্য খামার
-                </span>
-              </div>
+          {heroSettings.showTrustItems && heroSettings.trustItems.length > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3.5 text-xs">
+              {heroSettings.trustItems.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="bg-emerald-950/60 border border-emerald-800/50 rounded-2xl p-3 sm:px-4 sm:py-3.5 flex items-center gap-3 shadow-xs"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-emerald-800/80 text-amber-300 flex items-center justify-center shrink-0">
+                    {renderHeroIcon(item.icon, "w-4 h-4 text-emerald-300")}
+                  </div>
+                  <div>
+                    <strong className="text-white block font-bold text-xs sm:text-sm">
+                      {item.title}
+                    </strong>
+                    {item.subtitle && (
+                      <span className="text-emerald-200/80 text-[11px] block">
+                        {applyHeroPlaceholders(item.subtitle, settings)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-
-            <div className="bg-emerald-950/60 border border-emerald-800/50 rounded-2xl p-3 sm:px-4 sm:py-3.5 flex items-center gap-3 shadow-xs">
-              <div className="w-9 h-9 rounded-xl bg-emerald-800/80 text-amber-300 flex items-center justify-center shrink-0">
-                <Truck className="w-4 h-4 text-amber-300" />
-              </div>
-              <div>
-                <strong className="text-white block font-bold text-xs sm:text-sm">
-                  থার্মাল হোম ডেলিভারি
-                </strong>
-                <span className="text-emerald-200/80 text-[11px] block">
-                  ঢাকা ৳{settings.insideDhakaFee} • সারা দেশ ৳{settings.outsideDhakaFee}
-                </span>
-              </div>
-            </div>
-
-            <div className="bg-emerald-950/60 border border-emerald-800/50 rounded-2xl p-3 sm:px-4 sm:py-3.5 flex items-center gap-3 shadow-xs">
-              <div className="w-9 h-9 rounded-xl bg-emerald-800/80 text-amber-300 flex items-center justify-center shrink-0">
-                <ShieldCheck className="w-4 h-4 text-emerald-300" />
-              </div>
-              <div>
-                <strong className="text-white block font-bold text-xs sm:text-sm">
-                  নিরাপদ পেমেন্ট
-                </strong>
-                <span className="text-emerald-200/80 text-[11px] block">
-                  বিকাশ, কার্ড ও ক্যাশ অন ডেলিভারি
-                </span>
-              </div>
-            </div>
-
-            <div className="bg-emerald-950/60 border border-emerald-800/50 rounded-2xl p-3 sm:px-4 sm:py-3.5 flex items-center gap-3 shadow-xs">
-              <div className="w-9 h-9 rounded-xl bg-emerald-800/80 text-amber-300 flex items-center justify-center shrink-0">
-                <Clock className="w-4 h-4 text-amber-300" />
-              </div>
-              <div>
-                <strong className="text-white block font-bold text-xs sm:text-sm">
-                  লাইভ অর্ডার ট্র্যাকিং
-                </strong>
-                <span className="text-emerald-200/80 text-[11px] block">
-                  ইউনিক অর্ডার আইডি দিয়ে ট্র্যাক
-                </span>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       </section>
 

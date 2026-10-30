@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase/client";
+import type { HeroAdminActionPayload } from "@/lib/hero/schema";
 import {
   Category,
   ContactMessage,
@@ -796,6 +797,7 @@ export async function submitReviewViaEdgeApi(input: {
 }
 
 export type AdminEdgeActionPayload =
+  | HeroAdminActionPayload
   | {
       action: "set_order_status";
       orderId: string;
@@ -1124,6 +1126,16 @@ export function subscribeToRealtimeStore(onUpdate: () => void): () => void {
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "product_reviews" },
+      () => onUpdate()
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "hero_slides" },
+      () => onUpdate()
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "hero_settings" },
       () => onUpdate()
     )
     .subscribe();

@@ -250,3 +250,47 @@ export interface ContactMessage {
   repliedAt?: string;
   createdAt: string;
 }
+
+// ---------------------------------------------------------------------------
+// Hero banner CMS (see supabase/migrations/*_06_hero_cms.sql, src/lib/hero/*)
+// ---------------------------------------------------------------------------
+import type { HeroIconKey, HeroImagePosition } from "@/lib/hero/schema";
+export type { HeroIconKey, HeroImagePosition };
+
+export interface HeroSlide {
+  id: string;
+  sortOrder: number;
+  isActive: boolean;
+  imageUrl: string;
+  imageAlt: string;
+  imagePosition: HeroImagePosition;
+  badgeText: string;
+  badgeIcon: HeroIconKey;
+  title: string;
+  subtitle: string;
+  ctaText: string;
+  ctaLink: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  updatedAt?: string;
+}
+
+export interface HeroTrustItem {
+  icon: HeroIconKey;
+  title: string;
+  /** May contain {insideDhakaFee} / {outsideDhakaFee}; filled from live delivery settings. */
+  subtitle: string;
+}
+
+export interface HeroSettings {
+  showHeadline: boolean;
+  headline: string;
+  subheadline: string;
+  showGuarantee: boolean;
+  guaranteeText: string;
+  showCounter: boolean;
+  autoplay: boolean;
+  autoplaySeconds: number;
+  showTrustItems: boolean;
+  trustItems: HeroTrustItem[];
+}

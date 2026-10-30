@@ -36,11 +36,13 @@ import {
   LogOut,
   RefreshCw,
   Layers,
+  Sparkles,
 } from "lucide-react";
 import { rememberRecentOrderInSession, useStore } from "@/context/StoreContext";
 import { checkRateLimit } from "@/lib/security";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { fetchAuthenticatedAdminDataFromSupabase } from "@/services/supabaseSync";
+import HeroCmsManager from "@/components/admin/HeroCmsManager";
 import {
   Category,
   ContactMessage,
@@ -146,6 +148,7 @@ type AdminTab =
   | "procurement"
   | "products"
   | "categories"
+  | "hero"
   | "coupons"
   | "payments"
   | "messages"
@@ -186,6 +189,8 @@ export default function AdminDashboardPage() {
     refreshLiveStore,
     showToast,
     hydrateAdminRecords,
+    heroSlides,
+    refreshHero,
   } = useStore();
 
   // Supabase Auth + public.admins Allow-List Gate
@@ -205,6 +210,7 @@ export default function AdminDashboardPage() {
       const [adminData] = await Promise.all([
         fetchAuthenticatedAdminDataFromSupabase(),
         refreshLiveStore(),
+        refreshHero(),
       ]);
       if (adminData.authorized) {
         hydrateAdminRecords(
@@ -220,7 +226,7 @@ export default function AdminDashboardPage() {
     } finally {
       setRefreshingAdminData(false);
     }
-  }, [hydrateAdminRecords, refreshLiveStore]);
+  }, [hydrateAdminRecords, refreshLiveStore, refreshHero]);
 
   useEffect(() => {
     let active = true;
@@ -1041,6 +1047,11 @@ export default function AdminDashboardPage() {
                 icon: Layers,
               },
               {
+                id: "hero",
+                label: `Hero & Slider (${heroSlides.length})`,
+                icon: Sparkles,
+              },
+              {
                 id: "coupons",
                 label: `Promo Codes (${coupons.length})`,
                 icon: Tag,
@@ -1154,6 +1165,8 @@ export default function AdminDashboardPage() {
                 "Product, Variant & Pre-Order Batch Manager"}
               {activeTab === "categories" &&
                 "Store Category & Department Manager"}
+              {activeTab === "hero" &&
+                "Hero Banners, Carousel Slider & Homepage Highlights CMS"}
               {activeTab === "coupons" &&
                 "Promo Code & Campaign Discount Manager"}
               {activeTab === "payments" &&
@@ -2031,6 +2044,9 @@ export default function AdminDashboardPage() {
             </div>
           </div>
         )}
+
+        {/* TAB: HERO CAROUSEL, BANNERS & HOMEPAGE CMS */}
+        {activeTab === "hero" && <HeroCmsManager />}
 
         {/* TAB 5: PROMO CODES & COUPON MANAGER (Step 3 Upgrade) */}
         {activeTab === "coupons" && (

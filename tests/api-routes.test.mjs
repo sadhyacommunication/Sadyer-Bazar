@@ -229,4 +229,54 @@ function makeServiceRoleJwt() {
   console.log("  ✓ POST /api/admin/action rejects unauthenticated requests with 401");
 }
 
+// ---------------------------------------------------------------------------
+// 5. Admin Hero CMS Actions: Rejects Unauthenticated Requests (401)
+// ---------------------------------------------------------------------------
+{
+  const devEnv = {
+    APP_ENV: "development",
+    PAYMENT_MODE: "sandbox",
+    NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon-key",
+    SUPABASE_SERVICE_ROLE_KEY: makeServiceRoleJwt(),
+  };
+
+  const heroActions = [
+    "hero_save_slide",
+    "hero_delete_slide",
+    "hero_reorder",
+    "hero_set_active",
+    "hero_save_settings",
+    "hero_reset_defaults",
+  ];
+
+  for (const action of heroActions) {
+    const unauthReq = new Request("http://localhost:3000/api/admin/action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+
+    let caughtErr = null;
+    try {
+      await adminActionPost({
+        request: unauthReq,
+        env: devEnv,
+        data: { requestId: `req-hero-${action}`, ipHash: "hash-hero" },
+        next: async () => new Response(),
+      });
+    } catch (err) {
+      caughtErr = err;
+    }
+
+    assert.ok(caughtErr instanceof HttpError);
+    assert.equal(
+      caughtErr.status,
+      401,
+      `Action ${action} must reject without auth header`
+    );
+  }
+  console.log("  ✓ POST /api/admin/action rejects unauthenticated hero CMS actions with 401");
+}
+
 console.log("All Edge API & Cryptographic Gateway tests passed!");
