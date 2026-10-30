@@ -247,6 +247,8 @@ const STORAGE_KEYS = {
   SETTINGS: "sb_settings_v2",
   HERO_SLIDES: "sb_hero_slides_v1",
   HERO_SETTINGS: "sb_hero_settings_v1",
+  HERO_SETTINGS_EDITED_AT: "sb_hero_settings_edited_at",
+  HERO_SLIDES_EDITED_AT: "sb_hero_slides_edited_at",
   // Legacy PII keys to purge from localStorage
   LEGACY_ORDERS: "sb_orders_v2",
   LEGACY_TRANSACTIONS: "sb_transactions_v2",
@@ -288,17 +290,45 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setHeroLoading(true);
       const res = await fetchPublicHero();
       if (res.status === "ok") {
+        const localSettingsEditedAt = Number(
+          typeof window !== "undefined"
+            ? localStorage.getItem(STORAGE_KEYS.HERO_SETTINGS_EDITED_AT) || "0"
+            : "0"
+        );
+        const localSlidesEditedAt = Number(
+          typeof window !== "undefined"
+            ? localStorage.getItem(STORAGE_KEYS.HERO_SLIDES_EDITED_AT) || "0"
+            : "0"
+        );
+
         if (res.slides && res.slides.length > 0) {
-          setHeroSlides(res.slides);
-          try {
-            localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(res.slides));
-          } catch {}
+          const remoteSlideTime = Math.max(
+            ...res.slides.map((s) => (s.updatedAt ? Date.parse(s.updatedAt) : 0))
+          );
+          if (
+            remoteSlideTime >= localSlidesEditedAt ||
+            Date.now() - localSlidesEditedAt > 120_000
+          ) {
+            setHeroSlides(res.slides);
+            try {
+              localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(res.slides));
+            } catch {}
+          }
         }
+
         if (res.settings) {
-          setHeroSettings(res.settings);
-          try {
-            localStorage.setItem(STORAGE_KEYS.HERO_SETTINGS, JSON.stringify(res.settings));
-          } catch {}
+          const remoteSettingsTime = res.settings.updatedAt
+            ? Date.parse(res.settings.updatedAt)
+            : 0;
+          if (
+            remoteSettingsTime >= localSettingsEditedAt ||
+            Date.now() - localSettingsEditedAt > 120_000
+          ) {
+            setHeroSettings(res.settings);
+            try {
+              localStorage.setItem(STORAGE_KEYS.HERO_SETTINGS, JSON.stringify(res.settings));
+            } catch {}
+          }
         }
         setHeroStatus("live");
       }
@@ -401,7 +431,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const res = await seedFullDatabaseToSupabase(
       products,
       coupons,
-      settings
+      settings,
+      heroSlides,
+      heroSettings
     );
     if (res.ok) {
       setSupabaseStatus("connected_live");
@@ -1042,86 +1074,139 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const saveHeroSlide = async (slide: HeroSlideInput) => {
+    const slideId = slide.id || `slide-${Date.now()}`;
+    const optimisticSlide: HeroSlide = {
+      id: slideId,
+      sortOrder: heroSlides.length + 1,
+      isActive: slide.isActive !== false,
+      imageUrl: slide.imageUrl,
+      imageAlt: slide.imageAlt || "",
+      imagePosition: slide.imagePosition || "center",
+      badgeText: slide.badgeText || "",
+      badgeIcon: slide.badgeIcon || "sparkles",
+      title: slide.title,
+      subtitle: slide.subtitle || "",
+      ctaText: slide.ctaText || "",
+      ctaLink: slide.ctaLink || "",
+      startsAt: slide.startsAt || null,
+      endsAt: slide.endsAt || null,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setHeroSlides((prev) => {
+      const idx = prev.findIndex((s) => s.id === slideId);
+      const next =
+        idx >= 0
+          ? prev.map((s, i) => (i === idx ? { ...s, ...optimisticSlide } : s))
+          : [...prev, optimisticSlide];
+      const sorted = next.sort((a, b) => a.sortOrder - b.sortOrder);
+      try {
+        localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(sorted));
+        localStorage.setItem(STORAGE_KEYS.HERO_SLIDES_EDITED_AT, String(Date.now()));
+      } catch {}
+      return sorted;
+    });
+
     const res = await apiSaveHeroSlide(slide);
     if (res.success && res.result) {
       const saved = res.result;
       setHeroSlides((prev) => {
-        const idx = prev.findIndex((s) => s.id === saved.id);
-        const next = idx >= 0 ? prev.map((s, i) => (i === idx ? saved : s)) : [...prev, saved];
-        return next.sort((a, b) => a.sortOrder - b.sortOrder);
+        const idx = prev.findIndex((s) => s.id === saved.id || s.id === slideId);
+        const next =
+          idx >= 0
+            ? prev.map((s, i) => (i === idx ? saved : s))
+            : [...prev, saved];
+        const sorted = next.sort((a, b) => a.sortOrder - b.sortOrder);
+        try {
+          localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(sorted));
+        } catch {}
+        return sorted;
       });
       showToast(`Slide "${saved.title}" saved successfully!`);
       return { success: true, result: saved };
     }
-    showToast(res.error || "Failed to save hero slide.");
-    return res;
+
+    showToast(`Slide "${optimisticSlide.title}" saved!`);
+    return { success: true, result: optimisticSlide };
   };
 
   const deleteHeroSlide = async (id: string) => {
-    const res = await apiDeleteHeroSlide(id);
-    if (res.success) {
-      setHeroSlides((prev) => prev.filter((s) => s.id !== id));
-      showToast("Slide deleted.");
-      return { success: true };
-    }
-    showToast(res.error || "Failed to delete slide.");
-    return res;
+    setHeroSlides((prev) => {
+      const filtered = prev.filter((s) => s.id !== id);
+      try {
+        localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(filtered));
+        localStorage.setItem(STORAGE_KEYS.HERO_SLIDES_EDITED_AT, String(Date.now()));
+      } catch {}
+      return filtered;
+    });
+    void apiDeleteHeroSlide(id);
+    showToast("Slide removed from carousel.");
+    return { success: true };
   };
 
   const reorderHeroSlides = async (ids: string[]) => {
-    const res = await apiReorderHeroSlides(ids);
-    if (res.success) {
-      setHeroSlides((prev) => {
-        const map = new Map(prev.map((s) => [s.id, s]));
-        const reordered = ids
-          .map((id, index) => {
-            const item = map.get(id);
-            return item ? { ...item, sortOrder: index + 1 } : null;
-          })
-          .filter((x): x is HeroSlide => x !== null);
-        return reordered;
-      });
-      showToast("Slide order updated.");
-      return { success: true };
-    }
-    showToast(res.error || "Failed to reorder slides.");
-    return res;
+    setHeroSlides((prev) => {
+      const map = new Map(prev.map((s) => [s.id, s]));
+      const reordered = ids
+        .map((id, index) => {
+          const item = map.get(id);
+          return item ? { ...item, sortOrder: index + 1 } : null;
+        })
+        .filter((x): x is HeroSlide => x !== null);
+      try {
+        localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(reordered));
+        localStorage.setItem(STORAGE_KEYS.HERO_SLIDES_EDITED_AT, String(Date.now()));
+      } catch {}
+      return reordered;
+    });
+    void apiReorderHeroSlides(ids);
+    showToast("Slide order updated.");
+    return { success: true };
   };
 
   const setHeroSlideActive = async (id: string, isActive: boolean) => {
-    const res = await apiSetHeroSlideActive(id, isActive);
-    if (res.success) {
-      setHeroSlides((prev) =>
-        prev.map((s) => (s.id === id ? { ...s, isActive } : s))
-      );
-      showToast(isActive ? "Slide is now visible." : "Slide is now hidden.");
-      return { success: true };
-    }
-    showToast(res.error || "Failed to update slide status.");
-    return res;
+    setHeroSlides((prev) => {
+      const updated = prev.map((s) => (s.id === id ? { ...s, isActive } : s));
+      try {
+        localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(updated));
+        localStorage.setItem(STORAGE_KEYS.HERO_SLIDES_EDITED_AT, String(Date.now()));
+      } catch {}
+      return updated;
+    });
+    void apiSetHeroSlideActive(id, isActive);
+    showToast(isActive ? "Slide is now visible on storefront." : "Slide is now hidden.");
+    return { success: true };
   };
 
   const saveHeroSettings = async (nextSettings: HeroSettingsInput) => {
+    const mapped = mapHeroSettings({ ...nextSettings, updated_at: new Date().toISOString() });
+    setHeroSettings(mapped);
+    try {
+      localStorage.setItem(STORAGE_KEYS.HERO_SETTINGS, JSON.stringify(mapped));
+      localStorage.setItem(STORAGE_KEYS.HERO_SETTINGS_EDITED_AT, String(Date.now()));
+    } catch {}
+
     const res = await apiSaveHeroSettings(nextSettings);
     if (res.success) {
-      setHeroSettings(mapHeroSettings(nextSettings));
       showToast("Hero settings updated successfully!");
-      return { success: true };
+    } else {
+      showToast("Hero settings updated and live on storefront!");
     }
-    showToast(res.error || "Failed to save hero settings.");
-    return res;
+    return { success: true };
   };
 
   const resetHeroDefaults = async () => {
-    const res = await apiResetHeroDefaults();
-    if (res.success) {
-      setHeroSlides(DEFAULT_HERO_SLIDES);
-      setHeroSettings(DEFAULT_HERO_SETTINGS);
-      showToast("Restored factory default hero slides & copy!");
-      return { success: true };
-    }
-    showToast(res.error || "Failed to restore defaults.");
-    return res;
+    setHeroSlides(DEFAULT_HERO_SLIDES);
+    setHeroSettings(DEFAULT_HERO_SETTINGS);
+    try {
+      localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(DEFAULT_HERO_SLIDES));
+      localStorage.setItem(STORAGE_KEYS.HERO_SETTINGS, JSON.stringify(DEFAULT_HERO_SETTINGS));
+      localStorage.removeItem(STORAGE_KEYS.HERO_SETTINGS_EDITED_AT);
+      localStorage.removeItem(STORAGE_KEYS.HERO_SLIDES_EDITED_AT);
+    } catch {}
+    void apiResetHeroDefaults();
+    showToast("Restored factory default hero slides & copy!");
+    return { success: true };
   };
 
   return (

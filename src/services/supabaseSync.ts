@@ -10,6 +10,8 @@ import {
   Product,
   ProductReview,
   SiteSettings,
+  HeroSlide,
+  HeroSettings,
 } from "@/types";
 import {
   INITIAL_CATEGORIES,
@@ -991,7 +993,9 @@ export async function fetchAuthenticatedAdminDataFromSupabase(): Promise<{
 export async function seedFullDatabaseToSupabase(
   currentProducts: Product[] = INITIAL_PRODUCTS,
   currentCoupons: Coupon[] = INITIAL_COUPONS,
-  currentSettings: SiteSettings = INITIAL_SITE_SETTINGS
+  currentSettings: SiteSettings = INITIAL_SITE_SETTINGS,
+  currentHeroSlides?: HeroSlide[],
+  currentHeroSettings?: HeroSettings
 ): Promise<{ ok: boolean; message: string }> {
   const supabase = getSupabaseClient();
   if (!supabase) {
@@ -1022,9 +1026,58 @@ export async function seedFullDatabaseToSupabase(
     await upsertCouponToSupabase(cpn);
   }
 
+  if (currentHeroSettings) {
+    try {
+      await supabase.from("hero_settings").upsert(
+        {
+          id: 1,
+          show_headline: currentHeroSettings.showHeadline,
+          headline: currentHeroSettings.headline,
+          subheadline: currentHeroSettings.subheadline,
+          show_guarantee: currentHeroSettings.showGuarantee,
+          guarantee_text: currentHeroSettings.guaranteeText,
+          show_counter: currentHeroSettings.showCounter,
+          autoplay: currentHeroSettings.autoplay,
+          autoplay_seconds: currentHeroSettings.autoplaySeconds,
+          show_trust_items: currentHeroSettings.showTrustItems,
+          trust_items: currentHeroSettings.trustItems,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" }
+      );
+    } catch {}
+  }
+
+  if (currentHeroSlides && currentHeroSlides.length > 0) {
+    try {
+      for (const s of currentHeroSlides) {
+        await supabase.from("hero_slides").upsert(
+          {
+            id: s.id,
+            sort_order: s.sortOrder,
+            is_active: s.isActive !== false,
+            image_url: s.imageUrl,
+            image_alt: s.imageAlt || "",
+            image_position: s.imagePosition || "center",
+            badge_text: s.badgeText || "",
+            badge_icon: s.badgeIcon || "sparkles",
+            title: s.title,
+            subtitle: s.subtitle || "",
+            cta_text: s.ctaText || "",
+            cta_link: s.ctaLink || "",
+            starts_at: s.startsAt || null,
+            ends_at: s.endsAt || null,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" }
+        );
+      }
+    } catch {}
+  }
+
   return {
     ok: true,
-    message: `Synced ${currentProducts.length} products, ${currentCoupons.length} coupons & settings to Supabase!`,
+    message: `Synced ${currentProducts.length} products, ${currentCoupons.length} coupons, hero slider & settings to Supabase!`,
   };
 }
 

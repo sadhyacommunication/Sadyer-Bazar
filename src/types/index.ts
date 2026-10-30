@@ -293,4 +293,5 @@ export interface HeroSettings {
   autoplaySeconds: number;
   showTrustItems: boolean;
   trustItems: HeroTrustItem[];
+  updatedAt?: string;
 }

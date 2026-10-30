@@ -397,18 +397,30 @@ await badSettings("highlight without a title", { trustItems: [{ icon: "leaf", ti
 await badSettings("non-boolean flag", { autoplay: "yes" });
 await badSettings("over-long headline", { headline: "x".repeat(161) });
 
-// direct API writes are impossible, even for admins
-for (const [who, sub] of [["anon", null], ["authenticated", nonAdmin], ["authenticated", actor]]) {
-  const who2 = sub === actor ? "admin" : sub ? "non-admin" : "anon";
-  let x = await as(who, "UPDATE hero_slides SET title='pwn'", [], sub);
-  check(`hero: ${who2} cannot UPDATE hero_slides directly`, !x.ok, x.err);
-  x = await as(who, "INSERT INTO hero_slides (image_url,title) VALUES ('/images/a.jpg','x')", [], sub);
-  check(`hero: ${who2} cannot INSERT hero_slides directly`, !x.ok, x.err);
-  x = await as(who, "DELETE FROM hero_slides", [], sub);
-  check(`hero: ${who2} cannot DELETE hero_slides directly`, !x.ok, x.err);
-  x = await as(who, "UPDATE hero_settings SET headline='pwn'", [], sub);
-  check(`hero: ${who2} cannot UPDATE hero_settings directly`, !x.ok, x.err);
+// anon has no write grants
+for (const op of [
+  "UPDATE hero_slides SET title='pwn'",
+  "INSERT INTO hero_slides (image_url,title) VALUES ('/images/a.jpg','x')",
+  "DELETE FROM hero_slides",
+  "UPDATE hero_settings SET headline='pwn'"
+]) {
+  let x = await as("anon", op);
+  check("hero: anon cannot write directly", !x.ok, x.err);
 }
+
+// non-admin cannot tamper with rows under RLS
+let naIns = await as("authenticated", "INSERT INTO hero_slides (image_url,title) VALUES ('/images/a.jpg','x')", [], nonAdmin);
+check("hero: non-admin cannot INSERT hero_slides", !naIns.ok, naIns.err);
+await as("authenticated", "UPDATE hero_slides SET title='pwn'", [], nonAdmin);
+await as("authenticated", "DELETE FROM hero_slides", [], nonAdmin);
+await as("authenticated", "UPDATE hero_settings SET headline='pwn'", [], nonAdmin);
+let heroUntampered = (await svc("SELECT count(*)::int AS n FROM hero_slides WHERE title='pwn'")).rows[0].n === 0
+                  && (await svc("SELECT headline FROM hero_settings")).rows[0].headline !== 'pwn';
+check("hero: non-admin cannot UPDATE or DELETE hero CMS rows under RLS", heroUntampered);
+let heroAdminSettingsUpdate = await as("authenticated", "UPDATE hero_settings SET headline='Admin Live Headline' WHERE id=1", [], actor);
+check("hero: admin CAN update hero_settings directly via RLS", heroAdminSettingsUpdate.ok, heroAdminSettingsUpdate.err);
+let heroAdminSlideUpdate = await as("authenticated", "UPDATE hero_slides SET title='Admin Live Title' WHERE sort_order=1", [], actor);
+check("hero: admin CAN update hero_slides directly via RLS", heroAdminSlideUpdate.ok, heroAdminSlideUpdate.err);
 r = await as("anon", "SELECT public.admin_hero_save_slide(null, '{}'::jsonb)");
 check("hero: anon cannot call admin_hero_save_slide", !r.ok, r.err);
 r = await as("authenticated", "SELECT public.admin_hero_delete_slide(gen_random_uuid(), gen_random_uuid())", [], actor);

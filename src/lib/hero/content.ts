@@ -206,6 +206,7 @@ export function mapHeroSettings(raw: unknown): HeroSettings {
     autoplaySeconds: Number.isFinite(seconds) && seconds >= 2 && seconds <= 20 ? seconds : d.autoplaySeconds,
     showTrustItems: bool(pick("show_trust_items", "showTrustItems"), d.showTrustItems),
     trustItems: items,
+    updatedAt: typeof (r.updated_at ?? r.updatedAt) === "string" ? String(r.updated_at ?? r.updatedAt) : undefined,
   };
 }
 

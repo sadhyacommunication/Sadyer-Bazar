@@ -468,32 +468,33 @@ END $$;
 -- -----------------------------------------------------------------------------
 DROP POLICY IF EXISTS hero_slides_public_read   ON public.hero_slides;
 DROP POLICY IF EXISTS hero_slides_admin_read    ON public.hero_slides;
+DROP POLICY IF EXISTS hero_slides_admin_all     ON public.hero_slides;
 DROP POLICY IF EXISTS hero_settings_public_read ON public.hero_settings;
+DROP POLICY IF EXISTS hero_settings_admin_all   ON public.hero_settings;
 
 REVOKE ALL ON public.hero_slides, public.hero_settings FROM anon, authenticated;
-GRANT SELECT ON public.hero_slides   TO anon, authenticated;
-GRANT SELECT ON public.hero_settings TO anon, authenticated;
+GRANT SELECT ON public.hero_slides   TO anon;
+GRANT SELECT ON public.hero_settings TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.hero_slides   TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.hero_settings TO authenticated;
 
 -- Public: only slides that are switched on AND inside their schedule window.
 CREATE POLICY hero_slides_public_read ON public.hero_slides FOR SELECT TO anon, authenticated
   USING (is_active AND (starts_at IS NULL OR starts_at <= now()) AND (ends_at IS NULL OR ends_at > now()));
--- Admins also see hidden / scheduled / expired slides (to manage them).
-CREATE POLICY hero_slides_admin_read  ON public.hero_slides FOR SELECT TO authenticated
-  USING (public.is_admin());
+
+-- Admins also see hidden / scheduled / expired slides and can write (to manage them).
+CREATE POLICY hero_slides_admin_all  ON public.hero_slides FOR ALL TO authenticated
+  USING (public.is_admin()) WITH CHECK (public.is_admin());
+
 CREATE POLICY hero_settings_public_read ON public.hero_settings FOR SELECT TO anon, authenticated
   USING (true);
 
--- Defense in depth: even if a grant/policy is loosened by mistake, API roles can never write.
-DO $$
-DECLARE t text;
-BEGIN
-  FOREACH t IN ARRAY ARRAY['hero_slides', 'hero_settings']
-  LOOP
-    EXECUTE format('DROP TRIGGER IF EXISTS trg_forbid_api_writes ON public.%I', t);
-    EXECUTE format('CREATE TRIGGER trg_forbid_api_writes BEFORE INSERT OR UPDATE OR DELETE ON public.%I '
-                   'FOR EACH ROW EXECUTE FUNCTION public.forbid_api_writes()', t);
-  END LOOP;
-END $$;
+CREATE POLICY hero_settings_admin_all ON public.hero_settings FOR ALL TO authenticated
+  USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+-- Remove write-guard triggers so authenticated admins can manage CMS tables directly via RLS
+DROP TRIGGER IF EXISTS trg_forbid_api_writes ON public.hero_slides;
+DROP TRIGGER IF EXISTS trg_forbid_api_writes ON public.hero_settings;
 
 -- Functions: nobody but the server (service_role) may execute any of them.
 DO $$
@@ -510,6 +511,7 @@ BEGIN
   END LOOP;
 END $$;
 
+GRANT EXECUTE ON FUNCTION public.sb_hero_valid_image(text), public.sb_hero_valid_link(text) TO authenticated;
 GRANT ALL ON public.hero_slides, public.hero_settings TO service_role;
 
 -- -----------------------------------------------------------------------------

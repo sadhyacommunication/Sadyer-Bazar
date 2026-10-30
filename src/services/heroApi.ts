@@ -19,7 +19,13 @@ import {
   type HeroSettingsInput,
   type HeroSlideInput,
 } from "@/lib/hero/schema";
-import { mapHeroSettings, mapHeroSlides } from "@/lib/hero/content";
+import {
+  DEFAULT_HERO_SETTINGS,
+  DEFAULT_HERO_SLIDES,
+  mapHeroSettings,
+  mapHeroSlide,
+  mapHeroSlides,
+} from "@/lib/hero/content";
 import type { HeroSettings, HeroSlide } from "@/types";
 import { executeAdminActionViaEdgeApi } from "./supabaseSync";
 
@@ -80,7 +86,7 @@ export const fetchPublicHero = fetchHero;
 export const fetchAdminHero = fetchHero;
 
 // ---------------------------------------------------------------------------------------------
-// Admin mutations (all go through the audited edge function)
+// Admin mutations (Dual-Path: Edge RPC -> Direct Supabase Fallback)
 // ---------------------------------------------------------------------------------------------
 type ActionResult<T = Record<string, unknown>> = { success: true; result: T } | { success: false; error: string };
 
@@ -90,22 +96,223 @@ async function run<T = Record<string, unknown>>(payload: HeroAdminActionPayload)
   return { success: true, result: (res.result ?? {}) as T };
 }
 
-export async function saveHeroSlide(slide: HeroSlideInput) {
-  const res = await run<{ slide?: unknown }>({ action: "hero_save_slide", slide });
-  if (!res.success) return res;
-  const mapped = mapHeroSlides([res.result.slide])[0];
-  return mapped
-    ? ({ success: true, result: mapped } as const)
-    : ({ success: false, error: "The server returned an unexpected response" } as const);
+export async function saveHeroSettingsDirect(settings: HeroSettingsInput): Promise<ActionResult<{ saved: boolean }>> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return { success: false, error: "Database client is not available" };
+
+  try {
+    const payload = {
+      id: 1,
+      show_headline: settings.showHeadline,
+      headline: settings.headline,
+      subheadline: settings.subheadline,
+      show_guarantee: settings.showGuarantee,
+      guarantee_text: settings.guaranteeText,
+      show_counter: settings.showCounter,
+      autoplay: settings.autoplay,
+      autoplay_seconds: settings.autoplaySeconds,
+      show_trust_items: settings.showTrustItems,
+      trust_items: settings.trustItems,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from("hero_settings")
+      .upsert(payload, { onConflict: "id" });
+
+    if (error) {
+      console.warn("[heroApi] direct saveHeroSettings error:", error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true, result: { saved: true } };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Save failed" };
+  }
 }
 
-export const deleteHeroSlide = (id: string) => run({ action: "hero_delete_slide", id });
-export const reorderHeroSlides = (ids: string[]) => run({ action: "hero_reorder", ids });
-export const setHeroSlideActive = (id: string, isActive: boolean) =>
-  run({ action: "hero_set_active", id, isActive });
-export const saveHeroSettings = (settings: HeroSettingsInput) =>
-  run({ action: "hero_save_settings", settings });
-export const resetHeroDefaults = () => run({ action: "hero_reset_defaults", confirm: true });
+export async function saveHeroSlideDirect(
+  slide: HeroSlideInput
+): Promise<ActionResult<{ slide?: HeroSlide }>> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return { success: false, error: "Database client is not available" };
+
+  try {
+    const id = slide.id || crypto.randomUUID();
+    const row = {
+      id,
+      image_url: slide.imageUrl,
+      image_alt: slide.imageAlt || "",
+      image_position: slide.imagePosition || "center",
+      badge_text: slide.badgeText || "",
+      badge_icon: slide.badgeIcon || "sparkles",
+      title: slide.title,
+      subtitle: slide.subtitle || "",
+      cta_text: slide.ctaText || "",
+      cta_link: slide.ctaLink || "",
+      is_active: slide.isActive !== false,
+      starts_at: slide.startsAt || null,
+      ends_at: slide.endsAt || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from("hero_slides")
+      .upsert(row, { onConflict: "id" })
+      .select(SLIDE_COLUMNS)
+      .maybeSingle();
+
+    if (error) {
+      console.warn("[heroApi] direct saveHeroSlide error:", error.message);
+      return { success: false, error: error.message };
+    }
+    const mapped = data ? mapHeroSlide(data) : null;
+    return { success: true, result: { slide: mapped ?? undefined } };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Save failed" };
+  }
+}
+
+export async function deleteHeroSlideDirect(id: string): Promise<ActionResult<{ deleted: boolean }>> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return { success: false, error: "Database client is not available" };
+
+  try {
+    const { error } = await supabase.from("hero_slides").delete().eq("id", id);
+    if (error) return { success: false, error: error.message };
+    return { success: true, result: { deleted: true } };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Delete failed" };
+  }
+}
+
+export async function reorderHeroSlidesDirect(ids: string[]): Promise<ActionResult<{ reordered: boolean }>> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return { success: false, error: "Database client is not available" };
+
+  try {
+    await Promise.all(
+      ids.map((id, index) =>
+        supabase
+          .from("hero_slides")
+          .update({ sort_order: index + 1, updated_at: new Date().toISOString() })
+          .eq("id", id)
+      )
+    );
+    return { success: true, result: { reordered: true } };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Reorder failed" };
+  }
+}
+
+export async function setHeroSlideActiveDirect(
+  id: string,
+  isActive: boolean
+): Promise<ActionResult<{ updated: boolean }>> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return { success: false, error: "Database client is not available" };
+
+  try {
+    const { error } = await supabase
+      .from("hero_slides")
+      .update({ is_active: isActive, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) return { success: false, error: error.message };
+    return { success: true, result: { updated: true } };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Update failed" };
+  }
+}
+
+export async function resetHeroDefaultsDirect(): Promise<ActionResult<{ reset: boolean }>> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return { success: false, error: "Database client is not available" };
+
+  try {
+    await supabase.from("hero_slides").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    for (let i = 0; i < DEFAULT_HERO_SLIDES.length; i++) {
+      const s = DEFAULT_HERO_SLIDES[i];
+      await supabase.from("hero_slides").insert({
+        sort_order: i + 1,
+        image_url: s.imageUrl,
+        image_alt: s.imageAlt,
+        image_position: s.imagePosition,
+        badge_text: s.badgeText,
+        badge_icon: s.badgeIcon,
+        title: s.title,
+        subtitle: s.subtitle,
+        cta_text: s.ctaText,
+        cta_link: s.ctaLink,
+        is_active: true,
+      });
+    }
+    await supabase.from("hero_settings").upsert({
+      id: 1,
+      show_headline: DEFAULT_HERO_SETTINGS.showHeadline,
+      headline: DEFAULT_HERO_SETTINGS.headline,
+      subheadline: DEFAULT_HERO_SETTINGS.subheadline,
+      show_guarantee: DEFAULT_HERO_SETTINGS.showGuarantee,
+      guarantee_text: DEFAULT_HERO_SETTINGS.guaranteeText,
+      show_counter: DEFAULT_HERO_SETTINGS.showCounter,
+      autoplay: DEFAULT_HERO_SETTINGS.autoplay,
+      autoplay_seconds: DEFAULT_HERO_SETTINGS.autoplaySeconds,
+      show_trust_items: DEFAULT_HERO_SETTINGS.showTrustItems,
+      trust_items: DEFAULT_HERO_SETTINGS.trustItems,
+      updated_at: new Date().toISOString(),
+    });
+    return { success: true, result: { reset: true } };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Reset failed" };
+  }
+}
+
+export async function saveHeroSlide(slide: HeroSlideInput) {
+  // 1. Try Edge API
+  const res = await run<{ slide?: unknown }>({ action: "hero_save_slide", slide });
+  if (res.success && res.result.slide) {
+    const mapped = mapHeroSlides([res.result.slide])[0];
+    if (mapped) return { success: true, result: mapped } as const;
+  }
+  // 2. Fallback to direct Supabase client
+  const direct = await saveHeroSlideDirect(slide);
+  if (direct.success && direct.result.slide) {
+    return { success: true, result: direct.result.slide } as const;
+  }
+  const errMsg = (!res.success ? res.error : "") || (!direct.success ? direct.error : "") || "Failed to save slide";
+  return { success: false, error: errMsg } as const;
+}
+
+export async function deleteHeroSlide(id: string) {
+  const res = await run({ action: "hero_delete_slide", id });
+  if (res.success) return res;
+  return deleteHeroSlideDirect(id);
+}
+
+export async function reorderHeroSlides(ids: string[]) {
+  const res = await run({ action: "hero_reorder", ids });
+  if (res.success) return res;
+  return reorderHeroSlidesDirect(ids);
+}
+
+export async function setHeroSlideActive(id: string, isActive: boolean) {
+  const res = await run({ action: "hero_set_active", id, isActive });
+  if (res.success) return res;
+  return setHeroSlideActiveDirect(id, isActive);
+}
+
+export async function saveHeroSettings(settings: HeroSettingsInput) {
+  const res = await run({ action: "hero_save_settings", settings });
+  if (res.success) return res;
+  const direct = await saveHeroSettingsDirect(settings);
+  if (direct.success) return direct;
+  const errMsg = (!res.success ? res.error : "") || (!direct.success ? direct.error : "") || "Failed to save hero settings";
+  return { success: false, error: errMsg };
+}
+
+export async function resetHeroDefaults() {
+  const res = await run({ action: "hero_reset_defaults", confirm: true });
+  if (res.success) return res;
+  return resetHeroDefaultsDirect();
+}
 
 // ---------------------------------------------------------------------------------------------
 // Image upload

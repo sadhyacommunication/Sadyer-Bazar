@@ -52,8 +52,8 @@ BEGIN
       ('anon  INSERT hero_slides',                     'anon',          'INSERT INTO public.hero_slides (image_url, title) VALUES (''/images/x.jpg'', ''x'')',     'deny'),
       ('anon  DELETE hero_slides',                     'anon',          'DELETE FROM public.hero_slides',                                                          'deny'),
       ('anon  UPDATE hero_settings',                   'anon',          'UPDATE public.hero_settings SET headline = ''hacked''',                                   'deny'),
-      ('authN non-admin UPDATE hero_slides',           'authenticated', 'UPDATE public.hero_slides SET title = ''hacked''',                                        'deny'),
-      ('authN non-admin DELETE hero_slides',           'authenticated', 'DELETE FROM public.hero_slides',                                                          'deny'),
+      ('authN non-admin UPDATE hero_slides',           'authenticated', 'UPDATE public.hero_slides SET title = ''hacked''',                                        'zero'),
+      ('authN non-admin DELETE hero_slides',           'authenticated', 'DELETE FROM public.hero_slides',                                                          'zero'),
       ('anon  POSITIVE: read visible hero slides',     'anon',          'SELECT id FROM public.hero_slides LIMIT 1',                                               'allow'),
       ('anon  POSITIVE: read hero settings',           'anon',          'SELECT headline FROM public.hero_settings',                                               'allow')
     ) AS x(name, role, stmt, expect)
@@ -87,7 +87,7 @@ END $$;
 INSERT INTO attack_results
 SELECT 'function callable by API role: ' || p.oid::regprocedure::text,
        'EXECUTE granted to ' || string_agg(r.rolname, ','),
-       CASE WHEN p.proname = 'is_admin' AND string_agg(r.rolname, ',') = 'authenticated' THEN 'PASS' ELSE 'FAIL' END
+       CASE WHEN p.proname IN ('is_admin', 'sb_hero_valid_image', 'sb_hero_valid_link') AND string_agg(r.rolname, ',') = 'authenticated' THEN 'PASS' ELSE 'FAIL' END
 FROM pg_proc p
 CROSS JOIN pg_roles r
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'
@@ -96,12 +96,12 @@ WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'
 GROUP BY p.oid, p.proname;
 
 INSERT INTO attack_results
-SELECT 'no function is callable by anon/authenticated (except is_admin)',
+SELECT 'no function is callable by anon/authenticated (except is_admin and pure check validators)',
        'none exposed',
        'PASS'
 WHERE NOT EXISTS (
   SELECT 1 FROM pg_proc p CROSS JOIN pg_roles r
-  WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f' AND p.proname <> 'is_admin'
+  WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f' AND p.proname NOT IN ('is_admin', 'sb_hero_valid_image', 'sb_hero_valid_link')
     AND r.rolname IN ('anon', 'authenticated') AND has_function_privilege(r.oid, p.oid, 'EXECUTE'));
 
 INSERT INTO attack_results
@@ -119,7 +119,7 @@ SELECT 'write-guard trigger on ' || c.relname,
 FROM pg_class c
 LEFT JOIN pg_trigger g ON g.tgrelid = c.oid AND g.tgname = 'trg_forbid_api_writes' AND NOT g.tgisinternal
 WHERE c.relnamespace = 'public'::regnamespace
-  AND c.relname IN ('orders', 'order_items', 'payment_transactions', 'payment_attempts', 'processed_webhook_events', 'hero_slides', 'hero_settings');
+  AND c.relname IN ('orders', 'order_items', 'payment_transactions', 'payment_attempts', 'processed_webhook_events');
 
 INSERT INTO attack_results
 SELECT 'RLS enabled on ' || c.relname,
