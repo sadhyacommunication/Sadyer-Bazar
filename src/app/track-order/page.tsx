@@ -634,17 +634,66 @@ function TrackOrderContent() {
 
       {/* 5. Not Found State */}
       {notFound && (
-        <div className="bg-white rounded-3xl border border-stone-200 p-10 text-center space-y-4 shadow-sm">
-          <div className="w-14 h-14 rounded-full bg-stone-100 text-stone-500 flex items-center justify-center mx-auto">
-            <PackageSearch className="w-7 h-7" />
+        <div className="bg-white rounded-3xl border border-stone-200 p-8 sm:p-10 text-center space-y-4 shadow-sm max-w-xl mx-auto">
+          <div className="w-16 h-16 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center mx-auto border border-amber-200/60 shadow-xs">
+            <PackageSearch className="w-8 h-8" />
           </div>
-          <h3 className="text-lg font-bold text-stone-900">
-            &ldquo;{orderCodeInput}&rdquo; নম্বরের কোনো অর্ডার খুঁজে পাওয়া যায়নি
-          </h3>
-          <p className="text-xs text-stone-500 max-w-md mx-auto leading-relaxed">
-            {trackError ||
-              `দয়া করে আপনার অর্ডার আইডি (যেমন SB-YYMM-XXXXXXXXXX) এবং চেকআউটের সময় ব্যবহৃত ফোন নম্বরের শেষ ৪টি ডিজিট সঠিকভাবে মিলিয়ে নিন, অথবা আমাদের হটলাইনে কল করুন: ${settings.supportPhone}।`}
-          </p>
+          <div className="space-y-1.5">
+            <h3 className="text-lg sm:text-xl font-black text-stone-900">
+              &ldquo;{orderCodeInput}&rdquo; নম্বরের কোনো অর্ডার খুঁজে পাওয়া যায়নি
+            </h3>
+            <p className="text-xs sm:text-sm text-stone-600 max-w-md mx-auto leading-relaxed">
+              {trackError &&
+              !trackError
+                .toLowerCase()
+                .includes("service temporarily unavailable") &&
+              !trackError.toLowerCase().includes("upstream_error")
+                ? trackError
+                : "দয়া করে আপনার অর্ডার আইডি (যেমন SB-YYMM-XXXXXXXXXX) এবং চেকআউটের সময় ব্যবহৃত মোবাইল নম্বরের শেষ ৪টি ডিজিট সঠিকভাবে মিলিয়ে নিন।"}
+            </p>
+          </div>
+
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={() => performLookup(orderCodeInput, phoneLast4)}
+              disabled={loadingTrack}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs sm:text-sm shadow-sm transition cursor-pointer"
+            >
+              {loadingTrack ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>যাচাই করা হচ্ছে...</span>
+                </>
+              ) : (
+                <>
+                  <PackageSearch className="w-4 h-4" />
+                  <span>পুনরায় চেষ্টা করুন</span>
+                </>
+              )}
+            </button>
+
+            <a
+              href={`https://wa.me/88${(
+                settings.whatsappNumber || "01713477780"
+              ).replace(/\D/g, "")}?text=${encodeURIComponent(
+                `সালাম, আমার অর্ডার আইডি ${orderCodeInput || ""} খুঁজে পাচ্ছি না। দয়া করে একটু সাহায্য করবেন?`
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs sm:text-sm shadow-xs transition"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span>WhatsApp সহায়তা</span>
+            </a>
+
+            <a
+              href={`tel:${settings.supportPhone || "01713477780"}`}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs sm:text-sm transition"
+            >
+              <PhoneCall className="w-4 h-4 text-emerald-700" />
+              <span>হটলাইন: {settings.supportPhone || "01713477780"}</span>
+            </a>
+          </div>
         </div>
       )}
 

@@ -19,6 +19,7 @@ import {
   INITIAL_CATEGORIES,
   INITIAL_CONTACT_MESSAGES,
   INITIAL_COUPONS,
+  INITIAL_ORDERS,
   INITIAL_PRODUCTS,
   INITIAL_REVIEWS,
   INITIAL_SITE_SETTINGS,
@@ -737,32 +738,164 @@ export async function trackOrderViaEdgeApi(
   orderCode: string,
   phoneLast4: string
 ): Promise<{ success: boolean; order?: Order; error?: string }> {
+  const cleanCode = orderCode.trim().toUpperCase();
+  const cleanLast4 = phoneLast4.replace(/\D/g, "").slice(-4);
+
+  // Helper to retrieve local storage overrides safely
+  const getLocalOverrides = (): Record<string, Partial<Order>> => {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = localStorage.getItem("sb_order_status_overrides_v1");
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  };
+
+  // Helper to retrieve local known orders safely
+  const getLocalKnownOrders = (): Order[] => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = localStorage.getItem("sb_known_orders_v1");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  // Helper to apply overrides
+  const applyOverrides = (ord: Order): Order => {
+    const ov = getLocalOverrides()[ord.orderCode.trim().toUpperCase()];
+    if (!ov) return ord;
+    return {
+      ...ord,
+      orderStatus: (ov.orderStatus as Order["orderStatus"]) || ord.orderStatus,
+      paymentStatus:
+        (ov.paymentStatus as Order["paymentStatus"]) || ord.paymentStatus,
+      dueAmount: ov.dueAmount !== undefined ? ov.dueAmount : ord.dueAmount,
+      advancePaid:
+        ov.advancePaid !== undefined ? ov.advancePaid : ord.advancePaid,
+      courierName: ov.courierName || ord.courierName,
+      trackingReference: ov.trackingReference || ord.trackingReference,
+      riderName: ov.riderName || ord.riderName,
+      riderPhone: ov.riderPhone || ord.riderPhone,
+      weightAdjustmentAmount:
+        ov.weightAdjustmentAmount !== undefined
+          ? ov.weightAdjustmentAmount
+          : ord.weightAdjustmentAmount,
+      weightAdjustmentNote:
+        ov.weightAdjustmentNote || ord.weightAdjustmentNote,
+      updatedAt: ov.updatedAt || ord.updatedAt,
+    };
+  };
+
+  // Helper to check local matches (known orders + seed orders)
+  const findLocalMatch = (): Order | undefined => {
+    const known = getLocalKnownOrders();
+    const match =
+      known.find(
+        (o) =>
+          o.orderCode.trim().toUpperCase() === cleanCode &&
+          o.customerPhone.replace(/\D/g, "").endsWith(cleanLast4)
+      ) ||
+      INITIAL_ORDERS.find(
+        (o) =>
+          o.orderCode.trim().toUpperCase() === cleanCode &&
+          o.customerPhone.replace(/\D/g, "").endsWith(cleanLast4)
+      );
+    return match ? applyOverrides(match) : undefined;
+  };
+
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+
     const res = await fetch("/api/orders/track", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        orderCode: orderCode.trim().toUpperCase(),
-        phoneLast4: phoneLast4.trim(),
+        orderCode: cleanCode,
+        phoneLast4: cleanLast4,
       }),
-    });
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeoutId));
+
     const data = (await res.json().catch(() => ({}))) as {
       success?: boolean;
       order?: Record<string, unknown>;
       error?: { message?: string } | string;
     };
-    if (!res.ok || !data.success || !data.order) {
-      const msg =
-        typeof data.error === "string"
-          ? data.error
-          : data.error?.message || "No order found matching that Order ID and phone last 4 digits.";
-      return { success: false, error: msg };
+
+    if (res.ok && data.success && data.order) {
+      const mapped = applyOverrides(mapOrderFromRow(data.order));
+      if (typeof window !== "undefined") {
+        try {
+          const current = getLocalKnownOrders().filter(
+            (o) => o.orderCode.trim().toUpperCase() !== cleanCode
+          );
+          localStorage.setItem(
+            "sb_known_orders_v1",
+            JSON.stringify([mapped, ...current].slice(0, 200))
+          );
+        } catch {}
+      }
+      return { success: true, order: mapped };
     }
-    return { success: true, order: mapOrderFromRow(data.order) };
-  } catch (err) {
+
+    // Check local fallback if server returned 404, 502, 503
+    const local = findLocalMatch();
+    if (local) {
+      return { success: true, order: local };
+    }
+
+    // Direct Supabase authenticated check (if admin or user is logged in)
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData?.session) {
+          const { data: row } = await supabase
+            .from("orders")
+            .select("*, items:order_items(*)")
+            .eq("order_code", cleanCode)
+            .maybeSingle();
+
+          if (
+            row &&
+            String(row.customer_phone || "")
+              .replace(/\D/g, "")
+              .endsWith(cleanLast4)
+          ) {
+            const mapped = applyOverrides(mapOrderFromRow(row));
+            if (typeof window !== "undefined") {
+              try {
+                const current = getLocalKnownOrders().filter(
+                  (o) => o.orderCode.trim().toUpperCase() !== cleanCode
+                );
+                localStorage.setItem(
+                  "sb_known_orders_v1",
+                  JSON.stringify([mapped, ...current].slice(0, 200))
+                );
+              } catch {}
+            }
+            return { success: true, order: mapped };
+          }
+        }
+      } catch {}
+    }
+
+    const notFoundMsg = `“${cleanCode}” নম্বরের কোনো অর্ডার খুঁজে পাওয়া যায়নি। আপনার অর্ডার আইডি এবং ব্যবহৃত মোবাইল নম্বরের শেষ ৪ ডিজিট সঠিক রয়েছে কিনা অনুগ্রহ করে যাচাই করুন।`;
+    return { success: false, error: notFoundMsg };
+  } catch {
+    // If fetch failed completely (network down, abort timeout, or offline):
+    const local = findLocalMatch();
+    if (local) {
+      return { success: true, order: local };
+    }
+
     return {
       success: false,
-      error: err instanceof Error ? err.message : "Could not look up order",
+      error: `“${cleanCode}” নম্বরের কোনো অর্ডার খুঁজে পাওয়া যায়নি। অনুগ্রহ করে আপনার অর্ডার আইডি ও মোবাইল নম্বরের শেষ ৪ ডিজিট পুনরায় মিলিয়ে দেখুন।`,
     };
   }
 }

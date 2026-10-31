@@ -85,6 +85,7 @@ import {
 
 const RECENT_ORDERS_SESSION_KEY = "sb_recent_orders";
 const ORDER_OVERRIDES_KEY = "sb_order_status_overrides_v1";
+const KNOWN_ORDERS_STORAGE_KEY = "sb_known_orders_v1";
 
 export interface OrderStatusOverride {
   orderCode: string;
@@ -99,6 +100,39 @@ export interface OrderStatusOverride {
   riderName?: string;
   riderPhone?: string;
   updatedAt: string;
+}
+
+export function getKnownOrdersFromStorage(): Order[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(KNOWN_ORDERS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveKnownOrdersToStorage(ordersList: Order[]) {
+  if (typeof window === "undefined") return;
+  try {
+    // Keep up to 200 orders to stay safely within localStorage limits
+    const trimmed = ordersList.slice(0, 200);
+    localStorage.setItem(KNOWN_ORDERS_STORAGE_KEY, JSON.stringify(trimmed));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export function upsertKnownOrderToStorage(order: Order) {
+  if (typeof window === "undefined" || !order?.orderCode) return;
+  try {
+    const current = getKnownOrdersFromStorage();
+    const clean = order.orderCode.trim().toUpperCase();
+    const filtered = current.filter(
+      (o) => o.orderCode.trim().toUpperCase() !== clean
+    );
+    saveKnownOrdersToStorage([order, ...filtered]);
+  } catch {}
 }
 
 export function getOrderStatusOverrides(): Record<string, OrderStatusOverride> {
@@ -355,8 +389,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [orders, setOrders] = useState<Order[]>(() => {
     if (typeof window === "undefined") return INITIAL_ORDERS;
     const overrides = getOrderStatusOverrides();
-    return INITIAL_ORDERS.map((o) => {
-      const ov = overrides[o.orderCode.toUpperCase()];
+    const stored = getKnownOrdersFromStorage();
+    const orderMap = new Map<string, Order>();
+    for (const o of INITIAL_ORDERS) {
+      orderMap.set(o.orderCode.trim().toUpperCase(), o);
+    }
+    for (const o of stored) {
+      orderMap.set(o.orderCode.trim().toUpperCase(), o);
+    }
+    return Array.from(orderMap.values()).map((o) => {
+      const ov = overrides[o.orderCode.trim().toUpperCase()];
       if (ov) {
         return {
           ...o,
@@ -753,6 +795,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     // Remember orderCode + phoneLast4 in sessionStorage so /track-order can auto-fill phoneLast4
     rememberRecentOrderInSession(order.orderCode, order.customerPhone.slice(-4));
 
+    // Persist to local known orders storage so tracking always finds placed orders
+    upsertKnownOrderToStorage(order);
+
     setOrders((prev) => [
       order,
       ...prev.filter((o) => o.orderCode !== order.orderCode),
@@ -788,7 +833,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const findOrderByCode = (code: string): Order | undefined => {
     const clean = code.trim().toUpperCase();
-    const ord = orders.find((o) => o.orderCode.toUpperCase() === clean);
+    if (!clean) return undefined;
+    let ord = orders.find((o) => o.orderCode.trim().toUpperCase() === clean);
+    if (!ord) {
+      const stored = getKnownOrdersFromStorage();
+      ord = stored.find((o) => o.orderCode.trim().toUpperCase() === clean);
+    }
+    if (!ord) {
+      ord = INITIAL_ORDERS.find((o) => o.orderCode.trim().toUpperCase() === clean);
+    }
     if (!ord) return undefined;
     const overrides = getOrderStatusOverrides();
     const ov = overrides[clean];
@@ -815,7 +868,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
-    const target = orders.find((o) => o.id === orderId || o.orderCode === orderId);
+    const target =
+      orders.find((o) => o.id === orderId || o.orderCode === orderId) ||
+      getKnownOrdersFromStorage().find((o) => o.id === orderId || o.orderCode === orderId) ||
+      INITIAL_ORDERS.find((o) => o.id === orderId || o.orderCode === orderId);
     if (!target) return;
 
     const now = new Date().toISOString();
@@ -829,9 +885,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       )
     );
 
-    // 2. Persist override to localStorage (so refresh & new tabs have it!)
+    // 2. Persist override & update known order in localStorage
     saveOrderStatusOverride(target.orderCode, {
       orderCode: target.orderCode,
+      orderStatus: status,
+      updatedAt: now,
+    });
+    upsertKnownOrderToStorage({
+      ...target,
       orderStatus: status,
       updatedAt: now,
     });
@@ -1380,6 +1441,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         return o;
       });
       setOrders(mergedOrders);
+      saveKnownOrdersToStorage(mergedOrders);
       setMessages(adminMessages);
       if (adminTransactions) {
         setTransactions(adminTransactions);
