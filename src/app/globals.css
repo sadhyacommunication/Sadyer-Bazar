@@ -74,3 +74,13 @@ body {
   }
 }
 
+/* Hide scrollbar for horizontal chip/pill lists */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+
