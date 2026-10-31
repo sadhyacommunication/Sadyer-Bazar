@@ -49,6 +49,7 @@ import {
   seedFullDatabaseToSupabase,
   subscribeToRealtimeStore,
   SupabaseConnectionState,
+  syncOrderToSupabase,
   upsertCategoryToSupabase,
   upsertContactMessageToSupabase,
   upsertCouponToSupabase,
@@ -320,7 +321,7 @@ interface StoreContextValue {
   // Refresh Live Storefront Catalog & Settings from Supabase
   refreshLiveStore: () => Promise<void>;
 
-  // Secure Admin Record Hydration
+  // Secure Admin Record Hydration & Direct Sync
   hydrateAdminRecords: (
     adminOrders: Order[],
     adminMessages: ContactMessage[],
@@ -328,6 +329,9 @@ interface StoreContextValue {
     adminAttempts?: PaymentAttemptRecord[],
     adminCoupons?: Coupon[]
   ) => void;
+  syncResilientOrder: (
+    order: Order
+  ) => Promise<{ success: boolean; error?: string }>;
 
   // Dynamic Hero Banner & Section CMS
   heroSlides: HeroSlide[];
@@ -1415,33 +1419,132 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       adminCoupons?: Coupon[]
     ) => {
       const overrides = getOrderStatusOverrides();
-      const mergedOrders = adminOrders.map((o) => {
-        const ov = overrides[o.orderCode.toUpperCase()];
-        if (ov) {
-          return {
-            ...o,
-            orderStatus: ov.orderStatus || o.orderStatus,
-            paymentStatus: ov.paymentStatus || o.paymentStatus,
-            dueAmount: ov.dueAmount !== undefined ? ov.dueAmount : o.dueAmount,
-            advancePaid:
-              ov.advancePaid !== undefined ? ov.advancePaid : o.advancePaid,
-            courierName: ov.courierName || o.courierName,
-            trackingReference: ov.trackingReference || o.trackingReference,
-            riderName: ov.riderName || o.riderName,
-            riderPhone: ov.riderPhone || o.riderPhone,
-            weightAdjustmentAmount:
-              ov.weightAdjustmentAmount !== undefined
-                ? ov.weightAdjustmentAmount
-                : o.weightAdjustmentAmount,
-            weightAdjustmentNote:
-              ov.weightAdjustmentNote || o.weightAdjustmentNote,
-            updatedAt: ov.updatedAt || o.updatedAt,
-          };
+      const stored = getKnownOrdersFromStorage();
+
+      setOrders((prev) => {
+        // Build unified deduplicated order map
+        const orderMap = new Map<string, Order>();
+
+        // 1. Initial baseline demo orders
+        for (const o of INITIAL_ORDERS) {
+          orderMap.set(o.orderCode.trim().toUpperCase(), o);
         }
-        return o;
+
+        // 2. Local storage known orders (placed by customer or cached)
+        for (const o of stored) {
+          orderMap.set(o.orderCode.trim().toUpperCase(), o);
+        }
+
+        // 3. Current in-memory state orders
+        for (const o of prev) {
+          orderMap.set(o.orderCode.trim().toUpperCase(), o);
+        }
+
+        // 4. Check for resilient COD orders received in contact_messages
+        if (Array.isArray(adminMessages)) {
+          for (const msg of adminMessages) {
+            if (msg.subject && msg.subject.includes("[COD-ORDER]")) {
+              try {
+                const parsed = JSON.parse(msg.message);
+                const orderData = parsed.order || parsed;
+                if (orderData && orderData.orderCode) {
+                  const codeKey = orderData.orderCode.trim().toUpperCase();
+                  if (!orderMap.has(codeKey)) {
+                    orderMap.set(codeKey, {
+                      id: orderData.id || `cod-${orderData.orderCode}`,
+                      orderCode: orderData.orderCode,
+                      customerName: orderData.customerName || msg.name,
+                      customerPhone: orderData.customerPhone || msg.phone,
+                      deliveryZone: orderData.deliveryZone || "inside_dhaka",
+                      customerDistrict:
+                        orderData.district ||
+                        orderData.customerDistrict ||
+                        "Dhaka",
+                      customerAddress:
+                        orderData.address || orderData.customerAddress || "",
+                      customerNote:
+                        orderData.note || orderData.customerNote || undefined,
+                      subtotal: Number(
+                        orderData.subtotal || orderData.totalAmount || 0
+                      ),
+                      deliveryCharge: Number(orderData.deliveryCharge || 0),
+                      discountAmount: Number(orderData.discountAmount || 0),
+                      couponCode: orderData.couponCode || undefined,
+                      totalAmount: Number(orderData.totalAmount || 0),
+                      advancePaid: Number(orderData.advancePaid || 0),
+                      dueAmount: Number(
+                        orderData.dueAmount ?? orderData.totalAmount ?? 0
+                      ),
+                      paymentMethod: "cod",
+                      paymentPlan: "cod",
+                      paymentStatus: "pending",
+                      orderStatus: "pending",
+                      hasPreorderItems: Boolean(orderData.hasPreorderItems),
+                      isPendingDbSync: true,
+                      isResilientCod: true,
+                      items: Array.isArray(orderData.items)
+                        ? orderData.items
+                        : [],
+                      createdAt: msg.createdAt || new Date().toISOString(),
+                      updatedAt: msg.createdAt || new Date().toISOString(),
+                    });
+                  }
+                }
+              } catch {}
+            }
+          }
+        }
+
+        // 5. Overlay cloud database orders from Supabase (authoritative for settled orders)
+        if (Array.isArray(adminOrders)) {
+          for (const o of adminOrders) {
+            orderMap.set(o.orderCode.trim().toUpperCase(), {
+              ...o,
+              isPendingDbSync: false,
+            });
+          }
+        }
+
+        // 6. Apply local status overrides and sort newest first
+        const unified = Array.from(orderMap.values())
+          .map((o) => {
+            const ov = overrides[o.orderCode.trim().toUpperCase()];
+            if (ov) {
+              return {
+                ...o,
+                orderStatus: ov.orderStatus || o.orderStatus,
+                paymentStatus: ov.paymentStatus || o.paymentStatus,
+                dueAmount:
+                  ov.dueAmount !== undefined ? ov.dueAmount : o.dueAmount,
+                advancePaid:
+                  ov.advancePaid !== undefined ? ov.advancePaid : o.advancePaid,
+                courierName: ov.courierName || o.courierName,
+                trackingReference:
+                  ov.trackingReference || o.trackingReference,
+                riderName: ov.riderName || o.riderName,
+                riderPhone: ov.riderPhone || o.riderPhone,
+                weightAdjustmentAmount:
+                  ov.weightAdjustmentAmount !== undefined
+                    ? ov.weightAdjustmentAmount
+                    : o.weightAdjustmentAmount,
+                weightAdjustmentNote:
+                  ov.weightAdjustmentNote || o.weightAdjustmentNote,
+                updatedAt: ov.updatedAt || o.updatedAt,
+              };
+            }
+            return o;
+          })
+          .sort(
+            (a, b) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+
+        // 7. Persist unified list to local storage so orders are NEVER wiped out
+        saveKnownOrdersToStorage(unified);
+
+        return unified;
       });
-      setOrders(mergedOrders);
-      saveKnownOrdersToStorage(mergedOrders);
+
       setMessages(adminMessages);
       if (adminTransactions) {
         setTransactions(adminTransactions);
@@ -1452,6 +1555,29 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (adminCoupons && adminCoupons.length > 0) {
         setCoupons(adminCoupons);
       }
+    },
+    []
+  );
+
+  const syncResilientOrder = useCallback(
+    async (order: Order): Promise<{ success: boolean; error?: string }> => {
+      const res = await syncOrderToSupabase(order);
+      if (res.success) {
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.orderCode.trim().toUpperCase() ===
+            order.orderCode.trim().toUpperCase()
+              ? { ...o, isPendingDbSync: false }
+              : o
+          )
+        );
+        showToast(
+          `Order ${order.orderCode} successfully synced to Supabase database!`
+        );
+      } else {
+        showToast(res.error || "Failed to sync order to database");
+      }
+      return res;
     },
     []
   );
@@ -1730,6 +1856,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         procurementSummary,
         refreshLiveStore,
         hydrateAdminRecords,
+        syncResilientOrder,
         heroSlides,
         heroSettings,
         heroLoading,

@@ -193,6 +193,8 @@ export interface Order {
   isPhoneVerified?: boolean;
   verificationMethod?: "manual_call" | "sms_otp" | "payment_gateway" | "unverified";
   idempotencyKey?: string;
+  isPendingDbSync?: boolean;
+  isResilientCod?: boolean;
   items: OrderItem[];
   createdAt: string;
   updatedAt: string;

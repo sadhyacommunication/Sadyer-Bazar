@@ -723,6 +723,8 @@ export function buildResilientCodOrder(
     paymentStatus: "pending",
     orderStatus: "pending",
     hasPreorderItems: items.some((i) => i.isPreorder),
+    isPendingDbSync: true,
+    isResilientCod: true,
     items,
     createdAt: now,
     updatedAt: now,
@@ -746,30 +748,40 @@ export function buildResilientCodOrder(
   try {
     const supabase = getSupabaseClient();
     if (supabase) {
+      const messageId = `msg_cod_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const payload = {
+        id: messageId,
         name: order.customerName,
         phone: order.customerPhone,
         subject: `[COD-ORDER] ${order.orderCode} - ৳${order.totalAmount}`,
-        message: JSON.stringify(
-          {
-            orderCode: order.orderCode,
-            totalAmount: order.totalAmount,
-            deliveryZone: order.deliveryZone,
-            district: order.customerDistrict,
-            address: order.customerAddress,
-            note: order.customerNote || null,
-            items: order.items.map(
-              (i) =>
-                `${i.productTitle} (${i.variantLabel}) x ${i.quantity} = ৳${i.lineTotal}`
-            ),
+        message: JSON.stringify({
+          version: "1.0",
+          type: "cod_resilient_order",
+          order: {
+            ...order,
+            items: order.items.map((i) => ({
+              id: i.id,
+              orderId: i.orderId,
+              productId: i.productId,
+              variantId: i.variantId,
+              productTitle: i.productTitle.slice(0, 50),
+              productTitleBn: (i.productTitleBn || "").slice(0, 50),
+              productImage: i.productImage.slice(0, 60),
+              variantLabel: i.variantLabel.slice(0, 30),
+              cuttingPreference: i.cuttingPreference?.slice(0, 30),
+              isPreorder: i.isPreorder,
+              quantity: i.quantity,
+              unitPrice: i.unitPrice,
+              lineTotal: i.lineTotal,
+            })),
           },
-          null,
-          2
-        ),
+        }),
       };
       // Fire-and-forget safe insert
       Promise.resolve(supabase.from("contact_messages").insert(payload)).catch(
-        () => {}
+        (err) => {
+          console.warn("[resilient COD] contact_messages insert notice:", err);
+        }
       );
     }
   } catch {}
@@ -1285,6 +1297,117 @@ export async function fetchAuthenticatedAdminDataFromSupabase(): Promise<{
         )
       : [],
   };
+}
+
+/**
+ * Authenticated Admin: Sync resilient/offline order into public.orders and public.order_items in Supabase.
+ */
+export async function syncOrderToSupabase(
+  order: Order
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return { success: false, error: "Database client is not available" };
+  }
+
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData?.session) {
+      return {
+        success: false,
+        error: "Admin authentication required to sync orders to the database.",
+      };
+    }
+
+    const orderRow = {
+      id: order.id,
+      order_code: order.orderCode,
+      customer_name: order.customerName,
+      customer_phone: order.customerPhone,
+      delivery_zone: order.deliveryZone,
+      customer_district: order.customerDistrict,
+      customer_address: order.customerAddress,
+      customer_note: order.customerNote || null,
+      subtotal: order.subtotal,
+      delivery_charge: order.deliveryCharge,
+      discount_amount: order.discountAmount,
+      coupon_code: order.couponCode || null,
+      weight_adjustment_amount: order.weightAdjustmentAmount || 0,
+      weight_adjustment_note: order.weightAdjustmentNote || null,
+      total_amount: order.totalAmount,
+      advance_paid: order.advancePaid || 0,
+      due_amount: order.dueAmount,
+      payment_method: order.paymentMethod,
+      payment_plan: order.paymentPlan,
+      payment_status: order.paymentStatus,
+      order_status: order.orderStatus,
+      has_preorder_items: order.hasPreorderItems,
+      transaction_id: order.transactionId || null,
+      courier_name: order.courierName || null,
+      tracking_reference: order.trackingReference || null,
+      rider_name: order.riderName || null,
+      rider_phone: order.riderPhone || null,
+      items: order.items,
+      created_at: order.createdAt,
+      updated_at: order.updatedAt,
+    };
+
+    // 1. Upsert into public.orders
+    const { error: ordErr } = await supabase.from("orders").upsert(orderRow);
+    if (ordErr) {
+      console.error("[syncOrderToSupabase] orders table error:", ordErr);
+      return { success: false, error: ordErr.message };
+    }
+
+    // 2. Upsert into public.order_items if items exist
+    if (Array.isArray(order.items) && order.items.length > 0) {
+      const itemsRows = order.items.map((i, idx) => ({
+        id: i.id || `${order.id}-item-${idx}`,
+        order_id: order.id,
+        product_id: i.productId,
+        variant_id: i.variantId,
+        product_title: i.productTitle,
+        product_title_bn: i.productTitleBn,
+        product_image: i.productImage,
+        variant_label: i.variantLabel,
+        cutting_preference: i.cuttingPreference || null,
+        is_preorder: Boolean(i.isPreorder),
+        quantity: i.quantity,
+        unit_price: i.unitPrice,
+        line_total: i.lineTotal,
+      }));
+      const { error: itemsErr } = await supabase
+        .from("order_items")
+        .upsert(itemsRows);
+      if (itemsErr) {
+        console.warn("[syncOrderToSupabase] order_items notice:", itemsErr.message);
+      }
+    }
+
+    // 3. Update local storage to mark as synced
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("sb_known_orders_v1");
+        if (raw) {
+          const list: Order[] = JSON.parse(raw);
+          const updated = list.map((o) =>
+            o.orderCode.trim().toUpperCase() ===
+            order.orderCode.trim().toUpperCase()
+              ? { ...o, isPendingDbSync: false }
+              : o
+          );
+          localStorage.setItem("sb_known_orders_v1", JSON.stringify(updated));
+        }
+      } catch {}
+    }
+
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Sync failed",
+    };
+  }
 }
 
 /**

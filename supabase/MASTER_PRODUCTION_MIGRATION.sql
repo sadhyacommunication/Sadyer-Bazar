@@ -1851,6 +1851,31 @@ GRANT ALL ON ALL TABLES    IN SCHEMA public TO service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO service_role;
 
+-- -----------------------------------------------------------------------------
+-- 7. Resilient Orders & Contact Messages (Migration 08)
+-- -----------------------------------------------------------------------------
+ALTER TABLE public.contact_messages
+  ALTER COLUMN id SET DEFAULT ('msg_' || replace(gen_random_uuid()::text, '-', ''));
+
+GRANT SELECT, INSERT, UPDATE ON public.orders TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.order_items TO authenticated;
+
+DROP POLICY IF EXISTS orders_admin_insert ON public.orders;
+CREATE POLICY orders_admin_insert ON public.orders
+  FOR INSERT TO authenticated WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS orders_admin_update ON public.orders;
+CREATE POLICY orders_admin_update ON public.orders
+  FOR UPDATE TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS order_items_admin_insert ON public.order_items;
+CREATE POLICY order_items_admin_insert ON public.order_items
+  FOR INSERT TO authenticated WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS order_items_admin_update ON public.order_items;
+CREATE POLICY order_items_admin_update ON public.order_items
+  FOR UPDATE TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
 NOTIFY pgrst, 'reload schema';
 
 COMMIT;
