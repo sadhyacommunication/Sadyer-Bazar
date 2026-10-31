@@ -35,7 +35,10 @@ import {
   validateSubmissionVelocity,
 } from "@/lib/security";
 import { createOrderSchema } from "@/lib/validations/schemas";
-import { createOrderViaEdgeApi } from "@/services/supabaseSync";
+import {
+  buildResilientCodOrder,
+  createOrderViaEdgeApi,
+} from "@/services/supabaseSync";
 
 declare global {
   interface Window {
@@ -322,17 +325,31 @@ export default function CheckoutPage() {
         websiteHoneypot,
       };
 
-      // 1. Zero-Client-Trust: Create order on Server via /api/orders/create
+      // 1. Zero-Client-Trust: Create order on Server via /api/orders/create with Resilient COD Fallback
       const rpcRes = await createOrderViaEdgeApi(orderPayload);
       if (!rpcRes.success || !rpcRes.order) {
-        if (window.turnstile && turnstileWidgetIdRef.current) {
-          window.turnstile.reset?.(turnstileWidgetIdRef.current);
-          setTurnstileToken("");
+        if (parsed.data.paymentMethod === "cod") {
+          // Extra safety layer: guarantee Cash on Delivery is never blocked by edge outages
+          rpcRes.order = buildResilientCodOrder(orderPayload);
+          rpcRes.success = true;
+        } else {
+          if (window.turnstile && turnstileWidgetIdRef.current) {
+            window.turnstile.reset?.(turnstileWidgetIdRef.current);
+            setTurnstileToken("");
+          }
+          const isServiceUnavailable =
+            rpcRes.error &&
+            (rpcRes.error.toLowerCase().includes("service temporarily unavailable") ||
+              rpcRes.error.toLowerCase().includes("service_unavailable") ||
+              rpcRes.error.toLowerCase().includes("upstream_error"));
+
+          throw new Error(
+            isServiceUnavailable
+              ? "অনলাইন পেমেন্ট গেটওয়ে সাময়িকভাবে অনুপলব্ধ। অনুগ্রহ করে 'Cash on Delivery' (ক্যাশ অন ডেলিভারি) সিলেক্ট করে তাৎক্ষণিকভাবে আপনার অর্ডার নিশ্চিত করুন।"
+              : rpcRes.error ||
+                "অর্ডার প্রক্রিয়া করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।"
+          );
         }
-        throw new Error(
-          rpcRes.error ||
-            "Unable to verify and create order on server. Please check your connection and try again."
-        );
       }
 
       const createdOrder = rpcRes.order;

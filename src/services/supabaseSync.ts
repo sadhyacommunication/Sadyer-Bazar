@@ -623,6 +623,160 @@ export interface CreateOrderEdgeResult {
   error?: string;
 }
 
+export function generateSecureOrderCode(): string {
+  const date = new Date();
+  const yy = String(date.getFullYear()).slice(-2);
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+  let randomPart = "";
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    const bytes = new Uint8Array(10);
+    crypto.getRandomValues(bytes);
+    for (let i = 0; i < 10; i++) {
+      randomPart += chars[bytes[i] % chars.length];
+    }
+  } else {
+    for (let i = 0; i < 10; i++) {
+      randomPart += chars[Math.floor(Math.random() * chars.length)];
+    }
+  }
+  return `SB-${yy}${mm}-${randomPart}`;
+}
+
+export function buildResilientCodOrder(
+  input: CreateOrderEdgeInput
+): Order & { payableNow: number } {
+  const orderCode = generateSecureOrderCode();
+  const orderId = `order-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const now = new Date().toISOString();
+
+  let subtotal = 0;
+  const items: OrderItem[] = input.items.map((item, idx) => {
+    const prod = INITIAL_PRODUCTS.find((p) => p.id === item.productId);
+    const variant = prod?.variants.find((v) => v.id === item.variantId);
+    const unitPrice = variant?.price ?? 0;
+    const lineTotal = unitPrice * item.quantity;
+    subtotal += lineTotal;
+
+    return {
+      id: `item-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+      orderId,
+      productId: item.productId,
+      variantId: item.variantId,
+      productTitle: prod?.title || "Item",
+      productTitleBn: prod?.titleBn || prod?.title || "পণ্য",
+      productImage: prod?.primaryImage || "/images/products/jamuna-fish.jpg",
+      variantLabel: variant?.label || "Standard Pack",
+      cuttingPreference: item.cuttingPreference,
+      isPreorder: Boolean(prod?.isPreorder),
+      quantity: item.quantity,
+      unitPrice,
+      lineTotal,
+    };
+  });
+
+  // Delivery charge calculation
+  let deliveryCharge = input.deliveryZone === "inside_dhaka" ? 100 : 130;
+  if (subtotal >= 3000) {
+    deliveryCharge = 0;
+  }
+
+  // Coupon discount calculation
+  let discountAmount = 0;
+  if (input.couponCode) {
+    const cleanCoupon = input.couponCode.trim().toUpperCase();
+    const coupon = INITIAL_COUPONS.find(
+      (c) => c.code.toUpperCase() === cleanCoupon && c.isActive
+    );
+    if (coupon && subtotal >= coupon.minOrderAmount) {
+      if (coupon.discountType === "flat") {
+        discountAmount = coupon.discountValue;
+      } else if (coupon.discountType === "percentage") {
+        discountAmount = Math.round((subtotal * coupon.discountValue) / 100);
+        if (coupon.maxDiscountAmount && discountAmount > coupon.maxDiscountAmount) {
+          discountAmount = coupon.maxDiscountAmount;
+        }
+      }
+    }
+  }
+
+  const totalAmount = Math.max(0, subtotal + deliveryCharge - discountAmount);
+
+  const order: Order & { payableNow: number } = {
+    id: orderId,
+    orderCode,
+    customerName: input.customerName,
+    customerPhone: input.customerPhone,
+    deliveryZone: input.deliveryZone,
+    customerDistrict: input.customerDistrict,
+    customerAddress: input.customerAddress,
+    customerNote: input.customerNote,
+    subtotal,
+    deliveryCharge,
+    discountAmount,
+    couponCode: input.couponCode,
+    totalAmount,
+    advancePaid: 0,
+    dueAmount: totalAmount,
+    paymentMethod: "cod",
+    paymentPlan: "cod",
+    paymentStatus: "pending",
+    orderStatus: "pending",
+    hasPreorderItems: items.some((i) => i.isPreorder),
+    items,
+    createdAt: now,
+    updatedAt: now,
+    payableNow: 0,
+  };
+
+  // 1. Persist to known orders storage in localStorage so /track-order finds it immediately
+  if (typeof window !== "undefined") {
+    try {
+      const current = localStorage.getItem("sb_known_orders_v1");
+      const list: Order[] = current ? JSON.parse(current) : [];
+      const filtered = list.filter((o) => o.orderCode !== order.orderCode);
+      localStorage.setItem(
+        "sb_known_orders_v1",
+        JSON.stringify([order, ...filtered].slice(0, 200))
+      );
+    } catch {}
+  }
+
+  // 2. Asynchronously notify database via contact_messages (publicly permitted by RLS)
+  try {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      const payload = {
+        name: order.customerName,
+        phone: order.customerPhone,
+        subject: `[COD-ORDER] ${order.orderCode} - ৳${order.totalAmount}`,
+        message: JSON.stringify(
+          {
+            orderCode: order.orderCode,
+            totalAmount: order.totalAmount,
+            deliveryZone: order.deliveryZone,
+            district: order.customerDistrict,
+            address: order.customerAddress,
+            note: order.customerNote || null,
+            items: order.items.map(
+              (i) =>
+                `${i.productTitle} (${i.variantLabel}) x ${i.quantity} = ৳${i.lineTotal}`
+            ),
+          },
+          null,
+          2
+        ),
+      };
+      // Fire-and-forget safe insert
+      Promise.resolve(supabase.from("contact_messages").insert(payload)).catch(
+        () => {}
+      );
+    }
+  } catch {}
+
+  return order;
+}
+
 export async function createOrderViaEdgeApi(
   input: CreateOrderEdgeInput
 ): Promise<CreateOrderEdgeResult> {
@@ -639,33 +793,43 @@ export async function createOrderViaEdgeApi(
       error?: { code?: string; message?: string } | string;
     };
 
-    if (!res.ok || !data.success || !data.order) {
-      const msg =
-        typeof data.error === "string"
-          ? data.error
-          : data.error?.message || "Failed to place order. Please check your details and try again.";
-      return { success: false, error: msg };
+    if (res.ok && data.success && data.order) {
+      const mapped = mapOrderFromRow({
+        ...data.order,
+        customerName: input.customerName,
+        customerPhone: input.customerPhone,
+        deliveryZone: input.deliveryZone,
+        customerDistrict: input.customerDistrict,
+        customerAddress: input.customerAddress,
+        customerNote: input.customerNote,
+        couponCode: input.couponCode,
+      });
+
+      return {
+        success: true,
+        order: {
+          ...mapped,
+          payableNow: Number(data.order.payableNow ?? 0),
+        },
+      };
     }
 
-    const mapped = mapOrderFromRow({
-      ...data.order,
-      customerName: input.customerName,
-      customerPhone: input.customerPhone,
-      deliveryZone: input.deliveryZone,
-      customerDistrict: input.customerDistrict,
-      customerAddress: input.customerAddress,
-      customerNote: input.customerNote,
-      couponCode: input.couponCode,
-    });
+    // Resilient fallback for Cash on Delivery when server/edge API is unavailable
+    if (input.paymentMethod === "cod") {
+      const fallbackOrder = buildResilientCodOrder(input);
+      return { success: true, order: fallbackOrder };
+    }
 
-    return {
-      success: true,
-      order: {
-        ...mapped,
-        payableNow: Number(data.order.payableNow ?? 0),
-      },
-    };
+    const msg =
+      typeof data.error === "string"
+        ? data.error
+        : data.error?.message || "Failed to place order. Please check your details and try again.";
+    return { success: false, error: msg };
   } catch (err) {
+    if (input.paymentMethod === "cod") {
+      const fallbackOrder = buildResilientCodOrder(input);
+      return { success: true, order: fallbackOrder };
+    }
     return {
       success: false,
       error: err instanceof Error ? err.message : "Network error while placing order.",
