@@ -2,69 +2,41 @@
 
 import React, { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Image from "next/image";
+import Link from "next/link";
 import {
   PackageSearch,
   CheckCircle2,
-  Truck,
   Printer,
   Copy,
   Check,
   PhoneCall,
   Lock,
   Sparkles,
-  Scale,
   CreditCard,
   Loader2,
   X,
   Smartphone,
   AlertCircle,
+  Share2,
+  MessageCircle,
+  ShieldCheck,
+  ShoppingBag,
+  ArrowRight,
+  Fish,
 } from "lucide-react";
 import {
   getRecentOrderPhoneLast4,
   rememberRecentOrderInSession,
   useStore,
 } from "@/context/StoreContext";
-import { Order, OrderStatus } from "@/types";
+import { Order } from "@/types";
 import { checkRateLimit, maskAddress, maskPhoneNumber } from "@/lib/security";
 import { trackOrderViaEdgeApi } from "@/services/supabaseSync";
-
-const STATUS_STEPS: {
-  key: OrderStatus;
-  label: string;
-  labelBn: string;
-  desc: string;
-}[] = [
-  {
-    key: "pending",
-    label: "Order Placed",
-    labelBn: "অর্ডার গৃহীত",
-    desc: "Order received in our queue",
-  },
-  {
-    key: "confirmed",
-    label: "Confirmed",
-    labelBn: "কনফার্মড",
-    desc: "Verified & allocated in batch",
-  },
-  {
-    key: "processing",
-    label: "Fresh Catch & Packing",
-    labelBn: "সংগ্রহ ও প্যাকিং",
-    desc: "Weighed & packed in ice box",
-  },
-  {
-    key: "shipped",
-    label: "Out for Delivery",
-    labelBn: "ডেলিভারির পথে",
-    desc: "Dispatched with courier/rider",
-  },
-  {
-    key: "delivered",
-    label: "Delivered",
-    labelBn: "ডেলিভারি সম্পন্ন",
-    desc: "Handed over at doorstep",
-  },
-];
+import MotionStageViewer from "@/components/tracking/MotionStageViewer";
+import FreshnessTelemetry from "@/components/tracking/FreshnessTelemetry";
+import TransitRadar from "@/components/tracking/TransitRadar";
+import PrintableInvoice from "@/components/tracking/PrintableInvoice";
 
 function TrackOrderContent() {
   const searchParams = useSearchParams();
@@ -84,6 +56,7 @@ function TrackOrderContent() {
   const [loadingTrack, setLoadingTrack] = useState(false);
   const [trackError, setTrackError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
 
   // Pay Online / Pay Remaining Due Modal State (Official bKash & Nagad Merchant Gateways)
   const [isPayDueModalOpen, setIsPayDueModalOpen] = useState(false);
@@ -100,10 +73,12 @@ function TrackOrderContent() {
       if (!cleanCode) return;
 
       if (cleanLast4.length !== 4) {
-        // Check if order is already in current memory session (e.g. just ordered)
+        // Check if order is already in current memory session (e.g. just placed)
         const inMemory = findOrderByCode(cleanCode);
         if (inMemory) {
-          const derivedLast4 = inMemory.customerPhone.replace(/\D/g, "").slice(-4);
+          const derivedLast4 = inMemory.customerPhone
+            .replace(/\D/g, "")
+            .slice(-4);
           if (derivedLast4.length === 4) {
             setPhoneLast4(derivedLast4);
             rememberRecentOrderInSession(cleanCode, derivedLast4);
@@ -164,7 +139,9 @@ function TrackOrderContent() {
     } else {
       const inMemory = findOrderByCode(initialCode);
       if (inMemory) {
-        const derivedLast4 = inMemory.customerPhone.replace(/\D/g, "").slice(-4);
+        const derivedLast4 = inMemory.customerPhone
+          .replace(/\D/g, "")
+          .slice(-4);
         setPhoneLast4(derivedLast4);
         void performLookup(initialCode, derivedLast4);
       } else {
@@ -173,7 +150,7 @@ function TrackOrderContent() {
     }
   }, [initialCode, findOrderByCode, performLookup]);
 
-  // Keep activeOrder synced when orders update in context (e.g. admin action in same tab)
+  // Keep activeOrder synced when orders update in context
   useEffect(() => {
     if (activeOrder) {
       const updated = findOrderByCode(activeOrder.orderCode);
@@ -290,9 +267,25 @@ function TrackOrderContent() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const currentStepIndex = activeOrder
-    ? STATUS_STEPS.findIndex((s) => s.key === activeOrder.orderStatus)
-    : 0;
+  const handleShareTracking = async () => {
+    if (!activeOrder) return;
+    const shareUrl = `${window.location.origin}/track-order?code=${activeOrder.orderCode}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Track Order #${activeOrder.orderCode} — Sadhyer Bazar`,
+          text: `সাধ্যের বাজার রিয়েল-টাইম কোল্ড-চেইন ট্র্যাকিং: ${activeOrder.orderCode}`,
+          url: shareUrl,
+        });
+        return;
+      } catch {
+        // Fallback to clipboard
+      }
+    }
+    await navigator.clipboard.writeText(shareUrl);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2500);
+  };
 
   const gatewayDisplayName =
     gatewayParam === "bkash"
@@ -301,32 +294,41 @@ function TrackOrderContent() {
       ? "Nagad (নগদ)"
       : "অনলাইন পেমেন্ট গেটওয়ে";
 
+  const whatsappDirectUrl = activeOrder
+    ? `https://wa.me/8801713477780?text=${encodeURIComponent(
+        `আসসালামু আলাইকুম, আমি সাধ্যের বাজার অর্ডার #${activeOrder.orderCode} সম্পর্কে জানতে চাচ্ছি।`
+      )}`
+    : `https://wa.me/8801713477780`;
+
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
-      {/* Search Box Header */}
-      <div className="bg-[#0F3D2E] text-white rounded-3xl p-7 sm:p-10 shadow-xl space-y-6 no-print">
-        <div className="space-y-2">
-          <span className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-amber-300">
-            <PackageSearch className="w-4 h-4" /> Real-Time Order & Cold-Chain
-            Delivery Tracking
-          </span>
-          <h1 className="text-2xl sm:text-4xl font-extrabold">
-            Track Your Order by Order ID
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-8">
+      {/* 1. Advance Search Card Header */}
+      <div className="bg-gradient-to-br from-[#0F3D2E] via-[#0C3225] to-[#082219] text-white rounded-3xl p-7 sm:p-10 shadow-2xl space-y-6 no-print border border-emerald-800/40 relative overflow-hidden">
+        {/* Subtle Background Glow */}
+        <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 space-y-2">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-amber-300 text-xs font-black uppercase tracking-wider">
+            <PackageSearch className="w-4 h-4 text-amber-400" />
+            <span>Real-Time Cold-Chain & River Harvest Tracker</span>
+          </div>
+
+          <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
+            অর্ডার ট্র্যাকিং ও কোল্ড-চেইন ডেলিভারি মনিটর
           </h1>
-          <p className="text-xs sm:text-sm text-emerald-100/85 max-w-2xl">
-            Enter your Order ID (e.g.{" "}
-            <code className="px-2 py-0.5 rounded bg-white/15 font-mono text-amber-300">
+
+          <p className="text-xs sm:text-sm text-emerald-100/85 max-w-2xl leading-relaxed">
+            আপনার ইউনিক অর্ডার আইডি (যেমন{" "}
+            <code className="px-2 py-0.5 rounded bg-white/15 font-mono text-amber-300 font-bold">
               SB-YYMM-XXXXXXXXXX
             </code>
-            ) and the last 4 digits of your mobile number to check live harvest,
-            digital scale weight verification, courier rider info, and payment
-            ledger.
+            ) এবং অর্ডারে ব্যবহৃত মোবাইল নম্বরের শেষ ৪টি ডিজিট লিখে যমুনা নদী থেকে তাজা সংগ্রহ, ডিজিটাল স্কেলের নিট ওজন ও রাইডার স্ট্যাটাস সরাসরি ট্র্যাক করুন।
           </p>
         </div>
 
         <form
           onSubmit={handleSearch}
-          className="grid grid-cols-1 sm:grid-cols-12 gap-3"
+          className="relative z-10 grid grid-cols-1 sm:grid-cols-12 gap-3"
         >
           <input
             type="text"
@@ -334,7 +336,7 @@ function TrackOrderContent() {
             value={orderCodeInput}
             onChange={(e) => setOrderCodeInput(e.target.value.toUpperCase())}
             placeholder="Order ID (e.g. SB-2610-XXXXXXXXXX)"
-            className="sm:col-span-6 px-4 py-3.5 rounded-2xl bg-white text-stone-900 text-sm font-mono uppercase focus:outline-none"
+            className="sm:col-span-6 px-4 py-3.5 rounded-2xl bg-white text-stone-900 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-emerald-400 shadow-inner"
           />
           <input
             type="text"
@@ -343,58 +345,59 @@ function TrackOrderContent() {
             value={phoneLast4}
             onChange={(e) => setPhoneLast4(e.target.value.replace(/\D/g, ""))}
             placeholder="Last 4 digits of Phone *"
-            className="sm:col-span-4 px-4 py-3.5 rounded-2xl bg-white/95 text-stone-900 text-xs sm:text-sm font-mono focus:outline-none"
+            className="sm:col-span-4 px-4 py-3.5 rounded-2xl bg-white text-stone-900 text-xs sm:text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-400 shadow-inner"
           />
           <button
             type="submit"
             disabled={loadingTrack}
-            className="sm:col-span-2 py-3.5 px-5 rounded-2xl bg-[#C83E2B] hover:bg-[#b03221] disabled:opacity-60 text-white font-extrabold text-sm transition cursor-pointer flex items-center justify-center gap-1.5"
+            className="sm:col-span-2 py-3.5 px-5 rounded-2xl bg-[#C83E2B] hover:bg-[#b03221] disabled:opacity-60 text-white font-black text-sm transition cursor-pointer flex items-center justify-center gap-2 shadow-lg"
           >
             {loadingTrack ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              "Track Now"
+              <>
+                <span>Track Now</span>
+                <ArrowRight className="w-4 h-4" />
+              </>
             )}
           </button>
         </form>
 
         {/* Security & Anti-Harvesting Privacy Notice */}
-        <div className="flex flex-wrap items-center gap-2 text-xs text-emerald-200/90 pt-1">
+        <div className="relative z-10 flex flex-wrap items-center gap-2 text-xs text-emerald-200/90 pt-1">
           <span className="inline-flex items-center gap-1.5 font-medium">
             <Lock className="w-3.5 h-3.5 text-amber-300 shrink-0" />
             <span>
-              Zero-Leakage Privacy Guard: Both your unique Order ID and last 4
-              digits of your mobile number are verified on our server.
+              Zero-Leakage Privacy Guard: অর্ডার আইডি ও মোবাইল নম্বরের শেষ ৪ ডিজিট ছাড়া তথ্য দেখা যাবে না।
             </span>
           </span>
         </div>
       </div>
 
-      {/* Prompt for 4 digits if opened on a new device with ?code= */}
+      {/* 2. Prompt for 4 digits if opened with ?code= on new device */}
       {needsPhonePrompt && !activeOrder && (
-        <div className="p-6 rounded-3xl bg-amber-50 border border-amber-200 text-amber-950 text-xs sm:text-sm font-semibold flex items-center gap-3 no-print">
+        <div className="p-6 rounded-3xl bg-amber-50 border border-amber-200 text-amber-950 text-xs sm:text-sm font-semibold flex items-center gap-3.5 no-print shadow-xs">
           <Lock className="w-5 h-5 text-amber-700 shrink-0" />
           <span>
-            অর্ডার{" "}
-            <strong className="font-mono">{orderCodeInput}</strong>-এর বিস্তারিত
+            অর্ডার <strong className="font-mono">{orderCodeInput}</strong>-এর বিস্তারিত
             দেখতে উপরে আপনার মোবাইল নম্বরের শেষ ৪টি ডিজিট লিখে{" "}
             <strong>Track Now</strong> বাটনে ক্লিক করুন।
           </span>
         </div>
       )}
 
-      {/* Official bKash / Nagad Gateway Status Banners */}
+      {/* 3. Official Gateway Alerts (Success, Cancelled, Failed, Review) */}
       {paymentStatusParam === "success" && (
-        <div className="p-6 rounded-3xl bg-emerald-50 border-2 border-emerald-600/40 flex items-start gap-3.5 no-print shadow-sm">
+        <div className="p-6 rounded-3xl bg-emerald-50 border-2 border-emerald-600/40 flex items-start gap-4 no-print shadow-sm">
           <div className="w-12 h-12 rounded-2xl bg-[#0F3D2E] text-emerald-300 flex items-center justify-center shrink-0">
             <CheckCircle2 className="w-6 h-6" />
           </div>
           <div className="space-y-1">
-            <h2 className="text-lg font-extrabold text-[#0F3D2E]">
-              আলহামদুলিল্লাহ! আপনার {gatewayDisplayName} পেমেন্ট সফলভাবে সার্ভার থেকে ভেরিফাই ও রেকর্ড হয়েছে!
+            <h2 className="text-lg font-black text-[#0F3D2E]">
+              আলহামদুলিল্লাহ! আপনার {gatewayDisplayName} পেমেন্ট সফলভাবে সম্পন্ন ও ভেরিফাই হয়েছে!
             </h2>
             <p className="text-xs sm:text-sm text-stone-700">
-              গেটওয়ে থেকে আপনার লেনদেন নিশ্চিত করা হয়েছে এবং অর্ডারের পেমেন্ট লেজার আপডেট করা হয়েছে। নিচের অর্ডারের রসিদ ও ডেলিভারি ট্র্যাকিং দেখুন।
+              গেটওয়ে থেকে আপনার লেনদেন নিশ্চিত করা হয়েছে এবং অর্ডারের পেমেন্ট লেজার স্বয়ংক্রিয়ভাবে আপডেট করা হয়েছে।
             </p>
           </div>
         </div>
@@ -407,11 +410,11 @@ function TrackOrderContent() {
               <AlertCircle className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h2 className="text-lg font-extrabold text-[#C83E2B]">
+              <h2 className="text-lg font-black text-[#C83E2B]">
                 অনলাইন পেমেন্ট সম্পন্ন করা যায়নি
               </h2>
               <p className="text-xs sm:text-sm text-stone-700">
-                গেটওয়ে থেকে অর্থ কর্তন করা হয়নি। আপনার অর্ডারটি পেন্ডিং হিসেবে সুরক্ষিত আছে। আপনি নিচের বাটনে ক্লিক করে বিকাশ বা নগদের মাধ্যমে পেমেন্ট সম্পন্ন করতে পারেন।
+                গেটওয়ে থেকে অর্থ কর্তন করা হয়নি। আপনার অর্ডারটি সুরক্ষিত আছে; নিচে &ldquo;Pay Due Online&rdquo; বাটনে ক্লিক করে আবার চেষ্টা করতে পারেন।
               </p>
             </div>
           </div>
@@ -422,9 +425,9 @@ function TrackOrderContent() {
                 setDueTrxError(null);
                 setIsPayDueModalOpen(true);
               }}
-              className="px-4 py-2.5 rounded-2xl bg-[#E2136E] hover:bg-[#c20f5d] text-white text-xs font-extrabold shrink-0 cursor-pointer transition"
+              className="px-4 py-2.5 rounded-2xl bg-[#E2136E] hover:bg-[#c20f5d] text-white text-xs font-black shrink-0 cursor-pointer transition shadow-md"
             >
-              Pay Online Now (৳{activeOrder.dueAmount.toLocaleString()})
+              Pay Online (৳{activeOrder.dueAmount.toLocaleString()})
             </button>
           )}
         </div>
@@ -436,71 +439,39 @@ function TrackOrderContent() {
             <AlertCircle className="w-6 h-6" />
           </div>
           <div className="space-y-1">
-            <h2 className="text-lg font-extrabold text-amber-950">
+            <h2 className="text-lg font-black text-amber-950">
               পেমেন্ট প্রক্রিয়াটি বাতিল করা হয়েছে
             </h2>
             <p className="text-xs sm:text-sm text-stone-700">
-              আপনি পেমেন্ট উইন্ডো বাতিল করেছেন। আপনার অর্ডারটি পেন্ডিং রয়েছে, আপনি যেকোনো সময় &ldquo;Pay Due Online&rdquo; বাটনে ক্লিক করে পেমেন্ট সম্পন্ন করতে পারবেন।
+              আপনি পেমেন্ট উইন্ডো বাতিল করেছেন। আপনার অর্ডারটি বজায় আছে এবং আপনি যেকোনো সময় অনলাইন বা হোম ডেলিভারিতে ক্যাশে পরিশোধ করতে পারবেন।
             </p>
           </div>
         </div>
       )}
 
-      {paymentStatusParam === "processing" && (
-        <div className="p-6 rounded-3xl bg-blue-50 border-2 border-blue-500/40 flex items-start gap-3.5 no-print shadow-sm">
-          <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shrink-0">
-            <Loader2 className="w-6 h-6 animate-spin" />
-          </div>
-          <div className="space-y-1">
-            <h2 className="text-lg font-extrabold text-blue-950">
-              পেমেন্ট গেটওয়েতে প্রক্রিয়াধীন রয়েছে
-            </h2>
-            <p className="text-xs sm:text-sm text-stone-700">
-              আপনার পেমেন্টটি বর্তমানে গেটওয়েতে যাচাই করা হচ্ছে। কিছুক্ষণের মধ্যে স্ট্যাটাস আপডেট হবে।
-            </p>
-          </div>
-        </div>
-      )}
-
-      {paymentStatusParam === "review" && (
-        <div className="p-6 rounded-3xl bg-amber-50 border-2 border-amber-500/40 flex items-start gap-3.5 no-print shadow-sm">
-          <div className="w-12 h-12 rounded-2xl bg-amber-600 text-white flex items-center justify-center shrink-0">
-            <AlertCircle className="w-6 h-6" />
-          </div>
-          <div className="space-y-1">
-            <h2 className="text-lg font-extrabold text-amber-950">
-              পেমেন্ট যাচাইকরণ প্রক্রিয়াধীন (Under Verification)
-            </h2>
-            <p className="text-xs sm:text-sm text-stone-700">
-              গেটওয়ে থেকে ধীর গতির রেসপন্স পাওয়ায় আমাদের টিম আপনার পেমেন্টটি ম্যানুয়ালি যাচাই করছে। অনুগ্রহ করে দ্বিতীয়বার পেমেন্ট করবেন না; প্রয়োজনে কল করুন: {settings.supportPhone}।
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Just Ordered Confirmation Banner */}
+      {/* 4. Just Ordered Confirmation Banner */}
       {justOrdered && activeOrder && (
-        <div className="p-6 rounded-3xl bg-emerald-50 border-2 border-emerald-600/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
+        <div className="p-6 rounded-3xl bg-emerald-50 border-2 border-emerald-600/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print shadow-sm">
           <div className="flex items-start gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-[#0F3D2E] text-amber-300 flex items-center justify-center shrink-0">
               <Sparkles className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-extrabold text-[#0F3D2E]">
-                Alhamdulillah! Your Order is Registered!
+              <h2 className="text-lg font-black text-[#0F3D2E]">
+                আলহামদুলিল্লাহ! আপনার অর্ডার সফলভাবে নিবন্ধিত হয়েছে!
               </h2>
               <p className="text-xs sm:text-sm text-stone-700 mt-0.5">
-                Save your Order ID{" "}
+                আপনার অর্ডার আইডি{" "}
                 <strong className="font-mono text-[#C83E2B]">
                   {activeOrder.orderCode}
                 </strong>{" "}
-                to track your delivery anytime.
+                সংরক্ষণ করুন অথবা নিচের বাটনে ক্লিক করে ট্র্যাকিং লিংক সেভ করুন।
               </p>
             </div>
           </div>
           <button
             onClick={() => handleCopyCode(activeOrder.orderCode)}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white border border-emerald-300 text-xs font-extrabold text-[#0F3D2E] hover:bg-emerald-100 transition cursor-pointer self-start sm:self-center"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white border border-emerald-300 text-xs font-black text-[#0F3D2E] hover:bg-emerald-100 transition cursor-pointer self-start sm:self-center"
           >
             {copied ? (
               <>
@@ -515,61 +486,73 @@ function TrackOrderContent() {
         </div>
       )}
 
-      {/* Not Found State */}
+      {/* 5. Not Found State */}
       {notFound && (
-        <div className="bg-white rounded-3xl border border-stone-200 p-10 text-center space-y-3">
+        <div className="bg-white rounded-3xl border border-stone-200 p-10 text-center space-y-4 shadow-sm">
+          <div className="w-14 h-14 rounded-full bg-stone-100 text-stone-500 flex items-center justify-center mx-auto">
+            <PackageSearch className="w-7 h-7" />
+          </div>
           <h3 className="text-lg font-bold text-stone-900">
-            No Matching Order Found for &ldquo;{orderCodeInput}&rdquo;
+            &ldquo;{orderCodeInput}&rdquo; নম্বরের কোনো অর্ডার খুঁজে পাওয়া যায়নি
           </h3>
-          <p className="text-xs text-stone-500 max-w-md mx-auto">
+          <p className="text-xs text-stone-500 max-w-md mx-auto leading-relaxed">
             {trackError ||
-              `Please verify both your Order ID (e.g. SB-YYMM-XXXXXXXXXX) and the last 4 digits of the phone number used during checkout, or call our hotline at ${settings.supportPhone}.`}
+              `দয়া করে আপনার অর্ডার আইডি (যেমন SB-YYMM-XXXXXXXXXX) এবং চেকআউটের সময় ব্যবহৃত ফোন নম্বরের শেষ ৪টি ডিজিট সঠিকভাবে মিলিয়ে নিন, অথবা আমাদের হটলাইনে কল করুন: ${settings.supportPhone}।`}
           </p>
         </div>
       )}
 
-      {/* Active Order Tracking Card & Printable Invoice */}
+      {/* 6. Active Order Main Journey & Telemetry Hub */}
       {activeOrder && (
-        <div className="bg-white rounded-3xl border border-stone-200/90 shadow-sm overflow-hidden">
-          {/* Top Invoice Header */}
-          <div className="p-6 sm:p-8 bg-stone-50 border-b border-stone-200 flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2.5">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-[#0F3D2E]">
-                  Official Order & Delivery Receipt
-                </span>
-                {activeOrder.hasPreorderItems && (
-                  <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[11px] font-bold">
-                    Pre-Order Batch
-                  </span>
+        <div className="space-y-6">
+          {/* Action Toolbar (Share, WhatsApp, Print, Copy) */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-3xl bg-white border border-stone-200/80 shadow-xs no-print">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-sm sm:text-base font-black text-stone-900">
+                #{activeOrder.orderCode}
+              </span>
+              <button
+                onClick={() => handleCopyCode(activeOrder.orderCode)}
+                className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 transition cursor-pointer"
+                title="Copy Order ID"
+              >
+                {copied ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
                 )}
-              </div>
-              <div className="flex items-center gap-3 mt-1">
-                <h2 className="text-2xl sm:text-3xl font-black font-mono text-stone-900">
-                  {activeOrder.orderCode}
-                </h2>
-                <button
-                  onClick={() => handleCopyCode(activeOrder.orderCode)}
-                  className="p-1.5 rounded-lg bg-stone-200/70 hover:bg-stone-300 text-stone-700 no-print cursor-pointer"
-                  title="Copy Order ID"
-                >
-                  {copied ? (
-                    <Check className="w-4 h-4 text-emerald-700" />
-                  ) : (
-                    <Copy className="w-4 h-4" />
-                  )}
-                </button>
-              </div>
-              <p className="text-xs text-stone-500 mt-1">
-                Ordered on{" "}
-                {new Date(activeOrder.createdAt).toLocaleString("en-BD", {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
-              </p>
+              </button>
             </div>
 
-            <div className="flex items-center gap-3 no-print">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleShareTracking}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-bold transition cursor-pointer"
+              >
+                {shareCopied ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Copied Link!</span>
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="w-3.5 h-3.5 text-stone-600" />
+                    <span>Share Tracking</span>
+                  </>
+                )}
+              </button>
+
+              <a
+                href={whatsappDirectUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition"
+              >
+                <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                <span>WhatsApp Care</span>
+              </a>
+
               {activeOrder.dueAmount > 0 &&
                 activeOrder.orderStatus !== "cancelled" && (
                   <button
@@ -580,199 +563,114 @@ function TrackOrderContent() {
                       setDueTrxError(null);
                       setIsPayDueModalOpen(true);
                     }}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#E2136E] hover:bg-[#c20f5d] text-white text-xs font-extrabold shadow-md transition cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#E2136E] hover:bg-[#c20f5d] text-white text-xs font-black shadow-sm transition cursor-pointer"
                   >
-                    <CreditCard className="w-4 h-4" />
-                    <span>
-                      Pay Due ৳{activeOrder.dueAmount.toLocaleString()} Online
-                    </span>
+                    <CreditCard className="w-3.5 h-3.5" />
+                    <span>Pay Due (৳{activeOrder.dueAmount.toLocaleString()})</span>
                   </button>
                 )}
+
               <button
                 onClick={() => window.print()}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#0F3D2E] hover:bg-[#165b44] text-white text-xs font-bold transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0F3D2E] hover:bg-[#165b44] text-white text-xs font-bold transition cursor-pointer"
               >
-                <Printer className="w-4 h-4" />
+                <Printer className="w-3.5 h-3.5" />
                 <span>Print Invoice</span>
               </button>
             </div>
           </div>
 
-          {/* 5-Stage Visual Delivery Progress Tracker */}
-          <div className="p-6 sm:p-8 border-b border-stone-200 space-y-6">
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-stone-500">
-              Live Fulfilment & Delivery Timeline
-            </h3>
-
-            {activeOrder.orderStatus === "cancelled" ? (
-              <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-sm font-bold">
-                This order has been cancelled. Contact {settings.supportPhone}{" "}
-                for assistance.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
-                {STATUS_STEPS.map((step, index) => {
-                  const completed = index <= currentStepIndex;
-                  const isCurrent = index === currentStepIndex;
-                  return (
-                    <div
-                      key={step.key}
-                      className={`p-4 rounded-2xl border transition ${
-                        isCurrent
-                          ? "border-2 border-[#0F3D2E] bg-emerald-50/70 shadow-xs"
-                          : completed
-                          ? "border-emerald-200 bg-emerald-50/30"
-                          : "border-stone-200 bg-stone-50/60 opacity-60"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span
-                          className={`w-7 h-7 rounded-full text-xs font-extrabold flex items-center justify-center ${
-                            completed
-                              ? "bg-[#0F3D2E] text-white"
-                              : "bg-stone-200 text-stone-600"
-                          }`}
-                        >
-                          {completed ? (
-                            <CheckCircle2 className="w-4 h-4" />
-                          ) : (
-                            index + 1
-                          )}
-                        </span>
-                        {isCurrent && (
-                          <span className="px-2 py-0.5 rounded-full bg-[#C83E2B] text-white text-[10px] font-bold">
-                            CURRENT
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs font-bold text-[#0F3D2E]">
-                        {step.labelBn}
-                      </p>
-                      <p className="text-sm font-extrabold text-stone-900">
-                        {step.label}
-                      </p>
-                      <p className="text-[11px] text-stone-500 mt-0.5">
-                        {step.desc}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Cold-Chain Courier & Assigned Rider Banner */}
-            {activeOrder.courierName && (
-              <div className="p-4 sm:p-5 rounded-2xl bg-blue-50/80 border border-blue-200 flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-start gap-3.5">
-                  <div className="w-11 h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center shrink-0">
-                    <Truck className="w-5 h-5" />
-                  </div>
-                  <div className="space-y-0.5">
-                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-blue-700">
-                      Assigned Cold-Chain Courier & Dispatch Info
-                    </span>
-                    <h4 className="text-sm sm:text-base font-extrabold text-stone-900">
-                      {activeOrder.courierName}{" "}
-                      {activeOrder.trackingReference && (
-                        <span className="font-mono text-xs px-2 py-0.5 rounded bg-white border border-blue-200 text-blue-900 ml-1">
-                          Ref: {activeOrder.trackingReference}
-                        </span>
-                      )}
-                    </h4>
-                    {activeOrder.riderName && (
-                      <p className="text-xs text-stone-600">
-                        Assigned Rider / Supervisor:{" "}
-                        <strong>{activeOrder.riderName}</strong>
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {activeOrder.riderPhone && (
-                  <a
-                    href={`tel:${activeOrder.riderPhone}`}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold transition no-print"
-                  >
-                    <PhoneCall className="w-3.5 h-3.5" />
-                    <span>Call Rider: {activeOrder.riderPhone}</span>
-                  </a>
-                )}
-              </div>
-            )}
-
-            {/* Digital Scale Weight Verification Transparency Banner */}
-            {activeOrder.weightAdjustmentAmount !== undefined &&
-              activeOrder.weightAdjustmentAmount !== 0 && (
-                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-3">
-                  <Scale className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-                  <div className="text-xs space-y-0.5">
-                    <p className="font-extrabold text-amber-950">
-                      Digital Scale Weight Adjustment Applied:{" "}
-                      {activeOrder.weightAdjustmentAmount > 0 ? "+" : ""}৳
-                      {activeOrder.weightAdjustmentAmount}
-                    </p>
-                    <p className="text-amber-900">
-                      {activeOrder.weightAdjustmentNote ||
-                        "Adjusted according to exact net harvest weight on our digital scale prior to ice-box sealing."}
-                    </p>
-                  </div>
-                </div>
-              )}
+          {/* Module 1: CINEMATIC MOTION VIDEO GRAPHICS STAGE VIEWER */}
+          <div className="no-print">
+            <MotionStageViewer
+              currentStatus={activeOrder.orderStatus}
+              orderCode={activeOrder.orderCode}
+              orderDate={activeOrder.createdAt}
+              hasPreorderItems={activeOrder.hasPreorderItems}
+            />
           </div>
 
-          {/* Customer Info & Payment Ledger Grid */}
-          <div className="p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 border-b border-stone-200">
-            {/* Customer Delivery Details (with Server-Side PII Privacy Masking) */}
-            <div className="p-5 rounded-2xl bg-[#FAF8F5] border border-stone-200/80 space-y-2.5">
+          {/* Module 2: FRESHNESS & COLD-CHAIN TELEMETRY */}
+          <div className="no-print">
+            <FreshnessTelemetry
+              orderStatus={activeOrder.orderStatus}
+              weightAdjustmentAmount={activeOrder.weightAdjustmentAmount}
+              weightAdjustmentNote={activeOrder.weightAdjustmentNote}
+              hasPreorderItems={activeOrder.hasPreorderItems}
+            />
+          </div>
+
+          {/* Module 3: TRANSIT RADAR & RIDER DISPATCH */}
+          <div className="no-print">
+            <TransitRadar
+              orderStatus={activeOrder.orderStatus}
+              deliveryZone={activeOrder.deliveryZone}
+              deliveryAddress={activeOrder.customerAddress}
+              courierName={activeOrder.courierName}
+              trackingReference={activeOrder.trackingReference}
+              riderName={activeOrder.riderName}
+              riderPhone={activeOrder.riderPhone}
+              supportPhone={settings.supportPhone}
+            />
+          </div>
+
+          {/* Module 4: CUSTOMER DETAILS & FINANCIAL PAYMENT LEDGER */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 no-print">
+            {/* Customer Recipient Details */}
+            <div className="p-6 rounded-3xl bg-white border border-stone-200/90 shadow-xs space-y-3">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-stone-500">
-                  Delivery Recipient Details
+                <h4 className="text-xs font-black uppercase tracking-wider text-stone-500">
+                  ডেলিভারি গ্রহীতার তথ্য (Recipient)
                 </h4>
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800">
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                   <Lock className="w-3 h-3" /> PII Protected
                 </span>
               </div>
-              <p className="text-base font-extrabold text-stone-900">
+
+              <p className="text-base font-black text-stone-900">
                 {activeOrder.customerName}
               </p>
-              <p className="text-xs text-stone-700 font-mono">
-                Phone:{" "}
-                <strong>
-                  {activeOrder.customerPhone.includes("*")
-                    ? activeOrder.customerPhone
-                    : maskPhoneNumber(activeOrder.customerPhone)}
-                </strong>
-              </p>
-              <p className="text-xs text-stone-700">
-                Zone:{" "}
-                <strong className="uppercase">
-                  {activeOrder.deliveryZone === "inside_dhaka"
-                    ? "Inside Dhaka"
-                    : "Outside Dhaka"}
-                </strong>{" "}
-                ({activeOrder.customerDistrict})
-              </p>
-              <p className="text-xs text-stone-700">
-                Address:{" "}
-                <strong>
-                  {activeOrder.customerAddress.includes("*")
-                    ? activeOrder.customerAddress
-                    : maskAddress(
-                        activeOrder.customerAddress,
-                        activeOrder.customerDistrict
-                      )}
-                </strong>
-              </p>
+
+              <div className="space-y-1 text-xs text-stone-600">
+                <p>
+                  মোবাইল:{" "}
+                  <strong className="font-mono text-stone-900">
+                    {activeOrder.customerPhone.includes("*")
+                      ? activeOrder.customerPhone
+                      : maskPhoneNumber(activeOrder.customerPhone)}
+                  </strong>
+                </p>
+                <p>
+                  ডেলিভারি জোন:{" "}
+                  <strong className="text-stone-900 uppercase">
+                    {activeOrder.deliveryZone === "inside_dhaka"
+                      ? "Inside Dhaka (ঢাকা শহর)"
+                      : "Outside Dhaka (ঢাকার বাইরে)"}
+                  </strong>{" "}
+                  ({activeOrder.customerDistrict})
+                </p>
+                <p>
+                  ঠিকানা:{" "}
+                  <strong className="text-stone-900">
+                    {activeOrder.customerAddress.includes("*")
+                      ? activeOrder.customerAddress
+                      : maskAddress(
+                          activeOrder.customerAddress,
+                          activeOrder.customerDistrict
+                        )}
+                  </strong>
+                </p>
+              </div>
             </div>
 
-            {/* Payment Ledger Card */}
-            <div className="p-5 rounded-2xl bg-emerald-950 text-white space-y-3">
+            {/* Verified Payment Ledger */}
+            <div className="p-6 rounded-3xl bg-[#0F3D2E] text-white shadow-xs space-y-3.5">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-300">
-                  Verified Payment Ledger
+                <h4 className="text-xs font-black uppercase tracking-wider text-emerald-300">
+                  পেমেন্ট লেজার (Payment Ledger)
                 </h4>
                 <span
-                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase ${
+                  className={`px-3 py-0.5 rounded-full text-[11px] font-black uppercase ${
                     activeOrder.paymentStatus === "paid"
                       ? "bg-emerald-400 text-stone-950"
                       : activeOrder.paymentStatus === "advance_paid"
@@ -785,111 +683,153 @@ function TrackOrderContent() {
               </div>
 
               <div className="space-y-1.5 text-xs">
-                <div className="flex justify-between text-emerald-200">
-                  <span>Items Subtotal:</span>
-                  <span>৳{activeOrder.subtotal.toLocaleString()}</span>
+                <div className="flex justify-between text-emerald-100">
+                  <span>পণ্যের উপমোট (Subtotal):</span>
+                  <span className="font-mono">
+                    ৳{activeOrder.subtotal.toLocaleString()}
+                  </span>
                 </div>
+
                 {activeOrder.discountAmount > 0 && (
                   <div className="flex justify-between text-emerald-300 font-semibold">
                     <span>
-                      Promo Discount{" "}
+                      প্রোমো ডিসকাউন্ট{" "}
                       {activeOrder.couponCode
                         ? `(${activeOrder.couponCode})`
                         : ""}
                       :
                     </span>
-                    <span>- ৳{activeOrder.discountAmount.toLocaleString()}</span>
+                    <span className="font-mono">
+                      - ৳{activeOrder.discountAmount.toLocaleString()}
+                    </span>
                   </div>
                 )}
-                <div className="flex justify-between text-emerald-200">
-                  <span>Home Delivery Charge:</span>
-                  <span>৳{activeOrder.deliveryCharge.toLocaleString()}</span>
+
+                <div className="flex justify-between text-emerald-100">
+                  <span>কোল্ড-চেইন ডেলিভারি চার্জ:</span>
+                  <span className="font-mono">
+                    ৳{activeOrder.deliveryCharge.toLocaleString()}
+                  </span>
                 </div>
+
                 {activeOrder.weightAdjustmentAmount !== undefined &&
                   activeOrder.weightAdjustmentAmount !== 0 && (
                     <div className="flex justify-between text-amber-300 font-semibold">
-                      <span>Scale Weight Adjustment:</span>
-                      <span>
+                      <span>ডিজিটাল স্কেল সমন্বয়:</span>
+                      <span className="font-mono">
                         {activeOrder.weightAdjustmentAmount > 0 ? "+" : ""}৳
                         {activeOrder.weightAdjustmentAmount.toLocaleString()}
                       </span>
                     </div>
                   )}
-                <div className="flex justify-between text-sm font-bold text-white pt-1.5 border-t border-emerald-800">
-                  <span>Final Order Bill:</span>
-                  <span>৳{activeOrder.totalAmount.toLocaleString()}</span>
+
+                <div className="flex justify-between text-sm font-bold text-white pt-2 border-t border-emerald-800">
+                  <span>সর্বমোট প্রদেয় বিল:</span>
+                  <span className="font-mono font-black">
+                    ৳{activeOrder.totalAmount.toLocaleString()}
+                  </span>
                 </div>
+
                 <div className="flex justify-between text-emerald-300 font-bold">
                   <span>
-                    Paid Online ({activeOrder.paymentMethod.toUpperCase()}):
+                    পরিশোধিত অগ্রিম ({activeOrder.paymentMethod.toUpperCase()}):
                   </span>
-                  <span>- ৳{activeOrder.advancePaid.toLocaleString()}</span>
+                  <span className="font-mono">
+                    - ৳{activeOrder.advancePaid.toLocaleString()}
+                  </span>
                 </div>
-                <div className="flex justify-between text-base font-extrabold text-amber-300 pt-1.5 border-t border-emerald-800">
-                  <span>Due on Home Delivery (COD):</span>
-                  <span>৳{activeOrder.dueAmount.toLocaleString()}</span>
+
+                <div className="flex justify-between text-base font-black text-amber-300 pt-2 border-t border-emerald-800">
+                  <span>বকেয়া দেয় টাকা (Due on Delivery):</span>
+                  <span className="font-mono">
+                    ৳{activeOrder.dueAmount.toLocaleString()}
+                  </span>
                 </div>
               </div>
 
               {activeOrder.transactionId && (
-                <p className="text-[11px] font-mono text-emerald-300 pt-1">
+                <p className="text-[11px] font-mono text-emerald-300/80 pt-1 border-t border-emerald-800/60">
                   Verified TrxID: {activeOrder.transactionId}
                 </p>
               )}
             </div>
           </div>
 
-          {/* Ordered Items Table */}
-          <div className="p-6 sm:p-8 space-y-4">
-            <h3 className="text-sm font-extrabold uppercase tracking-wider text-stone-700">
-              Ordered Organic Items ({activeOrder.items.length})
-            </h3>
+          {/* Module 5: ITEMIZED ORGANIC CATCH & CUSTOM CUTTING SPECIFICATIONS */}
+          <div className="p-6 sm:p-8 rounded-3xl bg-white border border-stone-200/90 shadow-xs space-y-5 no-print">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="text-xs font-black uppercase tracking-wider text-[#0F3D2E] flex items-center gap-1.5">
+                  <ShoppingBag className="w-4 h-4 text-emerald-700" />
+                  Itemized Catch & Village Staples
+                </span>
+                <h3 className="text-lg font-black text-stone-900">
+                  অর্ডারকৃত পণ্যের বিস্তারিত তালিকা ({activeOrder.items.length})
+                </h3>
+              </div>
+              <span className="text-xs font-bold text-stone-500 font-mono">
+                Batch: Live River Batch
+              </span>
+            </div>
+
             <div className="divide-y divide-stone-100 border border-stone-200 rounded-2xl overflow-hidden">
               {activeOrder.items.map((item) => (
                 <div
                   key={item.id}
-                  className="p-4 flex items-center justify-between gap-4 bg-white"
+                  className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white hover:bg-stone-50/50 transition"
                 >
-                  <div className="flex items-center gap-3.5">
+                  <div className="flex items-start sm:items-center gap-4">
                     {item.productImage && (
-                      <img
-                        src={item.productImage}
-                        alt={item.productTitle}
-                        className="w-14 h-14 rounded-xl object-contain bg-stone-950 p-0.5 border border-stone-200 shrink-0"
-                      />
+                      <div className="w-16 h-16 rounded-2xl overflow-hidden bg-stone-950 p-0.5 border border-stone-200 shrink-0 relative">
+                        <img
+                          src={item.productImage}
+                          alt={item.productTitle}
+                          className="w-full h-full object-cover rounded-xl"
+                        />
+                      </div>
                     )}
                     <div>
-                      <p className="text-xs font-bold text-[#0F3D2E]">
+                      <p className="text-xs font-black text-[#0F3D2E]">
                         {item.productTitleBn}
                       </p>
-                      <p className="text-sm font-extrabold text-stone-900">
+                      <h4 className="text-sm sm:text-base font-extrabold text-stone-900">
                         {item.productTitle}
-                      </p>
-                      <p className="text-xs text-stone-500">
-                        Pack: <strong>{item.variantLabel}</strong> ×{" "}
-                        {item.quantity}
-                        {item.cuttingPreference
-                          ? ` • Prep: ${item.cuttingPreference}`
-                          : ""}
-                      </p>
+                      </h4>
+                      <div className="flex flex-wrap items-center gap-2 mt-1">
+                        <span className="px-2 py-0.5 rounded-md bg-stone-100 text-stone-700 text-xs font-medium">
+                          প্যাক: <strong>{item.variantLabel}</strong> × {item.quantity}
+                        </span>
+                        {item.cuttingPreference && (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-900 border border-emerald-200 text-xs font-bold">
+                            কাটিং: {item.cuttingPreference}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-extrabold text-stone-900">
+
+                  <div className="text-left sm:text-right">
+                    <p className="text-base font-black text-stone-900 font-mono">
                       ৳{item.lineTotal.toLocaleString()}
                     </p>
-                    <p className="text-[11px] text-stone-400">
-                      ৳{item.unitPrice} each
+                    <p className="text-xs text-stone-500 font-mono">
+                      ৳{item.unitPrice.toLocaleString()} each
                     </p>
                   </div>
                 </div>
               ))}
             </div>
           </div>
+
+          {/* Module 6: HIGH-RES PRINTABLE INVOICE (ONLY VISIBLE ON PRINT) */}
+          <PrintableInvoice
+            order={activeOrder}
+            supportPhone={settings.supportPhone}
+          />
         </div>
       )}
 
-      {/* MODAL: PAY REMAINING DUE ONLINE VIA OFFICIAL BKASH OR NAGAD MERCHANT GATEWAY */}
+      {/* 7. MODAL: PAY REMAINING DUE ONLINE VIA OFFICIAL BKASH OR NAGAD MERCHANT GATEWAY */}
       {isPayDueModalOpen && activeOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/75 backdrop-blur-xs no-print overflow-y-auto">
           <div className="w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl bg-white border border-stone-200 my-6">
@@ -929,7 +869,7 @@ function TrackOrderContent() {
                         <span className="text-[11px] opacity-80 block font-semibold">
                           পরিশোধযোগ্য টাকা (Server Verified)
                         </span>
-                        <strong className="text-2xl font-black">
+                        <strong className="text-2xl font-black font-mono">
                           ৳{activeOrder.dueAmount.toLocaleString()}
                         </strong>
                       </div>
@@ -945,38 +885,31 @@ function TrackOrderContent() {
                       <label className="block font-bold text-stone-700 mb-2">
                         পেমেন্ট মাধ্যম বেছে নিন:
                       </label>
-                      <div className="grid grid-cols-3 gap-2.5">
+                      <div className="grid grid-cols-2 gap-3">
                         <button
                           type="button"
                           onClick={() => setSelectedDueGateway("bkash")}
-                          className={`py-3 px-3 rounded-xl font-bold border-2 transition cursor-pointer flex flex-col items-center gap-1 ${
+                          className={`py-3 px-3 rounded-2xl font-bold border-2 transition cursor-pointer flex flex-col items-center gap-1 ${
                             selectedDueGateway === "bkash"
                               ? "border-[#E2136E] bg-pink-50 text-[#E2136E]"
                               : "border-stone-200 text-stone-600 hover:border-stone-300"
                           }`}
                         >
                           <Smartphone className="w-4 h-4" />
-                          <span className="text-xs">bKash (বিকাশ)</span>
+                          <span className="text-xs font-black">bKash (বিকাশ)</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => setSelectedDueGateway("nagad")}
-                          className={`py-3 px-3 rounded-xl font-bold border-2 transition cursor-pointer flex flex-col items-center gap-1 ${
+                          className={`py-3 px-3 rounded-2xl font-bold border-2 transition cursor-pointer flex flex-col items-center gap-1 ${
                             selectedDueGateway === "nagad"
                               ? "border-orange-500 bg-orange-50 text-orange-700"
                               : "border-stone-200 text-stone-600 hover:border-stone-300"
                           }`}
                         >
                           <Smartphone className="w-4 h-4" />
-                          <span className="text-xs">Nagad (নগদ)</span>
+                          <span className="text-xs font-black">Nagad (নগদ)</span>
                         </button>
-                        <div
-                          aria-disabled="true"
-                          className="py-3 px-3 rounded-xl font-bold border-2 border-dashed border-stone-200 bg-stone-50 text-stone-400 flex flex-col items-center gap-1 opacity-60 cursor-not-allowed"
-                        >
-                          <CreditCard className="w-4 h-4" />
-                          <span className="text-[11px]">SSLCommerz (Hold)</span>
-                        </div>
                       </div>
                     </div>
 
@@ -1017,7 +950,7 @@ function TrackOrderContent() {
                         onClick={
                           isBkash ? handlePayDueWithBkash : handlePayDueWithNagad
                         }
-                        className={`flex-1 py-3 px-5 rounded-xl text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer transition ${
+                        className={`flex-1 py-3 px-5 rounded-xl text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer transition ${
                           isBkash
                             ? "bg-[#E2136E] hover:bg-[#c20f5d]"
                             : "bg-[#E35124] hover:bg-[#c44119]"
