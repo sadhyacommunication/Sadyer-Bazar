@@ -24,6 +24,8 @@ import {
   ShoppingBag,
   ArrowRight,
   Fish,
+  FileText,
+  Download,
 } from "lucide-react";
 import {
   getOrderStatusOverrides,
@@ -38,6 +40,7 @@ import MotionStageViewer from "@/components/tracking/MotionStageViewer";
 import FreshnessTelemetry from "@/components/tracking/FreshnessTelemetry";
 import TransitRadar from "@/components/tracking/TransitRadar";
 import PrintableInvoice from "@/components/tracking/PrintableInvoice";
+import OrderReceiptModal from "@/components/receipt/OrderReceiptModal";
 
 function TrackOrderContent() {
   const searchParams = useSearchParams();
@@ -58,6 +61,9 @@ function TrackOrderContent() {
   const [trackError, setTrackError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+
+  // Official Viewable, Downloadable & Printable Digital Receipt Modal
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
 
   // Pay Online / Pay Remaining Due Modal State (Official bKash & Nagad Merchant Gateways)
   const [isPayDueModalOpen, setIsPayDueModalOpen] = useState(false);
@@ -534,18 +540,30 @@ function TrackOrderContent() {
 
       {/* 3. Official Gateway Alerts (Success, Cancelled, Failed, Review) */}
       {paymentStatusParam === "success" && (
-        <div className="p-6 rounded-3xl bg-emerald-50 border-2 border-emerald-600/40 flex items-start gap-4 no-print shadow-sm">
-          <div className="w-12 h-12 rounded-2xl bg-[#0F3D2E] text-emerald-300 flex items-center justify-center shrink-0">
-            <CheckCircle2 className="w-6 h-6" />
+        <div className="p-6 rounded-3xl bg-emerald-50 border-2 border-emerald-600/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print shadow-sm">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-[#0F3D2E] text-emerald-300 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-lg font-black text-[#0F3D2E]">
+                আলহামদুলিল্লাহ! আপনার {gatewayDisplayName} পেমেন্ট সফলভাবে সম্পন্ন ও ভেরিফাই হয়েছে!
+              </h2>
+              <p className="text-xs sm:text-sm text-stone-700">
+                গেটওয়ে থেকে আপনার লেনদেন নিশ্চিত করা হয়েছে এবং অর্ডারের পেমেন্ট লেজার স্বয়ংক্রিয়ভাবে আপডেট করা হয়েছে।
+              </p>
+            </div>
           </div>
-          <div className="space-y-1">
-            <h2 className="text-lg font-black text-[#0F3D2E]">
-              আলহামদুলিল্লাহ! আপনার {gatewayDisplayName} পেমেন্ট সফলভাবে সম্পন্ন ও ভেরিফাই হয়েছে!
-            </h2>
-            <p className="text-xs sm:text-sm text-stone-700">
-              গেটওয়ে থেকে আপনার লেনদেন নিশ্চিত করা হয়েছে এবং অর্ডারের পেমেন্ট লেজার স্বয়ংক্রিয়ভাবে আপডেট করা হয়েছে।
-            </p>
-          </div>
+          {activeOrder && (
+            <button
+              type="button"
+              onClick={() => setIsReceiptModalOpen(true)}
+              className="px-4 py-2.5 rounded-2xl bg-[#0F3D2E] hover:bg-[#165b44] text-white text-xs font-black shrink-0 cursor-pointer transition shadow-md flex items-center justify-center gap-2 self-start sm:self-center"
+            >
+              <FileText className="w-4 h-4 text-emerald-300" />
+              <span>মানি রসিদ ডাউনলোড / দেখুন</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -597,7 +615,7 @@ function TrackOrderContent() {
 
       {/* 4. Just Ordered Confirmation Banner */}
       {justOrdered && activeOrder && (
-        <div className="p-6 rounded-3xl bg-emerald-50 border-2 border-emerald-600/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print shadow-sm">
+        <div className="p-6 rounded-3xl bg-emerald-50 border-2 border-emerald-600/40 flex flex-col md:flex-row md:items-center justify-between gap-4 no-print shadow-sm">
           <div className="flex items-start gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-[#0F3D2E] text-amber-300 flex items-center justify-center shrink-0">
               <Sparkles className="w-6 h-6" />
@@ -611,24 +629,34 @@ function TrackOrderContent() {
                 <strong className="font-mono text-[#C83E2B]">
                   {activeOrder.orderCode}
                 </strong>{" "}
-                সংরক্ষণ করুন অথবা নিচের বাটনে ক্লিক করে ট্র্যাকিং লিংক সেভ করুন।
+                সংরক্ষণ করুন। আপনার অফিসিয়াল ডিজিটাল ক্যাশ মেমো ও রসিদ প্রস্তুত রয়েছে।
               </p>
             </div>
           </div>
-          <button
-            onClick={() => handleCopyCode(activeOrder.orderCode)}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white border border-emerald-300 text-xs font-black text-[#0F3D2E] hover:bg-emerald-100 transition cursor-pointer self-start sm:self-center"
-          >
-            {copied ? (
-              <>
-                <Check className="w-4 h-4 text-emerald-600" /> Copied Order ID!
-              </>
-            ) : (
-              <>
-                <Copy className="w-4 h-4" /> Copy Order ID
-              </>
-            )}
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5 self-start md:self-center">
+            <button
+              type="button"
+              onClick={() => setIsReceiptModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#0F3D2E] hover:bg-[#165b44] text-white text-xs font-black shadow-md transition cursor-pointer"
+            >
+              <FileText className="w-4 h-4 text-emerald-300" />
+              <span>রসিদ ও মেমো দেখুন</span>
+            </button>
+            <button
+              onClick={() => handleCopyCode(activeOrder.orderCode)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white border border-emerald-300 text-xs font-black text-[#0F3D2E] hover:bg-emerald-100 transition cursor-pointer"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-600" /> Copied ID!
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" /> Copy ID
+                </>
+              )}
+            </button>
+          </div>
         </div>
       )}
 
@@ -766,8 +794,17 @@ function TrackOrderContent() {
                 )}
 
               <button
+                type="button"
+                onClick={() => setIsReceiptModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0F3D2E] hover:bg-[#165b44] text-white text-xs font-bold transition cursor-pointer shadow-xs"
+              >
+                <FileText className="w-3.5 h-3.5 text-amber-300" />
+                <span>অফিসিয়াল রসিদ (Receipt)</span>
+              </button>
+
+              <button
                 onClick={() => window.print()}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0F3D2E] hover:bg-[#165b44] text-white text-xs font-bold transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-bold transition cursor-pointer"
               >
                 <Printer className="w-3.5 h-3.5" />
                 <span>Print Invoice</span>
@@ -947,6 +984,17 @@ function TrackOrderContent() {
                   Verified TrxID: {activeOrder.transactionId}
                 </p>
               )}
+
+              <div className="pt-2 border-t border-emerald-800/60">
+                <button
+                  type="button"
+                  onClick={() => setIsReceiptModalOpen(true)}
+                  className="w-full py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/20 border border-emerald-400/30 text-emerald-100 text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                >
+                  <Download className="w-3.5 h-3.5 text-amber-300" />
+                  <span>ডিজিটাল ক্যাশ মেমো ও মানি রসিদ ডাউনলোড করুন</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1172,6 +1220,16 @@ function TrackOrderContent() {
             })()}
           </div>
         </div>
+      )}
+
+      {/* 8. MODAL: OFFICIAL DIGITAL RECEIPT / CASH MEMO */}
+      {activeOrder && (
+        <OrderReceiptModal
+          order={activeOrder}
+          settings={settings}
+          isOpen={isReceiptModalOpen}
+          onClose={() => setIsReceiptModalOpen(false)}
+        />
       )}
     </div>
   );
