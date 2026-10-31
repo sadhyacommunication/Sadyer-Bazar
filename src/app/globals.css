@@ -46,3 +46,31 @@ body {
     display: none !important;
   }
 }
+
+/* Running News Ticker Marquee Animation */
+@keyframes newsTickerContinuous {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.animate-news-ticker {
+  display: inline-flex;
+  white-space: nowrap;
+  will-change: transform;
+  animation: newsTickerContinuous 30s linear infinite;
+}
+
+.animate-news-ticker:hover {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-news-ticker {
+    animation-duration: 60s;
+  }
+}
+

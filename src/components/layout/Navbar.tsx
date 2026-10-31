@@ -26,6 +26,7 @@ export default function Navbar() {
     cartSubtotal,
     setIsCartOpen,
     settings,
+    preorderSettings,
     products,
     toastMessage,
   } = useStore();
@@ -64,34 +65,116 @@ export default function Navbar() {
 
   return (
     <>
-      {/* Top Announcement & Live Delivery Rate Bar */}
-      <div className="bg-[#0F3D2E] text-emerald-50 text-xs sm:text-sm border-b border-emerald-800/60 no-print">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2 font-medium">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#C83E2B] text-white text-[11px] font-semibold tracking-wide uppercase">
-              <Flame className="w-3 h-3 fill-current" /> Live Batch
+      {/* Top Announcement & Live Running News Ticker Bar (Strict Single-Line) */}
+      <div className="bg-[#0F3D2E] text-emerald-50 text-xs sm:text-[13px] border-b border-emerald-800/70 no-print overflow-hidden h-9 sm:h-10 flex items-center">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 w-full flex items-center justify-between gap-2 sm:gap-4 flex-nowrap">
+          {/* Pinned Left: Live Batch Badge */}
+          <Link
+            href="/pre-orders"
+            className="flex items-center gap-1.5 shrink-0 z-20 bg-[#0F3D2E] pr-2 shadow-[6px_0_8px_#0F3D2E] group"
+          >
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#C83E2B] group-hover:bg-[#d94835] text-white text-[10px] sm:text-[11px] font-extrabold tracking-wide uppercase shadow-xs transition-colors whitespace-nowrap">
+              <Flame className="w-3 h-3 fill-current text-amber-300 animate-pulse" />
+              <span>Live Batch</span>
             </span>
-            <span className="truncate max-w-[260px] sm:max-w-none">
-              {settings.announcementEn}
-            </span>
+          </Link>
+
+          {/* Center: Running News Ticker (Continuous Smooth Horizontal Marquee) */}
+          <div className="relative flex-1 overflow-hidden whitespace-nowrap min-w-0 mx-1 sm:mx-2 py-0.5">
+            {/* Left and Right Subtle Fade Gradients */}
+            <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-4 sm:w-6 bg-gradient-to-r from-[#0F3D2E] to-transparent z-10" />
+            <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-4 sm:w-6 bg-gradient-to-l from-[#0F3D2E] to-transparent z-10" />
+
+            <div className="animate-news-ticker flex items-center gap-8">
+              {/* First Track */}
+              <div className="flex items-center gap-6 shrink-0 font-medium text-emerald-100/95">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                  <span>{settings.announcementEn}</span>
+                </span>
+                {preorderSettings.expectedDeliveryDate && (
+                  <span className="inline-flex items-center gap-1.5 text-amber-300">
+                    <span className="opacity-60">✦</span>
+                    <Truck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>
+                      Next Catch Dispatch: <strong>{preorderSettings.expectedDeliveryDate}</strong>
+                    </span>
+                  </span>
+                )}
+                {preorderSettings.bannerAlert && (
+                  <span className="inline-flex items-center gap-1.5 text-emerald-200">
+                    <span className="opacity-60">✦</span>
+                    <span>{preorderSettings.bannerAlert}</span>
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-1.5 text-emerald-200/90">
+                  <span className="opacity-60">✦</span>
+                  <span>গ্রামের পণ্য শহরে, আপনার ঘরে • 100% Formalin & Chemical Free</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-amber-200/90 sm:hidden">
+                  <span className="opacity-60">✦</span>
+                  <span>
+                    Delivery: Dhaka ৳{settings.insideDhakaFee} | Outside ৳{settings.outsideDhakaFee}
+                  </span>
+                </span>
+              </div>
+
+              {/* Second Identical Track (Ensures seamless continuous loop) */}
+              <div className="flex items-center gap-6 shrink-0 font-medium text-emerald-100/95">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                  <span>{settings.announcementEn}</span>
+                </span>
+                {preorderSettings.expectedDeliveryDate && (
+                  <span className="inline-flex items-center gap-1.5 text-amber-300">
+                    <span className="opacity-60">✦</span>
+                    <Truck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>
+                      Next Catch Dispatch: <strong>{preorderSettings.expectedDeliveryDate}</strong>
+                    </span>
+                  </span>
+                )}
+                {preorderSettings.bannerAlert && (
+                  <span className="inline-flex items-center gap-1.5 text-emerald-200">
+                    <span className="opacity-60">✦</span>
+                    <span>{preorderSettings.bannerAlert}</span>
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-1.5 text-emerald-200/90">
+                  <span className="opacity-60">✦</span>
+                  <span>গ্রামের পণ্য শহরে, আপনার ঘরে • 100% Formalin & Chemical Free</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-amber-200/90 sm:hidden">
+                  <span className="opacity-60">✦</span>
+                  <span>
+                    Delivery: Dhaka ৳{settings.insideDhakaFee} | Outside ৳{settings.outsideDhakaFee}
+                  </span>
+                </span>
+              </div>
+            </div>
           </div>
 
-          <div className="hidden md:flex items-center gap-5 text-xs text-emerald-100/90">
-            <span className="inline-flex items-center gap-1.5">
-              <Truck className="w-3.5 h-3.5 text-amber-400" />
-              Inside Dhaka:{" "}
-              <strong className="text-white">৳{settings.insideDhakaFee}</strong>{" "}
-              | Outside Dhaka:{" "}
-              <strong className="text-white">
-                ৳{settings.outsideDhakaFee}
-              </strong>
+          {/* Pinned Right: Delivery Charges & Hotline (Strictly Single-Line) */}
+          <div className="flex items-center gap-3 sm:gap-4.5 text-[11px] sm:text-xs shrink-0 z-20 bg-[#0F3D2E] pl-2 sm:pl-3 shadow-[-6px_0_8px_#0F3D2E]">
+            <span className="hidden sm:inline-flex items-center gap-1.5 text-emerald-100/90 whitespace-nowrap">
+              <Truck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>
+                Inside Dhaka: <strong className="text-white">৳{settings.insideDhakaFee}</strong>
+              </span>
+              <span className="text-emerald-500/70">|</span>
+              <span>
+                Outside: <strong className="text-white">৳{settings.outsideDhakaFee}</strong>
+              </span>
             </span>
+
             <a
-              href={`tel:${settings.supportPhone.split("-")[0]}`}
-              className="inline-flex items-center gap-1.5 text-amber-300 hover:text-amber-200 font-semibold transition"
+              href={`tel:${settings.supportPhone.split("-")[0].replace(/\s+/g, "")}`}
+              className="inline-flex items-center gap-1.5 text-amber-300 hover:text-amber-200 font-extrabold whitespace-nowrap transition cursor-pointer"
+              title="Click to call hotline"
             >
-              <PhoneCall className="w-3.5 h-3.5" />
-              Hotline: {settings.supportPhone}
+              <PhoneCall className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+              <span className="hidden md:inline font-bold">Hotline:</span>
+              <span className="tracking-tight">{settings.supportPhone}</span>
             </a>
           </div>
         </div>
