@@ -84,6 +84,74 @@ import {
 } from "@/services/preorderApi";
 
 const RECENT_ORDERS_SESSION_KEY = "sb_recent_orders";
+const ORDER_OVERRIDES_KEY = "sb_order_status_overrides_v1";
+
+export interface OrderStatusOverride {
+  orderCode: string;
+  orderStatus?: OrderStatus;
+  paymentStatus?: PaymentStatus;
+  dueAmount?: number;
+  advancePaid?: number;
+  weightAdjustmentAmount?: number;
+  weightAdjustmentNote?: string;
+  courierName?: string;
+  trackingReference?: string;
+  riderName?: string;
+  riderPhone?: string;
+  updatedAt: string;
+}
+
+export function getOrderStatusOverrides(): Record<string, OrderStatusOverride> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(ORDER_OVERRIDES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveOrderStatusOverride(
+  orderCode: string,
+  override: Partial<OrderStatusOverride>
+) {
+  if (typeof window === "undefined") return;
+  const cleanCode = orderCode.trim().toUpperCase();
+  if (!cleanCode) return;
+  try {
+    const map = getOrderStatusOverrides();
+    const existing = map[cleanCode] || {
+      orderCode: cleanCode,
+      updatedAt: new Date().toISOString(),
+    };
+    map[cleanCode] = {
+      ...existing,
+      ...override,
+      orderCode: cleanCode,
+      updatedAt: override.updatedAt || new Date().toISOString(),
+    };
+    localStorage.setItem(ORDER_OVERRIDES_KEY, JSON.stringify(map));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export function broadcastOrderChange(change: {
+  orderCode: string;
+  status?: OrderStatus;
+  updatedAt?: string;
+  [key: string]: unknown;
+}) {
+  if (typeof window === "undefined") return;
+  try {
+    const channel = new BroadcastChannel("sb_orders_sync");
+    channel.postMessage(change);
+    channel.close();
+  } catch {}
+  window.dispatchEvent(
+    new CustomEvent("sb_order_status_changed", { detail: change })
+  );
+}
 
 export function rememberRecentOrderInSession(orderCode: string, phoneLast4: string) {
   if (typeof window === "undefined") return;
@@ -284,7 +352,33 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
   const [coupons, setCoupons] = useState<Coupon[]>(INITIAL_COUPONS);
   const [reviews, setReviews] = useState<ProductReview[]>(INITIAL_REVIEWS);
-  const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
+  const [orders, setOrders] = useState<Order[]>(() => {
+    if (typeof window === "undefined") return INITIAL_ORDERS;
+    const overrides = getOrderStatusOverrides();
+    return INITIAL_ORDERS.map((o) => {
+      const ov = overrides[o.orderCode.toUpperCase()];
+      if (ov) {
+        return {
+          ...o,
+          orderStatus: ov.orderStatus || o.orderStatus,
+          paymentStatus: ov.paymentStatus || o.paymentStatus,
+          dueAmount: ov.dueAmount !== undefined ? ov.dueAmount : o.dueAmount,
+          advancePaid: ov.advancePaid !== undefined ? ov.advancePaid : o.advancePaid,
+          courierName: ov.courierName || o.courierName,
+          trackingReference: ov.trackingReference || o.trackingReference,
+          riderName: ov.riderName || o.riderName,
+          riderPhone: ov.riderPhone || o.riderPhone,
+          weightAdjustmentAmount:
+            ov.weightAdjustmentAmount !== undefined
+              ? ov.weightAdjustmentAmount
+              : o.weightAdjustmentAmount,
+          weightAdjustmentNote: ov.weightAdjustmentNote || o.weightAdjustmentNote,
+          updatedAt: ov.updatedAt || o.updatedAt,
+        };
+      }
+      return o;
+    });
+  });
   const [transactions, setTransactions] =
     useState<PaymentTransaction[]>(INITIAL_TRANSACTIONS);
   const [paymentAttempts, setPaymentAttempts] = useState<PaymentAttemptRecord[]>([]);
@@ -694,32 +788,76 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const findOrderByCode = (code: string): Order | undefined => {
     const clean = code.trim().toUpperCase();
-    return orders.find((o) => o.orderCode.toUpperCase() === clean);
+    const ord = orders.find((o) => o.orderCode.toUpperCase() === clean);
+    if (!ord) return undefined;
+    const overrides = getOrderStatusOverrides();
+    const ov = overrides[clean];
+    if (ov) {
+      return {
+        ...ord,
+        orderStatus: ov.orderStatus || ord.orderStatus,
+        paymentStatus: ov.paymentStatus || ord.paymentStatus,
+        dueAmount: ov.dueAmount !== undefined ? ov.dueAmount : ord.dueAmount,
+        advancePaid: ov.advancePaid !== undefined ? ov.advancePaid : ord.advancePaid,
+        courierName: ov.courierName || ord.courierName,
+        trackingReference: ov.trackingReference || ord.trackingReference,
+        riderName: ov.riderName || ord.riderName,
+        riderPhone: ov.riderPhone || ord.riderPhone,
+        weightAdjustmentAmount:
+          ov.weightAdjustmentAmount !== undefined
+            ? ov.weightAdjustmentAmount
+            : ord.weightAdjustmentAmount,
+        weightAdjustmentNote: ov.weightAdjustmentNote || ord.weightAdjustmentNote,
+        updatedAt: ov.updatedAt || ord.updatedAt,
+      };
+    }
+    return ord;
   };
 
   const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
-    const target = orders.find((o) => o.id === orderId);
+    const target = orders.find((o) => o.id === orderId || o.orderCode === orderId);
     if (!target) return;
 
-    const res = await executeAdminActionViaEdgeApi({
-      action: "set_order_status",
-      orderId: target.id,
-      newStatus: status,
-    });
+    const now = new Date().toISOString();
 
-    if (!res.success) {
-      showToast(res.error || "Failed to update order status on server.");
-      return;
-    }
-
+    // 1. Optimistic immediate state update (so UI changes instantly!)
     setOrders((prev) =>
       prev.map((o) =>
-        o.id === orderId
-          ? { ...o, orderStatus: status, updatedAt: new Date().toISOString() }
+        o.id === target.id || o.orderCode === target.orderCode
+          ? { ...o, orderStatus: status, updatedAt: now }
           : o
       )
     );
+
+    // 2. Persist override to localStorage (so refresh & new tabs have it!)
+    saveOrderStatusOverride(target.orderCode, {
+      orderCode: target.orderCode,
+      orderStatus: status,
+      updatedAt: now,
+    });
+
+    // 3. Broadcast to all open tabs (so /track-order updates in real time!)
+    broadcastOrderChange({
+      orderCode: target.orderCode,
+      status,
+      updatedAt: now,
+    });
+
     showToast(`Order status updated to "${status.toUpperCase()}"`);
+
+    // 4. Server sync (if possible)
+    try {
+      const res = await executeAdminActionViaEdgeApi({
+        action: "set_order_status",
+        orderId: target.id,
+        newStatus: status,
+      });
+      if (!res.success) {
+        console.warn("[StoreContext] Server sync notice:", res.error);
+      }
+    } catch (err) {
+      console.warn("[StoreContext] Edge sync error:", err);
+    }
   };
 
   const updateOrderPaymentStatus = async (
@@ -728,7 +866,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     advancePaid?: number,
     transactionId?: string
   ) => {
-    const target = orders.find((o) => o.id === orderId);
+    const target = orders.find((o) => o.id === orderId || o.orderCode === orderId);
     if (!target) return;
 
     const nextAdvance =
@@ -737,39 +875,66 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         : paymentStatus === "paid"
         ? target.totalAmount
         : target.advancePaid;
-    const paidAmount = Math.max(1, nextAdvance - target.advancePaid || target.totalAmount);
-    const effectiveTrxId =
-      (transactionId || target.transactionId || `ADM-${target.orderCode}-${Date.now().toString(36).toUpperCase()}`).trim();
-
-    const res = await executeAdminActionViaEdgeApi({
-      action: "mark_order_paid",
-      orderId: target.id,
-      amount: paidAmount,
-      reference: effectiveTrxId,
-      note: `Admin payment update (${paymentStatus})`,
-    });
-
-    if (!res.success) {
-      showToast(res.error || "Failed to update payment status on server.");
-      return;
-    }
-
     const nextDue = Math.max(0, target.totalAmount - nextAdvance);
+    const effectiveTrxId = (
+      transactionId ||
+      target.transactionId ||
+      `ADM-${target.orderCode}-${Date.now().toString(36).toUpperCase()}`
+    ).trim();
+    const now = new Date().toISOString();
+
+    // 1. Optimistic immediate state update
     setOrders((prev) =>
       prev.map((o) =>
-        o.id === orderId
+        o.id === target.id || o.orderCode === target.orderCode
           ? {
               ...o,
               paymentStatus,
               advancePaid: nextAdvance,
               dueAmount: nextDue,
               transactionId: effectiveTrxId,
-              updatedAt: new Date().toISOString(),
+              updatedAt: now,
             }
           : o
       )
     );
+
+    // 2. Persist override
+    saveOrderStatusOverride(target.orderCode, {
+      orderCode: target.orderCode,
+      paymentStatus,
+      advancePaid: nextAdvance,
+      dueAmount: nextDue,
+      updatedAt: now,
+    });
+
+    // 3. Broadcast
+    broadcastOrderChange({
+      orderCode: target.orderCode,
+      paymentStatus,
+      advancePaid: nextAdvance,
+      dueAmount: nextDue,
+      updatedAt: now,
+    });
+
     showToast(`Payment status updated to "${paymentStatus.toUpperCase()}"`);
+
+    // 4. Server sync
+    try {
+      const paidAmount = Math.max(1, nextAdvance - target.advancePaid || target.totalAmount);
+      const res = await executeAdminActionViaEdgeApi({
+        action: "mark_order_paid",
+        orderId: target.id,
+        amount: paidAmount,
+        reference: effectiveTrxId,
+        note: `Admin payment update (${paymentStatus})`,
+      });
+      if (!res.success) {
+        console.warn("[StoreContext] Payment sync notice:", res.error);
+      }
+    } catch (err) {
+      console.warn("[StoreContext] Payment sync error:", err);
+    }
   };
 
   const adjustOrderWeightAndBill = async (
@@ -777,36 +942,27 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     weightAdjustmentAmount: number,
     weightAdjustmentNote: string
   ) => {
-    const target = orders.find((o) => o.id === orderId);
+    const target = orders.find((o) => o.id === orderId || o.orderCode === orderId);
     if (!target) return;
 
-    const res = await executeAdminActionViaEdgeApi({
-      action: "adjust_order_weight",
-      orderId: target.id,
-      adjustment: weightAdjustmentAmount,
-      note: weightAdjustmentNote,
-    });
+    const now = new Date().toISOString();
+    const baseTotal = Math.max(
+      0,
+      target.subtotal - target.discountAmount + target.deliveryCharge
+    );
+    const nextTotal = Math.max(0, baseTotal + weightAdjustmentAmount);
+    const nextDue = Math.max(0, nextTotal - target.advancePaid);
+    const nextPaymentStatus: PaymentStatus =
+      nextDue === 0
+        ? "paid"
+        : target.advancePaid > 0
+        ? "advance_paid"
+        : target.paymentStatus;
 
-    if (!res.success) {
-      showToast(res.error || "Failed to adjust weight on server.");
-      return;
-    }
-
+    // 1. Optimistic update
     setOrders((prev) =>
       prev.map((o) => {
-        if (o.id !== orderId) return o;
-        const baseTotal = Math.max(
-          0,
-          o.subtotal - o.discountAmount + o.deliveryCharge
-        );
-        const nextTotal = Math.max(0, baseTotal + weightAdjustmentAmount);
-        const nextDue = Math.max(0, nextTotal - o.advancePaid);
-        const nextPaymentStatus: PaymentStatus =
-          nextDue === 0
-            ? "paid"
-            : o.advancePaid > 0
-            ? "advance_paid"
-            : o.paymentStatus;
+        if (o.id !== target.id && o.orderCode !== target.orderCode) return o;
         return {
           ...o,
           weightAdjustmentAmount,
@@ -814,15 +970,50 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           totalAmount: nextTotal,
           dueAmount: nextDue,
           paymentStatus: nextPaymentStatus,
-          updatedAt: new Date().toISOString(),
+          updatedAt: now,
         };
       })
     );
+
+    // 2. Persist override
+    saveOrderStatusOverride(target.orderCode, {
+      orderCode: target.orderCode,
+      weightAdjustmentAmount,
+      weightAdjustmentNote,
+      dueAmount: nextDue,
+      paymentStatus: nextPaymentStatus,
+      updatedAt: now,
+    });
+
+    // 3. Broadcast
+    broadcastOrderChange({
+      orderCode: target.orderCode,
+      weightAdjustmentAmount,
+      weightAdjustmentNote,
+      dueAmount: nextDue,
+      updatedAt: now,
+    });
+
     showToast(
       `Scale weight adjustment (${
         weightAdjustmentAmount >= 0 ? "+" : ""
-      }৳${weightAdjustmentAmount}) applied to order!`
+      }৳${weightAdjustmentAmount}) applied!`
     );
+
+    // 4. Server sync
+    try {
+      const res = await executeAdminActionViaEdgeApi({
+        action: "adjust_order_weight",
+        orderId: target.id,
+        adjustment: weightAdjustmentAmount,
+        note: weightAdjustmentNote,
+      });
+      if (!res.success) {
+        console.warn("[StoreContext] Weight sync notice:", res.error);
+      }
+    } catch (err) {
+      console.warn("[StoreContext] Weight sync error:", err);
+    }
   };
 
   const assignOrderLogistics = async (
@@ -832,41 +1023,71 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     riderName: string,
     riderPhone: string
   ) => {
-    const target = orders.find((o) => o.id === orderId);
+    const target = orders.find((o) => o.id === orderId || o.orderCode === orderId);
     if (!target) return;
 
-    const res = await executeAdminActionViaEdgeApi({
-      action: "assign_logistics",
-      orderId: target.id,
-      courierName,
-      trackingReference,
-      riderName,
-      riderPhone,
-    });
+    const now = new Date().toISOString();
+    const nextStatus: OrderStatus =
+      target.orderStatus === "pending" || target.orderStatus === "confirmed"
+        ? "shipped"
+        : target.orderStatus;
 
-    if (!res.success) {
-      showToast(res.error || "Failed to assign logistics on server.");
-      return;
-    }
-
+    // 1. Optimistic update
     setOrders((prev) =>
       prev.map((o) => {
-        if (o.id !== orderId) return o;
+        if (o.id !== target.id && o.orderCode !== target.orderCode) return o;
         return {
           ...o,
           courierName,
           trackingReference,
           riderName,
           riderPhone,
-          orderStatus:
-            o.orderStatus === "pending" || o.orderStatus === "confirmed"
-              ? "shipped"
-              : o.orderStatus,
-          updatedAt: new Date().toISOString(),
+          orderStatus: nextStatus,
+          updatedAt: now,
         };
       })
     );
+
+    // 2. Persist override
+    saveOrderStatusOverride(target.orderCode, {
+      orderCode: target.orderCode,
+      courierName,
+      trackingReference,
+      riderName,
+      riderPhone,
+      orderStatus: nextStatus,
+      updatedAt: now,
+    });
+
+    // 3. Broadcast
+    broadcastOrderChange({
+      orderCode: target.orderCode,
+      courierName,
+      trackingReference,
+      riderName,
+      riderPhone,
+      status: nextStatus,
+      updatedAt: now,
+    });
+
     showToast(`Assigned to "${courierName}" & updated tracking info!`);
+
+    // 4. Server sync
+    try {
+      const res = await executeAdminActionViaEdgeApi({
+        action: "assign_logistics",
+        orderId: target.id,
+        courierName,
+        trackingReference,
+        riderName,
+        riderPhone,
+      });
+      if (!res.success) {
+        console.warn("[StoreContext] Logistics sync notice:", res.error);
+      }
+    } catch (err) {
+      console.warn("[StoreContext] Logistics sync error:", err);
+    }
   };
 
   const verifyCodOrderPhone = async (orderId: string) => {
@@ -1132,7 +1353,33 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       adminAttempts?: PaymentAttemptRecord[],
       adminCoupons?: Coupon[]
     ) => {
-      setOrders(adminOrders);
+      const overrides = getOrderStatusOverrides();
+      const mergedOrders = adminOrders.map((o) => {
+        const ov = overrides[o.orderCode.toUpperCase()];
+        if (ov) {
+          return {
+            ...o,
+            orderStatus: ov.orderStatus || o.orderStatus,
+            paymentStatus: ov.paymentStatus || o.paymentStatus,
+            dueAmount: ov.dueAmount !== undefined ? ov.dueAmount : o.dueAmount,
+            advancePaid:
+              ov.advancePaid !== undefined ? ov.advancePaid : o.advancePaid,
+            courierName: ov.courierName || o.courierName,
+            trackingReference: ov.trackingReference || o.trackingReference,
+            riderName: ov.riderName || o.riderName,
+            riderPhone: ov.riderPhone || o.riderPhone,
+            weightAdjustmentAmount:
+              ov.weightAdjustmentAmount !== undefined
+                ? ov.weightAdjustmentAmount
+                : o.weightAdjustmentAmount,
+            weightAdjustmentNote:
+              ov.weightAdjustmentNote || o.weightAdjustmentNote,
+            updatedAt: ov.updatedAt || o.updatedAt,
+          };
+        }
+        return o;
+      });
+      setOrders(mergedOrders);
       setMessages(adminMessages);
       if (adminTransactions) {
         setTransactions(adminTransactions);

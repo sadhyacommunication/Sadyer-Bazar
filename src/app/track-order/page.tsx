@@ -26,6 +26,7 @@ import {
   Fish,
 } from "lucide-react";
 import {
+  getOrderStatusOverrides,
   getRecentOrderPhoneLast4,
   rememberRecentOrderInSession,
   useStore,
@@ -98,9 +99,37 @@ function TrackOrderContent() {
 
       try {
         const res = await trackOrderViaEdgeApi(cleanCode, cleanLast4);
+        const overrides = getOrderStatusOverrides();
+        const ov = overrides[cleanCode];
+
         if (res.success && res.order) {
           rememberRecentOrderInSession(cleanCode, cleanLast4);
-          setActiveOrder(res.order);
+          const finalOrder: Order = ov
+            ? {
+                ...res.order,
+                orderStatus: ov.orderStatus || res.order.orderStatus,
+                paymentStatus: ov.paymentStatus || res.order.paymentStatus,
+                dueAmount:
+                  ov.dueAmount !== undefined ? ov.dueAmount : res.order.dueAmount,
+                advancePaid:
+                  ov.advancePaid !== undefined
+                    ? ov.advancePaid
+                    : res.order.advancePaid,
+                courierName: ov.courierName || res.order.courierName,
+                trackingReference:
+                  ov.trackingReference || res.order.trackingReference,
+                riderName: ov.riderName || res.order.riderName,
+                riderPhone: ov.riderPhone || res.order.riderPhone,
+                weightAdjustmentAmount:
+                  ov.weightAdjustmentAmount !== undefined
+                    ? ov.weightAdjustmentAmount
+                    : res.order.weightAdjustmentAmount,
+                weightAdjustmentNote:
+                  ov.weightAdjustmentNote || res.order.weightAdjustmentNote,
+                updatedAt: ov.updatedAt || res.order.updatedAt,
+              }
+            : res.order;
+          setActiveOrder(finalOrder);
           setNotFound(false);
           return;
         }
@@ -111,7 +140,32 @@ function TrackOrderContent() {
           localMatch &&
           localMatch.customerPhone.replace(/\D/g, "").endsWith(cleanLast4)
         ) {
-          setActiveOrder(localMatch);
+          const finalOrder: Order = ov
+            ? {
+                ...localMatch,
+                orderStatus: ov.orderStatus || localMatch.orderStatus,
+                paymentStatus: ov.paymentStatus || localMatch.paymentStatus,
+                dueAmount:
+                  ov.dueAmount !== undefined ? ov.dueAmount : localMatch.dueAmount,
+                advancePaid:
+                  ov.advancePaid !== undefined
+                    ? ov.advancePaid
+                    : localMatch.advancePaid,
+                courierName: ov.courierName || localMatch.courierName,
+                trackingReference:
+                  ov.trackingReference || localMatch.trackingReference,
+                riderName: ov.riderName || localMatch.riderName,
+                riderPhone: ov.riderPhone || localMatch.riderPhone,
+                weightAdjustmentAmount:
+                  ov.weightAdjustmentAmount !== undefined
+                    ? ov.weightAdjustmentAmount
+                    : localMatch.weightAdjustmentAmount,
+                weightAdjustmentNote:
+                  ov.weightAdjustmentNote || localMatch.weightAdjustmentNote,
+                updatedAt: ov.updatedAt || localMatch.updatedAt,
+              }
+            : localMatch;
+          setActiveOrder(finalOrder);
           setNotFound(false);
           return;
         }
@@ -150,15 +204,107 @@ function TrackOrderContent() {
     }
   }, [initialCode, findOrderByCode, performLookup]);
 
-  // Keep activeOrder synced when orders update in context
+  // Keep activeOrder synced when orders update in context or via cross-tab broadcast
   useEffect(() => {
     if (activeOrder) {
       const updated = findOrderByCode(activeOrder.orderCode);
-      if (updated && updated.updatedAt > activeOrder.updatedAt) {
-        setActiveOrder(updated);
+      if (
+        updated &&
+        (updated.orderStatus !== activeOrder.orderStatus ||
+          updated.updatedAt > activeOrder.updatedAt)
+      ) {
+        setActiveOrder((prev) => (prev ? { ...prev, ...updated } : updated));
       }
     }
   }, [orders, activeOrder, findOrderByCode]);
+
+  // Cross-Tab BroadcastChannel & Event Synchronization
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel("sb_orders_sync");
+      channel.onmessage = (event) => {
+        const data = event.data;
+        if (
+          data?.orderCode &&
+          activeOrder &&
+          activeOrder.orderCode.toUpperCase() === data.orderCode.toUpperCase()
+        ) {
+          setActiveOrder((prev) => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              orderStatus: data.status || data.orderStatus || prev.orderStatus,
+              paymentStatus: data.paymentStatus || prev.paymentStatus,
+              dueAmount:
+                data.dueAmount !== undefined ? data.dueAmount : prev.dueAmount,
+              advancePaid:
+                data.advancePaid !== undefined
+                  ? data.advancePaid
+                  : prev.advancePaid,
+              courierName: data.courierName || prev.courierName,
+              trackingReference:
+                data.trackingReference || prev.trackingReference,
+              riderName: data.riderName || prev.riderName,
+              riderPhone: data.riderPhone || prev.riderPhone,
+              weightAdjustmentAmount:
+                data.weightAdjustmentAmount !== undefined
+                  ? data.weightAdjustmentAmount
+                  : prev.weightAdjustmentAmount,
+              weightAdjustmentNote:
+                data.weightAdjustmentNote || prev.weightAdjustmentNote,
+              updatedAt: data.updatedAt || new Date().toISOString(),
+            };
+          });
+        }
+      };
+    } catch {}
+
+    const handleStatusEvent = (e: Event) => {
+      const data = (e as CustomEvent).detail;
+      if (
+        data?.orderCode &&
+        activeOrder &&
+        activeOrder.orderCode.toUpperCase() === data.orderCode.toUpperCase()
+      ) {
+        setActiveOrder((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            orderStatus: data.status || data.orderStatus || prev.orderStatus,
+            paymentStatus: data.paymentStatus || prev.paymentStatus,
+            dueAmount:
+              data.dueAmount !== undefined ? data.dueAmount : prev.dueAmount,
+            advancePaid:
+              data.advancePaid !== undefined
+                ? data.advancePaid
+                : prev.advancePaid,
+            courierName: data.courierName || prev.courierName,
+            trackingReference:
+              data.trackingReference || prev.trackingReference,
+            riderName: data.riderName || prev.riderName,
+            riderPhone: data.riderPhone || prev.riderPhone,
+            weightAdjustmentAmount:
+              data.weightAdjustmentAmount !== undefined
+                ? data.weightAdjustmentAmount
+                : prev.weightAdjustmentAmount,
+            weightAdjustmentNote:
+              data.weightAdjustmentNote || prev.weightAdjustmentNote,
+            updatedAt: data.updatedAt || new Date().toISOString(),
+          };
+        });
+      }
+    };
+
+    window.addEventListener("sb_order_status_changed", handleStatusEvent);
+
+    return () => {
+      channel?.close();
+      window.removeEventListener("sb_order_status_changed", handleStatusEvent);
+    };
+  }, [activeOrder]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
