@@ -11,6 +11,13 @@ import {
 
 export const INITIAL_SITE_SETTINGS: SiteSettings = {
   id: 1,
+  brandNameEn: "Sadhyer Bazar",
+  brandNameBn: "সাধ্যের বাজার",
+  sloganEn: "Village Freshness in the City, at Your Home",
+  sloganBn: "গ্রামের পণ্য শহরে, আপনার ঘরে",
+  logoUrl: "",
+  logoMode: "badge",
+  faviconUrl: "",
   insideDhakaFee: 70,
   outsideDhakaFee: 130,
   freeDeliveryThreshold: 3000,

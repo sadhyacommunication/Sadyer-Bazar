@@ -5,6 +5,7 @@ import { Order } from "@/types";
 import { maskAddress, maskPhoneNumber } from "@/lib/security";
 import { generateQrMatrix, qrMatrixToSvgPath } from "@/lib/receipt/qrGenerator";
 import { generateReceiptVerificationHash } from "@/lib/receipt/receiptGenerator";
+import { useStore } from "@/context/StoreContext";
 
 interface PrintableInvoiceProps {
   order: Order;
@@ -15,6 +16,7 @@ export default function PrintableInvoice({
   order,
   supportPhone,
 }: PrintableInvoiceProps) {
+  const { settings } = useStore();
   const [verificationHash, setVerificationHash] = useState("");
 
   useEffect(() => {
@@ -50,13 +52,13 @@ export default function PrintableInvoice({
         <div className="transform -rotate-12 flex flex-col items-center justify-center text-center">
           <div className="w-80 h-80 rounded-full border-8 border-stone-800 flex flex-col items-center justify-center p-6 border-dashed">
             <span className="text-5xl font-black text-[#0F3D2E] tracking-tight">
-              সাধ্যের বাজার
+              {settings.brandNameBn || "সাধ্যের বাজার"}
             </span>
             <span className="text-2xl font-black text-[#C83E2B] mt-1 tracking-wider uppercase">
-              Sadhyer Bazar
+              {settings.brandNameEn || "Sadhyer Bazar"}
             </span>
             <span className="text-[11px] font-bold text-stone-700 mt-2 tracking-widest uppercase">
-              Official Tax Invoice • গ্রামে খাঁটি
+              Official Tax Invoice • {settings.sloganBn || "গ্রামে খাঁটি"}
             </span>
           </div>
         </div>
@@ -65,23 +67,32 @@ export default function PrintableInvoice({
       <div className="relative z-10 space-y-6">
         {/* Official Invoice Header */}
         <div className="border-b-2 border-stone-900 pb-6 flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-black text-[#0F3D2E] tracking-tight">
-              সাধ্যের বাজার (Sadhyer Bazar)
-            </h1>
-            <p className="text-xs font-bold text-stone-600 mt-0.5">
-              গ্রামের পণ্য শহরে, আপনার ঘরে — Village Freshness in the City, at Your Home
-            </p>
-            <div className="mt-2 text-[11px] text-stone-600 space-y-0.5">
-              <p>
-                <strong>ঢাকা প্রধান কার্যালয়:</strong> বাড়ি ৯০, রোড ২, ব্লক এ, নিকেতন, গুলশান, ঢাকা-১২১২
+          <div className="flex items-start gap-4">
+            {settings.logoMode === "custom" && settings.logoUrl && (
+              <img
+                src={settings.logoUrl}
+                alt={settings.brandNameEn || "Logo"}
+                className="w-16 h-16 object-contain"
+              />
+            )}
+            <div>
+              <h1 className="text-2xl font-black text-[#0F3D2E] tracking-tight">
+                {settings.brandNameBn || "সাধ্যের বাজার"} ({settings.brandNameEn || "Sadhyer Bazar"})
+              </h1>
+              <p className="text-xs font-bold text-stone-600 mt-0.5">
+                {settings.sloganBn || "গ্রামের পণ্য শহরে, আপনার ঘরে"} — {settings.sloganEn || "Village Freshness in the City, at Your Home"}
               </p>
-              <p>
-                <strong>গ্রামীণ ওয়্যারহাউস/ঘাট হাব:</strong> ধুনট সদর, ধুনট বাজার, বগুড়া
-              </p>
-              <p>
-                <strong>হটলাইন:</strong> {supportPhone} • <strong>ওয়েবসাইট:</strong> sadhyerbazar.com
-              </p>
+              <div className="mt-2 text-[11px] text-stone-600 space-y-0.5">
+                <p>
+                  <strong>ঢাকা প্রধান কার্যালয়:</strong> বাড়ি ৯০, রোড ২, ব্লক এ, নিকেতন, গুলশান, ঢাকা-১২১২
+                </p>
+                <p>
+                  <strong>গ্রামীণ ওয়্যারহাউস/ঘাট হাব:</strong> ধুনট সদর, ধুনট বাজার, বগুড়া
+                </p>
+                <p>
+                  <strong>হটলাইন:</strong> {supportPhone} • <strong>ওয়েবসাইট:</strong> sadhyerbazar.com
+                </p>
+              </div>
             </div>
           </div>
 

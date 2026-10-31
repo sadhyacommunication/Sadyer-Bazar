@@ -32,11 +32,14 @@ export type SupabaseConnectionState =
   | "offline";
 
 /**
- * Explicit safe columns granted to `anon` and `authenticated` by Migration 05.
+ * Explicit safe columns granted to `anon` and `authenticated` by Migration 05 & 09.
  * Never use `select("*")` on `site_settings` because secret columns are revoked from API roles.
  */
-export const SAFE_SITE_SETTINGS_COLUMNS =
+export const SAFE_SITE_SETTINGS_BASE_COLUMNS =
   "id, inside_dhaka_fee, outside_dhaka_fee, free_delivery_threshold, enable_free_delivery, preorder_advance_percent, support_phone, whatsapp_number, bkash_merchant_number, bkash_account_type, nagad_number, nagad_account_type, nagad_enabled, bkash_enabled, cod_enabled, announcement_en, announcement_bn, updated_at";
+
+export const SAFE_SITE_SETTINGS_COLUMNS =
+  `${SAFE_SITE_SETTINGS_BASE_COLUMNS}, brand_name_en, brand_name_bn, slogan_en, slogan_bn, logo_url, logo_mode, favicon_url`;
 
 export interface PaymentAttemptRecord {
   id: string;
@@ -66,6 +69,34 @@ export interface PaymentAttemptRecord {
 function mapSettingsFromRow(row: Record<string, unknown>): SiteSettings {
   return {
     id: 1,
+    brandNameEn: String(
+      row.brand_name_en ||
+        row.brandNameEn ||
+        INITIAL_SITE_SETTINGS.brandNameEn ||
+        "Sadhyer Bazar"
+    ),
+    brandNameBn: String(
+      row.brand_name_bn ||
+        row.brandNameBn ||
+        INITIAL_SITE_SETTINGS.brandNameBn ||
+        "সাধ্যের বাজার"
+    ),
+    sloganEn: String(
+      row.slogan_en ||
+        row.sloganEn ||
+        INITIAL_SITE_SETTINGS.sloganEn ||
+        "Village Freshness in the City, at Your Home"
+    ),
+    sloganBn: String(
+      row.slogan_bn ||
+        row.sloganBn ||
+        INITIAL_SITE_SETTINGS.sloganBn ||
+        "গ্রামের পণ্য শহরে, আপনার ঘরে"
+    ),
+    logoUrl: String(row.logo_url || row.logoUrl || ""),
+    logoMode:
+      ((row.logo_mode || row.logoMode) as SiteSettings["logoMode"]) || "badge",
+    faviconUrl: String(row.favicon_url || row.faviconUrl || ""),
     insideDhakaFee: Number(row.inside_dhaka_fee ?? 70),
     outsideDhakaFee: Number(row.outside_dhaka_fee ?? 130),
     freeDeliveryThreshold: Number(row.free_delivery_threshold ?? 3000),
@@ -371,6 +402,13 @@ export async function upsertSettingsToSupabase(
   if (!supabase) return false;
 
   const safePayload = {
+    brand_name_en: settings.brandNameEn || "Sadhyer Bazar",
+    brand_name_bn: settings.brandNameBn || "সাধ্যের বাজার",
+    slogan_en: settings.sloganEn || "Village Freshness in the City, at Your Home",
+    slogan_bn: settings.sloganBn || "গ্রামের পণ্য শহরে, আপনার ঘরে",
+    logo_url: settings.logoUrl || "",
+    logo_mode: settings.logoMode || "badge",
+    favicon_url: settings.faviconUrl || "",
     inside_dhaka_fee: settings.insideDhakaFee,
     outside_dhaka_fee: settings.outsideDhakaFee,
     free_delivery_threshold: settings.freeDeliveryThreshold,
@@ -394,6 +432,16 @@ export async function upsertSettingsToSupabase(
     .from("site_settings")
     .update(safePayload)
     .eq("id", 1);
+
+  if (error && /column.*does not exist/i.test(error.message)) {
+    // If migration 09 hasn't run yet in Supabase, fallback to base columns
+    const { brand_name_en, brand_name_bn, slogan_en, slogan_bn, logo_url, logo_mode, favicon_url, ...basePayload } = safePayload;
+    const { error: baseErr } = await supabase
+      .from("site_settings")
+      .update(basePayload)
+      .eq("id", 1);
+    return !baseErr;
+  }
 
   return !error;
 }
@@ -1548,20 +1596,33 @@ export async function fetchLiveStoreFromSupabase(): Promise<{
   }
 
   try {
-    const { data: settingsData, error: settingsErr } = await supabase
+    let settingsData: Record<string, unknown> | null = null;
+    const { data: withBrandData, error: withBrandErr } = await supabase
       .from("site_settings")
       .select(SAFE_SITE_SETTINGS_COLUMNS)
       .eq("id", 1)
       .maybeSingle();
 
-    if (settingsErr) {
-      if (
-        settingsErr.code === "PGRST205" ||
-        settingsErr.message?.includes("Could not find the table")
-      ) {
-        return { status: "schema_missing" };
+    if (!withBrandErr) {
+      settingsData = withBrandData as unknown as Record<string, unknown>;
+    } else {
+      // Fallback if brand identity migration 09 hasn't been run yet on remote Supabase
+      const { data: baseData, error: baseErr } = await supabase
+        .from("site_settings")
+        .select(SAFE_SITE_SETTINGS_BASE_COLUMNS)
+        .eq("id", 1)
+        .maybeSingle();
+
+      if (baseErr) {
+        if (
+          baseErr.code === "PGRST205" ||
+          baseErr.message?.includes("Could not find the table")
+        ) {
+          return { status: "schema_missing" };
+        }
+        return { status: "offline" };
       }
-      return { status: "offline" };
+      settingsData = baseData as unknown as Record<string, unknown>;
     }
 
     const [prodRes, revRes, catRes] = await Promise.all([

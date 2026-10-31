@@ -233,17 +233,17 @@ export default function OrderReceiptModal({
                 <div className="w-80 h-80 rounded-full border-8 border-dashed border-[#0F3D2E] flex flex-col items-center justify-center mx-auto p-4">
                   <Leaf className="w-20 h-20 text-[#0F3D2E] mb-2" />
                   <span className="text-4xl font-black text-[#0F3D2E] tracking-tight leading-none">
-                    সাধ্যের
+                    {settings.brandNameBn || "সাধ্যের বাজার"}
                   </span>
-                  <span className="text-3xl font-extrabold text-[#C83E2B] leading-tight mt-1">
-                    বাজার
+                  <span className="text-xl font-extrabold text-[#C83E2B] leading-tight mt-2 uppercase tracking-wider">
+                    {settings.brandNameEn || "Sadhyer Bazar"}
                   </span>
-                  <span className="text-sm font-black text-[#0F3D2E] uppercase tracking-wider mt-3">
-                    Sadhyer Bazar
+                  <span className="text-xs font-black text-[#0F3D2E] uppercase tracking-wider mt-3">
+                    {settings.sloganBn || "গ্রামের পণ্য শহরে, আপনার ঘরে"}
                   </span>
                 </div>
                 <p className="text-xs font-black uppercase tracking-widest text-[#0F3D2E]">
-                  AUTHENTIC COLD-CHAIN CERTIFIED • গ্রামের পণ্য শহরে, আপনার ঘরে
+                  AUTHENTIC COLD-CHAIN CERTIFIED • {settings.sloganEn || "Village Freshness in the City, at Your Home"}
                 </p>
               </div>
             </div>
@@ -253,26 +253,38 @@ export default function OrderReceiptModal({
               {/* 1. Official Header */}
               <div className="border-b-2 border-[#0F3D2E] pb-6 flex flex-col sm:flex-row items-start justify-between gap-4">
                 <div className="flex items-start gap-3.5">
-                  {/* Circular Brand Identity Emblem */}
-                  <div className="w-14 h-14 rounded-full bg-white border-2 border-[#0F3D2E] shadow-xs flex flex-col items-center justify-center shrink-0">
-                    <Leaf className="w-3.5 h-3.5 text-emerald-600 -mb-0.5" />
-                    <span className="text-[11px] font-black text-[#0F3D2E] leading-none">
-                      সাধ্যের
-                    </span>
-                    <span className="text-[9px] font-extrabold text-[#C83E2B] leading-tight">
-                      বাজার
-                    </span>
-                  </div>
+                  {/* Brand Identity Logo / Emblem */}
+                  {settings.logoMode === "custom" && settings.logoUrl ? (
+                    <div className="w-14 h-14 rounded-2xl bg-white border border-stone-200 shadow-xs flex items-center justify-center p-1.5 shrink-0 overflow-hidden">
+                      <img
+                        src={settings.logoUrl}
+                        alt={settings.brandNameEn || "Brand Logo"}
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-14 h-14 rounded-full bg-white border-2 border-[#0F3D2E] shadow-xs flex flex-col items-center justify-center shrink-0">
+                      <Leaf className="w-3.5 h-3.5 text-emerald-600 -mb-0.5" />
+                      <span className="text-[11px] font-black text-[#0F3D2E] leading-none">
+                        {settings.brandNameBn ? settings.brandNameBn.split(" ")[0] : "সাধ্যের"}
+                      </span>
+                      <span className="text-[9px] font-extrabold text-[#C83E2B] leading-tight">
+                        {settings.brandNameBn && settings.brandNameBn.split(" ").length > 1
+                          ? settings.brandNameBn.split(" ").slice(1).join(" ")
+                          : "বাজার"}
+                      </span>
+                    </div>
+                  )}
 
                   <div className="space-y-0.5">
                     <h1 className="text-xl sm:text-2xl font-black text-[#0F3D2E] tracking-tight">
-                      সাধ্যের বাজার{" "}
+                      {settings.brandNameBn || "সাধ্যের বাজার"}{" "}
                       <span className="text-[#C83E2B] font-extrabold text-lg sm:text-xl">
-                        (Sadhyer Bazar)
+                        ({settings.brandNameEn || "Sadhyer Bazar"})
                       </span>
                     </h1>
                     <p className="text-xs font-bold text-stone-600">
-                      গ্রামের পণ্য শহরে, আপনার ঘরে — Village Freshness in the City, at Your Home
+                      {settings.sloganBn || "গ্রামের পণ্য শহরে, আপনার ঘরে"} — {settings.sloganEn || "Village Freshness in the City, at Your Home"}
                     </p>
                     <div className="text-[11px] text-stone-500 pt-1 space-y-0.5 leading-relaxed">
                       <p>

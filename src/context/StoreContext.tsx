@@ -428,7 +428,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [transactions, setTransactions] =
     useState<PaymentTransaction[]>(INITIAL_TRANSACTIONS);
   const [paymentAttempts, setPaymentAttempts] = useState<PaymentAttemptRecord[]>([]);
-  const [settings, setSettings] = useState<SiteSettings>(INITIAL_SITE_SETTINGS);
+  const [settings, setSettings] = useState<SiteSettings>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("sb_site_settings_v1");
+        if (stored) {
+          return { ...INITIAL_SITE_SETTINGS, ...JSON.parse(stored) };
+        }
+      } catch {}
+    }
+    return INITIAL_SITE_SETTINGS;
+  });
   const [heroSlides, setHeroSlides] = useState<HeroSlide[]>(DEFAULT_HERO_SLIDES);
   const [heroSettings, setHeroSettings] = useState<HeroSettings>(DEFAULT_HERO_SETTINGS);
   const [heroLoading, setHeroLoading] = useState<boolean>(false);
@@ -1316,8 +1326,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const updateSiteSettings = async (nextSettings: SiteSettings) => {
     setSettings(nextSettings);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("sb_site_settings_v1", JSON.stringify(nextSettings));
+      } catch {}
+    }
     await upsertSettingsToSupabase(nextSettings);
-    showToast("Delivery charges & site settings saved to Supabase!");
+    showToast("Settings & brand identity saved successfully!");
   };
 
   const unreadMessageCount = useMemo(() => {

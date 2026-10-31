@@ -23,6 +23,14 @@ export type OrderStatus =
 
 export interface SiteSettings {
   id: number;
+  // Brand Identity, Logo & Slogan
+  brandNameEn?: string;
+  brandNameBn?: string;
+  sloganEn?: string;
+  sloganBn?: string;
+  logoUrl?: string;
+  logoMode?: "custom" | "badge";
+  faviconUrl?: string;
   insideDhakaFee: number;
   outsideDhakaFee: number;
   freeDeliveryThreshold: number;

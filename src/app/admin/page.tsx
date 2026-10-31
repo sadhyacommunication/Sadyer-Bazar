@@ -38,6 +38,7 @@ import {
   Layers,
   Sparkles,
   Database,
+  Palette,
 } from "lucide-react";
 import { rememberRecentOrderInSession, useStore } from "@/context/StoreContext";
 import { checkRateLimit } from "@/lib/security";
@@ -45,6 +46,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { fetchAuthenticatedAdminDataFromSupabase } from "@/services/supabaseSync";
 import HeroCmsManager from "@/components/admin/HeroCmsManager";
 import PreorderManager from "@/components/admin/PreorderManager";
+import BrandIdentityManager from "@/components/admin/BrandIdentityManager";
 import {
   Category,
   ContactMessage,
@@ -152,6 +154,7 @@ type AdminTab =
   | "categories"
   | "hero"
   | "preorders"
+  | "brand"
   | "coupons"
   | "payments"
   | "messages"
@@ -1063,6 +1066,11 @@ export default function AdminDashboardPage() {
                 badge: preorderSettings.isBatchActive ? "LIVE" : null,
               },
               {
+                id: "brand",
+                label: "Logo, Name & Slogan",
+                icon: Palette,
+              },
+              {
                 id: "coupons",
                 label: `Promo Codes (${coupons.length})`,
                 icon: Tag,
@@ -1180,6 +1188,8 @@ export default function AdminDashboardPage() {
                 "Hero Banners, Carousel Slider & Homepage Highlights CMS"}
               {activeTab === "preorders" &&
                 "Live Pre-Order Batch Booking & Catch Schedule CMS"}
+              {activeTab === "brand" &&
+                "Brand Identity, Company Logo, Name & Slogan CMS"}
               {activeTab === "coupons" &&
                 "Promo Code & Campaign Discount Manager"}
               {activeTab === "payments" &&
@@ -2108,6 +2118,9 @@ export default function AdminDashboardPage() {
 
         {/* TAB: PRE-ORDER BATCH BOOKING & SCHEDULE CMS */}
         {activeTab === "preorders" && <PreorderManager />}
+
+        {/* TAB: BRAND IDENTITY, LOGO, NAME & SLOGAN CMS */}
+        {activeTab === "brand" && <BrandIdentityManager />}
 
         {/* TAB 5: PROMO CODES & COUPON MANAGER (Step 3 Upgrade) */}
         {activeTab === "coupons" && (
