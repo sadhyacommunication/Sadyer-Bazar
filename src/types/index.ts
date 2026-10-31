@@ -295,3 +295,33 @@ export interface HeroSettings {
   trustItems: HeroTrustItem[];
   updatedAt?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Pre-order batch & schedule CMS (see supabase/migrations/*_07_preorder_settings.sql)
+// ---------------------------------------------------------------------------
+import type {
+  PreorderBatchStatus,
+  PreorderSettingsInput,
+} from "@/lib/preorder/schema";
+export type { PreorderBatchStatus, PreorderSettingsInput };
+
+export interface PreorderSettings {
+  id: number;
+  isBatchActive: boolean;
+  batchStatus: PreorderBatchStatus;
+  badgeText: string;
+  headline: string;
+  subheadline: string;
+  cutoffTime: string;
+  expectedDeliveryDate: string;
+  dispatchLocation: string;
+  closedMessage: string;
+  showCountdown: boolean;
+  requireAdvancePayment: boolean;
+  advancePercent: number;
+  bannerAlert: string;
+  showBannerAlert: boolean;
+  maxBatchCapacity: number;
+  updatedAt?: string;
+}
+

@@ -19,6 +19,7 @@ import {
   heroSettingsInputSchema,
   heroSlideInputSchema,
 } from "../../../src/lib/hero/schema";
+import { preorderSettingsInputSchema } from "../../../src/lib/preorder/schema";
 
 async function cleanupStorageUrl(cfg: Config, publicUrl: string): Promise<void> {
   try {
@@ -102,6 +103,18 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("hero_reset_defaults"),
     confirm: z.literal(true),
+  }),
+  z.object({
+    action: z.literal("preorder_save_settings"),
+    settings: preorderSettingsInputSchema,
+  }),
+  z.object({
+    action: z.literal("preorder_sync_product_dates"),
+    cutoffTime: z.string().min(1),
+    expectedDeliveryDate: z.string().trim().min(1).max(120),
+  }),
+  z.object({
+    action: z.literal("preorder_reset_batch_booked"),
   }),
 ]);
 
@@ -235,6 +248,27 @@ export const onRequestPost = async (ctx: PagesContext): Promise<Response> => {
           ctx.waitUntil(cleanupStorageUrl(cfg, url));
         }
       }
+      return json({ success: true, result });
+    }
+    case "preorder_save_settings": {
+      const result = await rpc(cfg, "admin_preorder_save_settings", {
+        p_actor: admin.userId,
+        p_settings: d.settings,
+      });
+      return json({ success: true, result });
+    }
+    case "preorder_sync_product_dates": {
+      const result = await rpc(cfg, "admin_preorder_sync_product_dates", {
+        p_actor: admin.userId,
+        p_cutoff: d.cutoffTime,
+        p_delivery: d.expectedDeliveryDate,
+      });
+      return json({ success: true, result });
+    }
+    case "preorder_reset_batch_booked": {
+      const result = await rpc(cfg, "admin_preorder_reset_batch_booked", {
+        p_actor: admin.userId,
+      });
       return json({ success: true, result });
     }
   }

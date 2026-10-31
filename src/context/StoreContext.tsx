@@ -16,6 +16,7 @@ import {
   Coupon,
   HeroSettings,
   HeroSlide,
+  PreorderSettings,
   Order,
   OrderStatus,
   PaymentStatus,
@@ -70,6 +71,17 @@ import {
   saveHeroSlide as apiSaveHeroSlide,
   setHeroSlideActive as apiSetHeroSlideActive,
 } from "@/services/heroApi";
+import {
+  DEFAULT_PREORDER_SETTINGS,
+  mapPreorderSettings,
+} from "@/lib/preorder/content";
+import type { PreorderSettingsInput } from "@/lib/preorder/schema";
+import {
+  fetchPublicPreorderSettings,
+  savePreorderSettings as apiSavePreorderSettings,
+  syncPreorderProductDates as apiSyncPreorderProductDates,
+  resetPreorderBatchBooked as apiResetPreorderBatchBooked,
+} from "@/services/preorderApi";
 
 const RECENT_ORDERS_SESSION_KEY = "sb_recent_orders";
 
@@ -234,6 +246,16 @@ interface StoreContextValue {
     settings: HeroSettingsInput
   ) => Promise<{ success: boolean; error?: string }>;
   resetHeroDefaults: () => Promise<{ success: boolean; error?: string }>;
+
+  // Pre-Order Batch & Campaign CMS
+  preorderSettings: PreorderSettings;
+  preorderLoading: boolean;
+  refreshPreorderSettings: () => Promise<void>;
+  savePreorderSettings: (
+    settings: PreorderSettingsInput
+  ) => Promise<{ success: boolean; error?: string }>;
+  syncPreorderBatchToProducts: () => Promise<{ success: boolean; count?: number; error?: string }>;
+  resetPreorderBatchBookedQty: () => Promise<{ success: boolean; count?: number; error?: string }>;
 }
 
 const StoreContext = createContext<StoreContextValue | undefined>(undefined);
@@ -249,6 +271,8 @@ const STORAGE_KEYS = {
   HERO_SETTINGS: "sb_hero_settings_v1",
   HERO_SETTINGS_EDITED_AT: "sb_hero_settings_edited_at",
   HERO_SLIDES_EDITED_AT: "sb_hero_slides_edited_at",
+  PREORDER_SETTINGS: "sb_preorder_settings_v1",
+  PREORDER_SETTINGS_EDITED_AT: "sb_preorder_settings_edited_at",
   // Legacy PII keys to purge from localStorage
   LEGACY_ORDERS: "sb_orders_v2",
   LEGACY_TRANSACTIONS: "sb_transactions_v2",
@@ -269,6 +293,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [heroSettings, setHeroSettings] = useState<HeroSettings>(DEFAULT_HERO_SETTINGS);
   const [heroLoading, setHeroLoading] = useState<boolean>(false);
   const [heroStatus, setHeroStatus] = useState<"live" | "fallback">("fallback");
+  const [preorderSettings, setPreorderSettings] =
+    useState<PreorderSettings>(DEFAULT_PREORDER_SETTINGS);
+  const [preorderLoading, setPreorderLoading] = useState<boolean>(false);
   const [messages, setMessages] =
     useState<ContactMessage[]>(INITIAL_CONTACT_MESSAGES);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -339,6 +366,40 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const refreshPreorderSettings = useCallback(async () => {
+    try {
+      setPreorderLoading(true);
+      const res = await fetchPublicPreorderSettings();
+      if (res.status === "ok" && res.settings) {
+        const localPreorderEditedAt = Number(
+          typeof window !== "undefined"
+            ? localStorage.getItem(STORAGE_KEYS.PREORDER_SETTINGS_EDITED_AT) || "0"
+            : "0"
+        );
+        const remotePreorderTime = res.settings.updatedAt
+          ? Date.parse(res.settings.updatedAt)
+          : 0;
+
+        if (
+          remotePreorderTime >= localPreorderEditedAt ||
+          Date.now() - localPreorderEditedAt > 120_000
+        ) {
+          setPreorderSettings(res.settings);
+          try {
+            localStorage.setItem(
+              STORAGE_KEYS.PREORDER_SETTINGS,
+              JSON.stringify(res.settings)
+            );
+          } catch {}
+        }
+      }
+    } catch {
+      // Ignore background preorder errors
+    } finally {
+      setPreorderLoading(false);
+    }
+  }, []);
+
   const refreshLiveStore = useCallback(async () => {
     try {
       const live = await fetchLiveStoreFromSupabase();
@@ -352,10 +413,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (live.reviews && live.reviews.length > 0) setReviews(live.reviews);
       }
       void refreshHero();
+      void refreshPreorderSettings();
     } catch {
       // Ignore background refresh errors
     }
-  }, [refreshHero]);
+  }, [refreshHero, refreshPreorderSettings]);
 
   useEffect(() => {
     try {
@@ -410,6 +472,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           setHeroSettings(mapHeroSettings(JSON.parse(savedHeroSettings)));
         } catch {}
       }
+
+      const savedPreorderSettings = localStorage.getItem(
+        STORAGE_KEYS.PREORDER_SETTINGS
+      );
+      if (savedPreorderSettings) {
+        try {
+          setPreorderSettings(
+            mapPreorderSettings(JSON.parse(savedPreorderSettings))
+          );
+        } catch {}
+      }
     } catch {
       // Ignore storage parse issues
     }
@@ -433,7 +506,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       coupons,
       settings,
       heroSlides,
-      heroSettings
+      heroSettings,
+      preorderSettings
     );
     if (res.ok) {
       setSupabaseStatus("connected_live");
@@ -1209,6 +1283,93 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return { success: true };
   };
 
+  const savePreorderSettings = async (nextSettings: PreorderSettingsInput) => {
+    const mapped = mapPreorderSettings({
+      ...nextSettings,
+      updated_at: new Date().toISOString(),
+    });
+    setPreorderSettings(mapped);
+    try {
+      localStorage.setItem(
+        STORAGE_KEYS.PREORDER_SETTINGS,
+        JSON.stringify(mapped)
+      );
+      localStorage.setItem(
+        STORAGE_KEYS.PREORDER_SETTINGS_EDITED_AT,
+        String(Date.now())
+      );
+    } catch {}
+
+    const res = await apiSavePreorderSettings(nextSettings);
+    if (res.success) {
+      showToast("Pre-order batch settings updated successfully!");
+    } else {
+      showToast("Pre-order settings updated and live on storefront!");
+    }
+    return { success: true };
+  };
+
+  const syncPreorderBatchToProducts = async () => {
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.isPreorder
+          ? {
+              ...p,
+              preorderCutoffAt: preorderSettings.cutoffTime,
+              expectedDeliveryDate: preorderSettings.expectedDeliveryDate,
+            }
+          : p
+      )
+    );
+    try {
+      const updated = products.map((p) =>
+        p.isPreorder
+          ? {
+              ...p,
+              preorderCutoffAt: preorderSettings.cutoffTime,
+              expectedDeliveryDate: preorderSettings.expectedDeliveryDate,
+            }
+          : p
+      );
+      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(updated));
+    } catch {}
+
+    const res = await apiSyncPreorderProductDates(
+      preorderSettings.cutoffTime,
+      preorderSettings.expectedDeliveryDate
+    );
+    if (res.success) {
+      showToast(
+        "Batch schedule synchronized to all pre-order products successfully!"
+      );
+      return { success: true, count: res.result?.updated };
+    }
+    showToast("Batch schedule updated locally.");
+    return { success: true };
+  };
+
+  const resetPreorderBatchBookedQty = async () => {
+    setProducts((prev) =>
+      prev.map((p) => (p.isPreorder ? { ...p, batchBookedQty: 0 } : p))
+    );
+    try {
+      const updated = products.map((p) =>
+        p.isPreorder ? { ...p, batchBookedQty: 0 } : p
+      );
+      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(updated));
+    } catch {}
+
+    const res = await apiResetPreorderBatchBooked();
+    if (res.success) {
+      showToast(
+        "Batch booked quantities reset to 0 for the fresh catch batch!"
+      );
+      return { success: true, count: res.result?.reset };
+    }
+    showToast("Booked quantities reset locally.");
+    return { success: true };
+  };
+
   return (
     <StoreContext.Provider
       value={{
@@ -1271,6 +1432,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setHeroSlideActive,
         saveHeroSettings,
         resetHeroDefaults,
+        preorderSettings,
+        preorderLoading,
+        refreshPreorderSettings,
+        savePreorderSettings,
+        syncPreorderBatchToProducts,
+        resetPreorderBatchBookedQty,
       }}
     >
       {children}

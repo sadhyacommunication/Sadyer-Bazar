@@ -43,6 +43,7 @@ import { checkRateLimit } from "@/lib/security";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { fetchAuthenticatedAdminDataFromSupabase } from "@/services/supabaseSync";
 import HeroCmsManager from "@/components/admin/HeroCmsManager";
+import PreorderManager from "@/components/admin/PreorderManager";
 import {
   Category,
   ContactMessage,
@@ -149,6 +150,7 @@ type AdminTab =
   | "products"
   | "categories"
   | "hero"
+  | "preorders"
   | "coupons"
   | "payments"
   | "messages"
@@ -191,6 +193,7 @@ export default function AdminDashboardPage() {
     hydrateAdminRecords,
     heroSlides,
     refreshHero,
+    preorderSettings,
   } = useStore();
 
   // Supabase Auth + public.admins Allow-List Gate
@@ -1052,6 +1055,12 @@ export default function AdminDashboardPage() {
                 icon: Sparkles,
               },
               {
+                id: "preorders",
+                label: "Pre-Order Batches",
+                icon: Flame,
+                badge: preorderSettings.isBatchActive ? "LIVE" : null,
+              },
+              {
                 id: "coupons",
                 label: `Promo Codes (${coupons.length})`,
                 icon: Tag,
@@ -1167,6 +1176,8 @@ export default function AdminDashboardPage() {
                 "Store Category & Department Manager"}
               {activeTab === "hero" &&
                 "Hero Banners, Carousel Slider & Homepage Highlights CMS"}
+              {activeTab === "preorders" &&
+                "Live Pre-Order Batch Booking & Catch Schedule CMS"}
               {activeTab === "coupons" &&
                 "Promo Code & Campaign Discount Manager"}
               {activeTab === "payments" &&
@@ -2047,6 +2058,9 @@ export default function AdminDashboardPage() {
 
         {/* TAB: HERO CAROUSEL, BANNERS & HOMEPAGE CMS */}
         {activeTab === "hero" && <HeroCmsManager />}
+
+        {/* TAB: PRE-ORDER BATCH BOOKING & SCHEDULE CMS */}
+        {activeTab === "preorders" && <PreorderManager />}
 
         {/* TAB 5: PROMO CODES & COUPON MANAGER (Step 3 Upgrade) */}
         {activeTab === "coupons" && (

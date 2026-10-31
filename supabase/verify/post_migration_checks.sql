@@ -55,7 +55,10 @@ BEGIN
       ('authN non-admin UPDATE hero_slides',           'authenticated', 'UPDATE public.hero_slides SET title = ''hacked''',                                        'zero'),
       ('authN non-admin DELETE hero_slides',           'authenticated', 'DELETE FROM public.hero_slides',                                                          'zero'),
       ('anon  POSITIVE: read visible hero slides',     'anon',          'SELECT id FROM public.hero_slides LIMIT 1',                                               'allow'),
-      ('anon  POSITIVE: read hero settings',           'anon',          'SELECT headline FROM public.hero_settings',                                               'allow')
+      ('anon  POSITIVE: read hero settings',           'anon',          'SELECT headline FROM public.hero_settings',                                               'allow'),
+      ('anon  UPDATE preorder_settings',               'anon',          'UPDATE public.preorder_settings SET headline = ''hacked''',                               'deny'),
+      ('authN non-admin UPDATE preorder_settings',     'authenticated', 'UPDATE public.preorder_settings SET headline = ''hacked''',                               'zero'),
+      ('anon  POSITIVE: read preorder settings',       'anon',          'SELECT headline FROM public.preorder_settings',                                           'allow')
     ) AS x(name, role, stmt, expect)
   LOOP
     v_out := NULL; v_state := NULL; v_rows := NULL;

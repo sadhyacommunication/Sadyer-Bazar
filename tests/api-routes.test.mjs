@@ -248,6 +248,9 @@ function makeServiceRoleJwt() {
     "hero_set_active",
     "hero_save_settings",
     "hero_reset_defaults",
+    "preorder_save_settings",
+    "preorder_sync_product_dates",
+    "preorder_reset_batch_booked",
   ];
 
   for (const action of heroActions) {

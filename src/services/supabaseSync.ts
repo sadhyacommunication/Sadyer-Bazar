@@ -1,5 +1,6 @@
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { HeroAdminActionPayload } from "@/lib/hero/schema";
+import type { PreorderAdminActionPayload } from "@/lib/preorder/schema";
 import {
   Category,
   ContactMessage,
@@ -12,6 +13,7 @@ import {
   SiteSettings,
   HeroSlide,
   HeroSettings,
+  PreorderSettings,
 } from "@/types";
 import {
   INITIAL_CATEGORIES,
@@ -800,6 +802,7 @@ export async function submitReviewViaEdgeApi(input: {
 
 export type AdminEdgeActionPayload =
   | HeroAdminActionPayload
+  | PreorderAdminActionPayload
   | {
       action: "set_order_status";
       orderId: string;
@@ -995,7 +998,8 @@ export async function seedFullDatabaseToSupabase(
   currentCoupons: Coupon[] = INITIAL_COUPONS,
   currentSettings: SiteSettings = INITIAL_SITE_SETTINGS,
   currentHeroSlides?: HeroSlide[],
-  currentHeroSettings?: HeroSettings
+  currentHeroSettings?: HeroSettings,
+  currentPreorderSettings?: PreorderSettings
 ): Promise<{ ok: boolean; message: string }> {
   const supabase = getSupabaseClient();
   if (!supabase) {
@@ -1075,9 +1079,36 @@ export async function seedFullDatabaseToSupabase(
     } catch {}
   }
 
+  if (currentPreorderSettings) {
+    try {
+      await supabase.from("preorder_settings").upsert(
+        {
+          id: 1,
+          is_batch_active: currentPreorderSettings.isBatchActive,
+          batch_status: currentPreorderSettings.batchStatus,
+          badge_text: currentPreorderSettings.badgeText,
+          headline: currentPreorderSettings.headline,
+          subheadline: currentPreorderSettings.subheadline,
+          cutoff_time: currentPreorderSettings.cutoffTime,
+          expected_delivery_date: currentPreorderSettings.expectedDeliveryDate,
+          dispatch_location: currentPreorderSettings.dispatchLocation,
+          closed_message: currentPreorderSettings.closedMessage,
+          show_countdown: currentPreorderSettings.showCountdown,
+          require_advance_payment: currentPreorderSettings.requireAdvancePayment,
+          advance_percent: currentPreorderSettings.advancePercent,
+          banner_alert: currentPreorderSettings.bannerAlert,
+          show_banner_alert: currentPreorderSettings.showBannerAlert,
+          max_batch_capacity: currentPreorderSettings.maxBatchCapacity,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" }
+      );
+    } catch {}
+  }
+
   return {
     ok: true,
-    message: `Synced ${currentProducts.length} products, ${currentCoupons.length} coupons, hero slider & settings to Supabase!`,
+    message: `Synced ${currentProducts.length} products, ${currentCoupons.length} coupons, hero slider, preorder & settings to Supabase!`,
   };
 }
 

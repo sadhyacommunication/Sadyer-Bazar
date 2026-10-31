@@ -1,4 +1,4 @@
-﻿import fs from "node:fs";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 
@@ -47,14 +47,14 @@ await db.exec(`
    VALUES ('c1','SAVE10','10%','percentage',10,100);
   UPDATE site_settings SET inside_dhaka_fee=70, outside_dhaka_fee=130, free_delivery_threshold=3000, preorder_advance_percent=25;
 `);
-for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown", "06_hero_cms"]) {
+for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown", "06_hero_cms", "07_preorder_settings"]) {
   const file = fs.readdirSync(`${root}/migrations`).find((n) => n.includes(f));
   try { await db.exec(read(`migrations/${file}`)); console.log(`applied ${file}`); }
   catch (e) { console.log(`MIGRATION FAILED ${file}: ${e.message}`); process.exit(2); }
 }
 await db.exec("UPDATE coupons SET max_uses = 2 WHERE id = 'c1'");
 // idempotency: re-running every migration must succeed too
-for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown", "06_hero_cms"]) {
+for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown", "06_hero_cms", "07_preorder_settings"]) {
   const file = fs.readdirSync(`${root}/migrations`).find((n) => n.includes(f));
   try { await db.exec(read(`migrations/${file}`)); } catch (e) { check(`re-run ${file}`, false, e.message); }
 }
@@ -456,6 +456,54 @@ r = await as("authenticated", "DELETE FROM storage.objects WHERE name='hero/ok.w
 check("hero: non-admin cannot delete uploads", r.ok && (await svc("SELECT 1 FROM storage.objects WHERE name='hero/ok.webp'")).rows.length === 1);
 r = await as("authenticated", "DELETE FROM storage.objects WHERE name='hero/ok.webp'", [], actor);
 check("hero: admin can delete uploads", r.ok && (await svc("SELECT 1 FROM storage.objects WHERE name='hero/ok.webp'")).rows.length === 0);
+
+// pre-order batch cms tests
+let preAnonRead = await as("anon", "SELECT headline, batch_status FROM preorder_settings WHERE id = 1");
+check("preorder: anon can read preorder settings", preAnonRead.ok && preAnonRead.rows[0].batch_status === "booking_open");
+
+let preAnonWrite = await as("anon", "UPDATE preorder_settings SET headline = 'hacked' WHERE id = 1");
+check("preorder: anon cannot write preorder settings", !preAnonWrite.ok, preAnonWrite.err);
+
+let preNonAdminWrite = await as("authenticated", "UPDATE preorder_settings SET headline = 'hacked' WHERE id = 1", [], nonAdmin);
+let preUntampered = (await svc("SELECT headline FROM preorder_settings WHERE id = 1")).rows[0].headline !== "hacked";
+check("preorder: non-admin cannot update preorder settings under RLS", preUntampered);
+
+let preAdminUpdate = await as("authenticated", "UPDATE preorder_settings SET headline = 'Admin Live Batch Headline' WHERE id = 1", [], actor);
+check("preorder: admin can update preorder settings directly via RLS", preAdminUpdate.ok, preAdminUpdate.err);
+
+r = await fn("admin_preorder_save_settings", actor, J({
+  badgeText: "LIMITED PRE-ORDER BATCH",
+  headline: "Fresh River Fish Dispatch",
+  subheadline: "Caught at dawn",
+  cutoffTime: "2026-11-10T16:00:00Z",
+  expectedDeliveryDate: "Saturday Morning Batch",
+  dispatchLocation: "Sirajganj Ghat",
+  closedMessage: "Batch is fully booked",
+  batchStatus: "booking_open",
+  isBatchActive: true,
+  showCountdown: true,
+  requireAdvancePayment: true,
+  advancePercent: 25,
+  bannerAlert: "Few slots left",
+  showBannerAlert: true,
+  maxBatchCapacity: 300,
+}));
+check("preorder: admin RPC saves settings and returns row", r.ok && r.r.saved === true && r.r.settings.headline === "Fresh River Fish Dispatch", r.err);
+
+r = await fn("admin_preorder_sync_product_dates", actor, "2026-11-10T16:00:00Z", "Saturday Morning Batch");
+check("preorder: admin RPC syncs dates to pre-order products", r.ok && r.r.updated >= 1, r.err);
+
+r = await fn("admin_preorder_reset_batch_booked", actor);
+check("preorder: admin RPC resets booked quantities for all pre-order products", r.ok && typeof r.r.reset === "number", r.err);
+
+let preBadStatus = await svc("UPDATE preorder_settings SET batch_status = 'invalid_status' WHERE id = 1");
+check("preorder: table CHECK constraint rejects invalid status", !preBadStatus.ok && /check/i.test(preBadStatus.err), preBadStatus.err);
+
+let preBadAdvance = await svc("UPDATE preorder_settings SET advance_percent = 150 WHERE id = 1");
+check("preorder: table CHECK constraint rejects advance percent > 100", !preBadAdvance.ok && /check/i.test(preBadAdvance.err), preBadAdvance.err);
+
+const preAud = (await svc("SELECT count(*)::int AS n FROM admin_audit_log WHERE action LIKE 'preorder.%' AND actor = $1", [actor])).rows[0].n;
+check("preorder: admin actions are audited", preAud >= 3, preAud);
 
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

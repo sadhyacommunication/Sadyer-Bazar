@@ -25,34 +25,27 @@ import FamilyComboBuilder from "@/components/storefront/FamilyComboBuilder";
 import DepartmentShowcase from "@/components/storefront/DepartmentShowcase";
 import HeroSlider, { renderHeroIcon } from "@/components/storefront/HeroSlider";
 import { applyHeroPlaceholders } from "@/lib/hero/content";
+import { calculatePreorderCountdown } from "@/lib/preorder/content";
 
 export default function HomePage() {
   const router = useRouter();
-  const { products, categories, settings, heroSettings } = useStore();
+  const { products, categories, settings, heroSettings, preorderSettings } =
+    useStore();
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [quickTrackCode, setQuickTrackCode] = useState("");
 
-  // Live Countdown Timer for Next Pre-Order Catch
-  const [timeLeft, setTimeLeft] = useState({
-    days: 1,
-    hours: 14,
-    minutes: 38,
-    seconds: 45,
-  });
+  // Dynamic Live Countdown Timer for Next Pre-Order Catch
+  const [countdown, setCountdown] = useState(() =>
+    calculatePreorderCountdown(preorderSettings.cutoffTime)
+  );
 
   useEffect(() => {
+    setCountdown(calculatePreorderCountdown(preorderSettings.cutoffTime));
     const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev.seconds > 0) return { ...prev, seconds: prev.seconds - 1 };
-        if (prev.minutes > 0)
-          return { ...prev, minutes: prev.minutes - 1, seconds: 59 };
-        if (prev.hours > 0)
-          return { ...prev, hours: prev.hours - 1, minutes: 59, seconds: 59 };
-        return { days: 1, hours: 23, minutes: 59, seconds: 59 };
-      });
+      setCountdown(calculatePreorderCountdown(preorderSettings.cutoffTime));
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [preorderSettings.cutoffTime]);
 
   const activeProducts = products.filter((p) => p.isActive);
   const preorderProducts = activeProducts.filter((p) => p.isPreorder);
@@ -144,48 +137,85 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 2. LIVE PRE-ORDER CATCH BOARD (Existing Section Kept Intact) */}
+      {/* 2. LIVE PRE-ORDER CATCH BOARD (Dynamic Admin CMS Controlled) */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 relative z-10">
         <div className="bg-white rounded-3xl border-2 border-[#0F3D2E]/15 shadow-xl p-4 sm:p-6 lg:p-8">
+          {preorderSettings.showBannerAlert && preorderSettings.bannerAlert && (
+            <div className="mb-4 px-4 py-2.5 rounded-2xl bg-amber-50 border border-amber-200/90 text-amber-950 text-xs font-bold flex items-center gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping shrink-0" />
+              <span>{preorderSettings.bannerAlert}</span>
+            </div>
+          )}
+
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 sm:gap-6 pb-6 border-b border-stone-200/80">
             <div className="space-y-1.5">
-              <div className="inline-flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-[#C83E2B]">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#C83E2B] animate-ping" />
-                Live Pre-Order Batch Booking
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="inline-flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-[#C83E2B]">
+                  <span
+                    className={`w-2.5 h-2.5 rounded-full ${
+                      preorderSettings.isBatchActive &&
+                      preorderSettings.batchStatus === "booking_open"
+                        ? "bg-[#C83E2B] animate-ping"
+                        : "bg-stone-400"
+                    }`}
+                  />
+                  {preorderSettings.badgeText}
+                </div>
+                {preorderSettings.expectedDeliveryDate && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-[#0F3D2E] text-[11px] font-extrabold border border-emerald-200/80">
+                    <Truck className="w-3 h-3 text-emerald-700 shrink-0" />
+                    <span>{preorderSettings.expectedDeliveryDate}</span>
+                  </span>
+                )}
               </div>
               <h2 className="text-2xl sm:text-3xl font-extrabold text-stone-900">
-                Next Jamuna River Catch & Bogura Doi Dispatch
+                {preorderSettings.headline}
               </h2>
-              <p className="text-xs sm:text-sm text-stone-600">
-                Reserve your share before the batch closes. Caught at dawn and
-                delivered straight to your home in thermal boxes.
-              </p>
+              {preorderSettings.subheadline && (
+                <p className="text-xs sm:text-sm text-stone-600">
+                  {preorderSettings.subheadline}
+                </p>
+              )}
             </div>
 
             {/* Live Countdown Clock */}
-            <div className="w-full sm:w-auto max-w-full bg-stone-950 text-white px-3.5 py-3 sm:px-5 sm:py-3.5 rounded-2xl flex flex-col sm:flex-row items-center justify-between sm:justify-start gap-2.5 sm:gap-3.5 self-stretch sm:self-start lg:self-center shrink-0">
-              <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-stone-300">
-                <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0" />
-                <span className="whitespace-nowrap">Batch Cut-Off In:</span>
+            {preorderSettings.showCountdown && (
+              <div className="w-full sm:w-auto max-w-full bg-stone-950 text-white px-3.5 py-3 sm:px-5 sm:py-3.5 rounded-2xl flex flex-col sm:flex-row items-center justify-between sm:justify-start gap-2.5 sm:gap-3.5 self-stretch sm:self-start lg:self-center shrink-0">
+                {countdown.isExpired ||
+                preorderSettings.batchStatus !== "booking_open" ? (
+                  <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-amber-300">
+                    <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0" />
+                    <span className="line-clamp-1">
+                      {preorderSettings.closedMessage || "বর্তমান ব্যাচ সম্পন্ন"}
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-stone-300">
+                      <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0" />
+                      <span className="whitespace-nowrap">Batch Cut-Off In:</span>
+                    </div>
+                    <div className="flex items-center justify-center gap-1 sm:gap-1.5 font-mono text-xs sm:text-base font-extrabold">
+                      <span className="px-2 py-1 rounded-lg bg-white/10 text-amber-300 min-w-[34px] sm:min-w-[38px] text-center">
+                        {String(countdown.days).padStart(2, "0")}d
+                      </span>
+                      <span className="text-stone-400 font-bold">:</span>
+                      <span className="px-2 py-1 rounded-lg bg-white/10 text-amber-300 min-w-[34px] sm:min-w-[38px] text-center">
+                        {String(countdown.hours).padStart(2, "0")}h
+                      </span>
+                      <span className="text-stone-400 font-bold">:</span>
+                      <span className="px-2 py-1 rounded-lg bg-white/10 text-amber-300 min-w-[34px] sm:min-w-[38px] text-center">
+                        {String(countdown.minutes).padStart(2, "0")}m
+                      </span>
+                      <span className="text-stone-400 font-bold">:</span>
+                      <span className="px-2 py-1 rounded-lg bg-[#C83E2B] text-white min-w-[34px] sm:min-w-[38px] text-center shadow-xs">
+                        {String(countdown.seconds).padStart(2, "0")}s
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
-              <div className="flex items-center justify-center gap-1 sm:gap-1.5 font-mono text-xs sm:text-base font-extrabold">
-                <span className="px-2 py-1 rounded-lg bg-white/10 text-amber-300 min-w-[34px] sm:min-w-[38px] text-center">
-                  {String(timeLeft.days).padStart(2, "0")}d
-                </span>
-                <span className="text-stone-400 font-bold">:</span>
-                <span className="px-2 py-1 rounded-lg bg-white/10 text-amber-300 min-w-[34px] sm:min-w-[38px] text-center">
-                  {String(timeLeft.hours).padStart(2, "0")}h
-                </span>
-                <span className="text-stone-400 font-bold">:</span>
-                <span className="px-2 py-1 rounded-lg bg-white/10 text-amber-300 min-w-[34px] sm:min-w-[38px] text-center">
-                  {String(timeLeft.minutes).padStart(2, "0")}m
-                </span>
-                <span className="text-stone-400 font-bold">:</span>
-                <span className="px-2 py-1 rounded-lg bg-[#C83E2B] text-white min-w-[34px] sm:min-w-[38px] text-center shadow-xs">
-                  {String(timeLeft.seconds).padStart(2, "0")}s
-                </span>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Pre-Order Spotlight Grid */}
