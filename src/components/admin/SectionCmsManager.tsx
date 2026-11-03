@@ -69,6 +69,23 @@ const DEPARTMENT_PRESETS: Record<DepartmentSectionKey, { label: string; url: str
   ],
 };
 
+function isoToLocalDatetimeInput(iso: string | null | undefined): string {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const year = d.getFullYear();
+    const month = pad(d.getMonth() + 1);
+    const day = pad(d.getDate());
+    const hours = pad(d.getHours());
+    const minutes = pad(d.getMinutes());
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  } catch {
+    return "";
+  }
+}
+
 function getSlideStatusBadge(slide: SectionSlide) {
   const now = Date.now();
   if (!slide.isActive) {
@@ -237,8 +254,8 @@ export default function SectionCmsManager() {
     setSlideCtaText(slide.ctaText);
     setSlideCtaLink(slide.ctaLink);
     setSlideIsActive(slide.isActive);
-    setSlideStartsAt(slide.startsAt ? slide.startsAt.slice(0, 16) : "");
-    setSlideEndsAt(slide.endsAt ? slide.endsAt.slice(0, 16) : "");
+    setSlideStartsAt(isoToLocalDatetimeInput(slide.startsAt));
+    setSlideEndsAt(isoToLocalDatetimeInput(slide.endsAt));
     setImageTab("custom");
     setUploadError(null);
     setIsSlideModalOpen(true);
@@ -340,6 +357,43 @@ export default function SectionCmsManager() {
     }
     if (confirm("আপনি কি নিশ্চিত এই ব্যানার স্লাইডটি মুছে ফেলতে চান?")) {
       await deleteSectionSlide(id);
+    }
+  };
+
+  const handleMakeLiveNow = async (slide: SectionSlide) => {
+    try {
+      const payload: SectionSlideInput = {
+        id: slide.id,
+        sectionId: slide.sectionId,
+        sortOrder: slide.sortOrder,
+        isActive: true,
+        imageUrl: slide.imageUrl,
+        imageAlt: slide.imageAlt,
+        badgeTextEn: slide.badgeTextEn,
+        badgeTextBn: slide.badgeTextBn,
+        badgeIcon: slide.badgeIcon,
+        titleEn: slide.titleEn,
+        headlineBn: slide.headlineBn,
+        convincingSubtextBn: slide.convincingSubtextBn,
+        descriptionEn: slide.descriptionEn,
+        originLocation: slide.originLocation,
+        highlights: slide.highlights,
+        pairingTipText: slide.pairingTipText,
+        pairingTargetHref: slide.pairingTargetHref,
+        pairingTargetLabel: slide.pairingTargetLabel,
+        ctaText: slide.ctaText,
+        ctaLink: slide.ctaLink,
+        bannerLayout: slide.bannerLayout,
+        startsAt: null,
+        endsAt: slide.endsAt,
+      };
+      const res = await saveSectionSlide(payload);
+      if (res.success) {
+        showToast("স্লাইডটি অবিলম্বে স্টোরফ্রন্টে লাইভ করা হয়েছে!");
+      }
+    } catch (err) {
+      console.error("Failed to make slide live now:", err);
+      showToast("স্লাইড লাইভ করতে সমস্যা হয়েছে।");
     }
   };
 
@@ -541,6 +595,17 @@ export default function SectionCmsManager() {
                     <div className="space-y-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         {getSlideStatusBadge(slide)}
+                        {slide.isActive && slide.startsAt && new Date(slide.startsAt).getTime() > Date.now() && (
+                          <button
+                            type="button"
+                            onClick={() => handleMakeLiveNow(slide)}
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition active:scale-95 cursor-pointer"
+                            title="শিডিউল বাতিল করে স্লাইডটি সাথে সাথে স্টোরফ্রন্টে লাইভ করুন"
+                          >
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>এখনই লাইভ করুন (Make Live)</span>
+                          </button>
+                        )}
                         <span className="text-[11px] font-bold text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">
                           লেআউট: {slide.bannerLayout === "reversed" ? "ছবি ডানে" : "ছবি বামে"}
                         </span>
@@ -1198,30 +1263,58 @@ export default function SectionCmsManager() {
               </div>
 
               {/* Schedule and Active Status */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-stone-50 border border-stone-200 rounded-2xl items-center">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-stone-50 border border-stone-200 rounded-2xl items-start">
                 <div>
-                  <label className="block text-[11px] font-bold text-stone-700 mb-1">
-                    ক্যাম্পেইন শুরু (Starts At)
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold text-stone-700">
+                      ক্যাম্পেইন শুরু (Starts At)
+                    </label>
+                    {slideStartsAt && (
+                      <button
+                        type="button"
+                        onClick={() => setSlideStartsAt("")}
+                        className="text-[10px] font-bold text-rose-600 hover:text-rose-800 underline"
+                      >
+                        মুছুন (তাৎক্ষণিক লাইভ)
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="datetime-local"
                     value={slideStartsAt}
                     onChange={(e) => setSlideStartsAt(e.target.value)}
                     className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 text-xs bg-white"
                   />
+                  <p className="text-[10px] text-stone-500 mt-1">
+                    💡 সাথে সাথে লাইভ করতে এটি ফাঁকা রাখুন।
+                  </p>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-stone-700 mb-1">
-                    ক্যাম্পেইন শেষ (Ends At)
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold text-stone-700">
+                      ক্যাম্পেইন শেষ (Ends At)
+                    </label>
+                    {slideEndsAt && (
+                      <button
+                        type="button"
+                        onClick={() => setSlideEndsAt("")}
+                        className="text-[10px] font-bold text-rose-600 hover:text-rose-800 underline"
+                      >
+                        মুছুন (কোনো মেয়াদ নেই)
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="datetime-local"
                     value={slideEndsAt}
                     onChange={(e) => setSlideEndsAt(e.target.value)}
                     className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 text-xs bg-white"
                   />
+                  <p className="text-[10px] text-stone-500 mt-1">
+                    💡 কোনো নির্দিষ্ট মেয়াদ না থাকলে ফাঁকা রাখুন।
+                  </p>
                 </div>
-                <div className="flex items-center gap-2 pt-4 sm:pt-0">
+                <div className="flex items-center gap-2 pt-4 sm:pt-6">
                   <input
                     type="checkbox"
                     id="slide-is-active-chk"

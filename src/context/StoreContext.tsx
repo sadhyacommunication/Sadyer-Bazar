@@ -796,8 +796,29 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       void refreshLiveStore();
     });
 
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEYS.SECTION_SLIDES && e.newValue) {
+        try {
+          const parsed = mapSectionSlides(JSON.parse(e.newValue));
+          if (parsed.length > 0) setSectionSlides(parsed);
+        } catch {}
+      }
+      if (e.key === STORAGE_KEYS.SECTION_SETTINGS && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          setSectionSettings((prev) => ({ ...prev, ...parsed }));
+        } catch {}
+      }
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("storage", handleStorageChange);
+    }
+
     return () => {
       unsubscribe();
+      if (typeof window !== "undefined") {
+        window.removeEventListener("storage", handleStorageChange);
+      }
     };
   }, [refreshLiveStore]);
 

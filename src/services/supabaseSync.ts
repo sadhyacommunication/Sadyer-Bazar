@@ -1822,6 +1822,16 @@ export function subscribeToRealtimeStore(onUpdate: () => void): () => void {
       { event: "*", schema: "public", table: "hero_settings" },
       () => onUpdate()
     )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "section_slides" },
+      () => onUpdate()
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "section_slider_settings" },
+      () => onUpdate()
+    )
     .subscribe();
 
   return () => {
