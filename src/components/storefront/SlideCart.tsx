@@ -284,8 +284,7 @@ export default function SlideCart() {
               </div>
               <p className="text-[11px] text-stone-500 flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                1-Click Guest Checkout • Pay via bKash, SSLCommerz or Cash on
-                Delivery
+                1-Click Guest Checkout • 100% Cash on Delivery (পণ্য পেয়ে মূল্য পরিশোধ)
               </p>
               <button
                 onClick={handleProceedToCheckout}

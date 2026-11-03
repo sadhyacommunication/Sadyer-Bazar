@@ -151,10 +151,10 @@ export default function CheckoutPage() {
     document.head.appendChild(script);
   }, []);
 
-  // Payment Selection (Active: bkash | nagad | cod; SSLCommerz kept on hold)
+  // Payment Selection (Active: cod; online gateways bKash, Nagad, SSLCommerz on hold)
   const [paymentMethod, setPaymentMethod] =
-    useState<ActiveCheckoutPaymentMethod>("bkash");
-  const [paymentPlan, setPaymentPlan] = useState<PaymentPlan>("full");
+    useState<ActiveCheckoutPaymentMethod>("cod");
+  const [paymentPlan, setPaymentPlan] = useState<PaymentPlan>("cod");
 
   // Submission & Gateway Redirect State
   const [submitting, setSubmitting] = useState(false);
@@ -699,107 +699,161 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {/* Step 3: Official Merchant Payment Gateway Selection (bKash / Nagad / COD + SSLCommerz On Hold) */}
+          {/* Step 3: Official Merchant Payment Gateway Selection (Cash on Delivery Active, Gateways On Hold) */}
           <div className="bg-white rounded-3xl border border-stone-200/90 p-6 sm:p-7 shadow-2xs space-y-5">
-            <h2 className="text-base sm:text-lg font-extrabold text-stone-900 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-[#0F3D2E] text-white text-xs flex items-center justify-center">
-                3
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-base sm:text-lg font-extrabold text-stone-900 flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-[#0F3D2E] text-white text-xs flex items-center justify-center">
+                  3
+                </span>
+                Select Payment Method (পেমেন্ট মাধ্যম)
+              </h2>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-black">
+                <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
+                ক্যাশ অন ডেলিভারি সক্রিয় (COD Active)
               </span>
-              Select Payment Method
-            </h2>
+            </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
-              {/* bKash Merchant */}
-              <button
-                type="button"
-                onClick={() => {
-                  setPaymentMethod("bkash");
-                  if (paymentPlan === "cod") setPaymentPlan("full");
-                }}
-                className={`p-2.5 sm:p-4 rounded-2xl border-2 text-left transition cursor-pointer space-y-1 sm:space-y-1.5 ${
-                  paymentMethod === "bkash"
-                    ? "border-pink-600 bg-pink-50/60 shadow-xs"
-                    : "border-stone-200 hover:border-stone-300"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-[#E2136E] text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
-                    Merchant PGW
-                  </span>
-                  <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#E2136E]" />
-                </div>
-                <p className="text-xs font-bold text-stone-900">
-                  bKash (বিকাশ)
-                </p>
-                <p className="text-[10px] sm:text-[11px] text-stone-600 font-semibold truncate">
-                  অফিসিয়াল টোকেনাইজড পেমেন্ট
-                </p>
-                <p className="text-[9px] sm:text-[10px] text-stone-400 truncate">
-                  অটোমেটিক সার্ভার ভেরিফাইড
-                </p>
-              </button>
-
-              {/* Nagad Merchant */}
-              <button
-                type="button"
-                onClick={() => {
-                  setPaymentMethod("nagad");
-                  if (paymentPlan === "cod") setPaymentPlan("full");
-                }}
-                className={`p-2.5 sm:p-4 rounded-2xl border-2 text-left transition cursor-pointer space-y-1 sm:space-y-1.5 ${
-                  paymentMethod === "nagad"
-                    ? "border-orange-500 bg-orange-50/60 shadow-xs"
-                    : "border-stone-200 hover:border-stone-300"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-[#F7931E] text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
-                    Merchant PGW
-                  </span>
-                  <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F7931E]" />
-                </div>
-                <p className="text-xs font-bold text-stone-900">
-                  Nagad (নগদ)
-                </p>
-                <p className="text-[10px] sm:text-[11px] text-stone-600 font-semibold truncate">
-                  অফিসিয়াল মার্চেন্ট গেটওয়ে
-                </p>
-                <p className="text-[9px] sm:text-[10px] text-stone-400 truncate">
-                  RSA ক্রিপ্টোগ্রাফিক ভেরিফাইড
-                </p>
-              </button>
-
-              {/* Cash on Delivery */}
+              {/* 1. Cash on Delivery (Active Primary Method) */}
               <button
                 type="button"
                 onClick={() => {
                   setPaymentMethod("cod");
                   setPaymentPlan("cod");
                 }}
-                className={`p-2.5 sm:p-4 rounded-2xl border-2 text-left transition cursor-pointer space-y-1 sm:space-y-1.5 ${
+                className={`p-3 sm:p-4 rounded-2xl border-2 text-left transition cursor-pointer space-y-1 sm:space-y-1.5 relative overflow-hidden ${
                   paymentMethod === "cod"
-                    ? "border-[#0F3D2E] bg-emerald-50/60 shadow-xs"
+                    ? "border-[#0F3D2E] bg-emerald-50/70 ring-2 ring-emerald-600/20 shadow-xs"
                     : "border-stone-200 hover:border-stone-300"
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-[#0F3D2E] text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
-                    COD
+                    COD • Active
                   </span>
-                  <Banknote className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#0F3D2E]" />
+                  <Banknote className="w-4 h-4 text-[#0F3D2E]" />
                 </div>
-                <p className="text-xs font-bold text-stone-900">
+                <p className="text-xs sm:text-sm font-bold text-stone-900">
                   Cash on Delivery
                 </p>
-                <p className="text-[10px] sm:text-[11px] text-stone-500 truncate">
+                <p className="text-[10px] sm:text-[11px] text-emerald-900 font-bold truncate">
                   ডেলিভারিতে ক্যাশ পেমেন্ট
                 </p>
-                <p className="text-[9px] sm:text-[10px] text-stone-400 truncate">
+                <p className="text-[9px] sm:text-[10px] text-stone-500 truncate">
                   পণ্য বুঝে পেয়ে মূল্য পরিশোধ
                 </p>
               </button>
 
-              {/* SSLCommerz (Kept On Hold as requested) */}
+              {/* 2. bKash (Kept On Hold) */}
+              {settings.bkashEnabled ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaymentMethod("bkash");
+                    if (paymentPlan === "cod") setPaymentPlan("full");
+                  }}
+                  className={`p-2.5 sm:p-4 rounded-2xl border-2 text-left transition cursor-pointer space-y-1 sm:space-y-1.5 ${
+                    paymentMethod === "bkash"
+                      ? "border-pink-600 bg-pink-50/60 shadow-xs"
+                      : "border-stone-200 hover:border-stone-300"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-[#E2136E] text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
+                      Merchant PGW
+                    </span>
+                    <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#E2136E]" />
+                  </div>
+                  <p className="text-xs font-bold text-stone-900">
+                    bKash (বিকাশ)
+                  </p>
+                  <p className="text-[10px] sm:text-[11px] text-stone-600 font-semibold truncate">
+                    অফিসিয়াল টোকেনাইজড পেমেন্ট
+                  </p>
+                  <p className="text-[9px] sm:text-[10px] text-stone-400 truncate">
+                    অটোমেটিক সার্ভার ভেরিফাইড
+                  </p>
+                </button>
+              ) : (
+                <div
+                  aria-disabled="true"
+                  title="bKash online gateway is currently on hold"
+                  className="p-2.5 sm:p-4 rounded-2xl border-2 border-dashed border-stone-200 bg-stone-50/70 text-left opacity-60 cursor-not-allowed space-y-1 sm:space-y-1.5 select-none"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-stone-400 text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
+                      On Hold
+                    </span>
+                    <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#E2136E]/60" />
+                  </div>
+                  <p className="text-xs font-bold text-stone-600">
+                    bKash (বিকাশ)
+                  </p>
+                  <p className="text-[10px] sm:text-[11px] text-stone-400 truncate">
+                    মার্চেন্ট গেটওয়ে
+                  </p>
+                  <p className="text-[9px] sm:text-[10px] text-amber-700 font-medium truncate">
+                    সাময়িকভাবে স্থগিত (On Hold)
+                  </p>
+                </div>
+              )}
+
+              {/* 3. Nagad (Kept On Hold) */}
+              {settings.nagadEnabled ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaymentMethod("nagad");
+                    if (paymentPlan === "cod") setPaymentPlan("full");
+                  }}
+                  className={`p-2.5 sm:p-4 rounded-2xl border-2 text-left transition cursor-pointer space-y-1 sm:space-y-1.5 ${
+                    paymentMethod === "nagad"
+                      ? "border-orange-500 bg-orange-50/60 shadow-xs"
+                      : "border-stone-200 hover:border-stone-300"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-[#F7931E] text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
+                      Merchant PGW
+                    </span>
+                    <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F7931E]" />
+                  </div>
+                  <p className="text-xs font-bold text-stone-900">
+                    Nagad (নগদ)
+                  </p>
+                  <p className="text-[10px] sm:text-[11px] text-stone-600 font-semibold truncate">
+                    অফিসিয়াল মার্চেন্ট গেটওয়ে
+                  </p>
+                  <p className="text-[9px] sm:text-[10px] text-stone-400 truncate">
+                    RSA ক্রিপ্টোগ্রাফিক ভেরিফাইড
+                  </p>
+                </button>
+              ) : (
+                <div
+                  aria-disabled="true"
+                  title="Nagad online gateway is currently on hold"
+                  className="p-2.5 sm:p-4 rounded-2xl border-2 border-dashed border-stone-200 bg-stone-50/70 text-left opacity-60 cursor-not-allowed space-y-1 sm:space-y-1.5 select-none"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-stone-400 text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
+                      On Hold
+                    </span>
+                    <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F7931E]/60" />
+                  </div>
+                  <p className="text-xs font-bold text-stone-600">
+                    Nagad (নগদ)
+                  </p>
+                  <p className="text-[10px] sm:text-[11px] text-stone-400 truncate">
+                    মার্চেন্ট গেটওয়ে
+                  </p>
+                  <p className="text-[9px] sm:text-[10px] text-amber-700 font-medium truncate">
+                    সাময়িকভাবে স্থগিত (On Hold)
+                  </p>
+                </div>
+              )}
+
+              {/* 4. SSLCommerz (Kept On Hold) */}
               <div
                 aria-disabled="true"
                 title="SSLCommerz Card Gateway is currently on hold"
@@ -817,9 +871,17 @@ export default function CheckoutPage() {
                 <p className="text-[10px] sm:text-[11px] text-stone-400 truncate">
                   Visa / Master Cards
                 </p>
-                <p className="text-[9px] sm:text-[10px] text-stone-400 truncate">
+                <p className="text-[9px] sm:text-[10px] text-amber-700 font-medium truncate">
                   সাময়িকভাবে স্থগিত (On Hold)
                 </p>
+              </div>
+            </div>
+
+            {/* Informative Assurance Banner for Cash on Delivery */}
+            <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200/80 text-xs text-emerald-950 flex items-start gap-2.5">
+              <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+              <div className="leading-relaxed">
+                <strong>নিরাপদ ক্যাশ অন ডেলিভারি (Cash on Delivery):</strong> বর্তমানে সকল অনলাইন পেমেন্ট মেথড সাময়িকভাবে অন হোল্ড রাখা হয়েছে। কোনো প্রকার অগ্রিম ছাড়াই নিশ্চিন্তে অর্ডার করুন এবং বাসায় পণ্য বুঝে পাওয়ার পর মূল্য পরিশোধ করুন।
               </div>
             </div>
 
@@ -1099,7 +1161,9 @@ export default function CheckoutPage() {
             </p>
             <p className="flex items-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-              Official bKash & Nagad Merchant Server-to-Server Verification
+              {paymentMethod === "cod"
+                ? "100% Secure Cash on Delivery • পণ্য হাতে পেয়ে নিশ্চিন্তে মূল্য পরিশোধ"
+                : "Official bKash & Nagad Merchant Server-to-Server Verification"}
             </p>
           </div>
         </div>

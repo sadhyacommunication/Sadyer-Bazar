@@ -3096,6 +3096,30 @@ export default function AdminDashboardPage() {
                   </select>
                 </div>
 
+                <div className="sm:col-span-2">
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-stone-50 border border-stone-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settingsForm.bkashEnabled ?? false}
+                      onChange={(e) =>
+                        setSettingsForm({
+                          ...settingsForm,
+                          bkashEnabled: e.target.checked,
+                        })
+                      }
+                      className="w-4 h-4 accent-[#E2136E]"
+                    />
+                    <span className="text-xs font-bold text-stone-800">
+                      Enable bKash in Checkout (চেকআউট পেজে বিকাশ পেমেন্ট অপশন চালু রাখুন)
+                    </span>
+                    {!settingsForm.bkashEnabled && (
+                      <span className="ml-auto px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                        Currently On Hold
+                      </span>
+                    )}
+                  </label>
+                </div>
+
                 <div className="sm:col-span-2 bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-xs text-emerald-900 flex items-start gap-2.5">
                   <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
                   <div>
@@ -3173,7 +3197,7 @@ export default function AdminDashboardPage() {
                   <label className="flex items-center gap-2.5 p-3 rounded-xl bg-stone-50 border border-stone-200 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={settingsForm.nagadEnabled ?? true}
+                      checked={settingsForm.nagadEnabled ?? false}
                       onChange={(e) =>
                         setSettingsForm({
                           ...settingsForm,
@@ -3185,6 +3209,11 @@ export default function AdminDashboardPage() {
                     <span className="text-xs font-bold text-stone-800">
                       Enable Nagad in Checkout (চেকআউট পেজে নগদ পেমেন্ট অপশন চালু রাখুন)
                     </span>
+                    {!settingsForm.nagadEnabled && (
+                      <span className="ml-auto px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                        Currently On Hold
+                      </span>
+                    )}
                   </label>
                 </div>
 
@@ -3203,25 +3232,24 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
-            {/* SSLCommerz Gateway Status (On Hold) */}
+            {/* Payment Gateways Status (On Hold) */}
             <div>
               <div className="border-b border-stone-200 pb-3 mb-4">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-stone-500">
-                  4. SSLCommerz Official Gateway (On Hold)
+                <span className="text-xs font-extrabold uppercase tracking-wider text-amber-700">
+                  4. Online Payment Gateways (Currently On Hold)
                 </span>
                 <h3 className="text-lg font-extrabold text-stone-900 mt-0.5">
-                  SSLCommerz গেটওয়ে স্ট্যাটাস (সাময়িকভাবে স্থগিত)
+                  অনলাইন গেটওয়ে স্ট্যাটাস (bKash, Nagad ও SSLCommerz অন হোল্ড)
                 </h3>
               </div>
 
-              <div className="bg-stone-50 border border-dashed border-stone-300 rounded-2xl p-4 text-xs text-stone-600 flex items-start gap-3">
-                <Lock className="w-4 h-4 text-stone-500 shrink-0 mt-0.5" />
+              <div className="bg-amber-50/60 border border-amber-200 rounded-2xl p-4 text-xs text-amber-950 flex items-start gap-3">
+                <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-bold text-stone-800">
-                    SSLCommerz ইন্টিগ্রেশন অন হোল্ড (On Hold):
+                  <span className="font-bold text-amber-900">
+                    ক্লায়েন্টের নির্দেশনায় অনলাইন গেটওয়ে অন হোল্ড (On Hold):
                   </span>{" "}
-                  সার্ভার কোড (<code className="font-mono">functions/api/payment/sslcommerz/*</code>) সুরক্ষিতভাবে সংরক্ষিত আছে এবং মিডলওয়্যারে সাময়িকভাবে হোল্ডে রাখা হয়েছে। সক্রিয় পেমেন্ট মাধ্যম হিসেবে বর্তমানে{" "}
-                  <strong>bKash Merchant, Nagad Merchant এবং Cash on Delivery (COD)</strong> চালু রয়েছে।
+                  বর্তমানে <strong>Cash on Delivery (COD / ক্যাশ অন ডেলিভারি)</strong> একমাত্র সক্রিয় পেমেন্ট মাধ্যম হিসেবে চালু রাখা হয়েছে। বিকাশ, নগদ এবং SSLCommerz গেটওয়ের ব্যাকএন্ড ও এপিআই প্রস্তুত রাখা হয়েছে—ভবিষ্যতে প্রয়োজন অনুযায়ী উপরের চেকবক্স চালু করলেই চেকআউটে তাৎক্ষণিকভাবে তা পুনরায় গ্রাহকদের জন্য সক্রিয় হয়ে যাবে।
                 </div>
               </div>
             </div>

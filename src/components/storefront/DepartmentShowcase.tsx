@@ -220,7 +220,7 @@ export default function DepartmentShowcase({
                   <ArrowRight className="w-4 h-4" />
                 </Link>
                 <span className="text-[11px] text-stone-300 font-medium">
-                  • 1-Click Checkout • bKash & COD
+                  • 1-Click Checkout • Cash on Delivery
                 </span>
               </div>
             </div>

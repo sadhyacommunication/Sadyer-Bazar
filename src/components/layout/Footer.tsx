@@ -71,10 +71,10 @@ export default function Footer() {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-white">
-                  Automated bKash & SSLCommerz
+                  100% Cash on Delivery (ক্যাশ অন ডেলিভারি)
                 </h3>
                 <p className="text-xs text-emerald-200/80 mt-0.5">
-                  Pay full, pre-order advance, or Cash on Home Delivery.
+                  পণ্য হাতে পেয়ে নিশ্চিন্তে মূল্য পরিশোধ করুন (Zero Risk).
                 </p>
               </div>
             </div>
@@ -313,17 +313,36 @@ export default function Footer() {
                   100% Secured Payment Gateways
                 </p>
                 <p className="text-[11px] text-emerald-200/80 mt-0.5">
-                  নিরাপদ ও সহজ পেমেন্ট — বিকাশ, নগদ, ভিসা কার্ড, মাস্টারকার্ড ও ক্যাশ অন ডেলিভারি
+                  নিরাপদ ও সহজ ক্যাশ অন ডেলিভারি — পণ্য গ্রহণের পর মূল্য পরিশোধ করুন
                 </p>
               </div>
             </div>
 
             {/* Payment Method Badges */}
             <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3">
-              {/* bKash */}
+              {/* Cash on Delivery (Primary Active) */}
               <div
-                className="h-9 px-3 bg-white rounded-xl shadow-xs border border-white/20 flex items-center gap-1.5 select-none hover:scale-105 hover:shadow-md transition-all cursor-default"
-                title="bKash (বিকাশ) Payment"
+                className="h-9 px-3.5 bg-emerald-950 text-white rounded-xl shadow-xs border-2 border-emerald-400 flex items-center gap-2 select-none hover:scale-105 hover:shadow-md transition-all cursor-default"
+                title="Cash on Delivery (ক্যাশ অন ডেলিভারি - সক্রিয়)"
+              >
+                <div className="w-5 h-5 rounded-md bg-emerald-500 text-stone-950 flex items-center justify-center shrink-0">
+                  <Banknote className="w-3.5 h-3.5 text-stone-950" />
+                </div>
+                <div className="flex flex-col text-left">
+                  <span className="text-white font-black text-[11px] leading-tight flex items-center gap-1">
+                    Cash on Delivery
+                    <span className="text-[9px] font-extrabold px-1.5 py-0.2 bg-emerald-400 text-stone-950 rounded">সক্রিয়</span>
+                  </span>
+                  <span className="text-emerald-300 font-semibold text-[9px] leading-none">
+                    ক্যাশ অন ডেলিভারি
+                  </span>
+                </div>
+              </div>
+
+              {/* bKash (On Hold) */}
+              <div
+                className="h-9 px-3 bg-white/90 rounded-xl shadow-xs border border-white/20 flex items-center gap-1.5 select-none opacity-60 hover:opacity-80 transition-all cursor-default"
+                title="bKash (বিকাশ) - বর্তমানে On Hold"
               >
                 <svg
                   viewBox="0 0 45 40"
@@ -341,12 +360,13 @@ export default function Footer() {
                 <span className="text-[#D12053] font-black text-xs tracking-tight">
                   bKash
                 </span>
+                <span className="text-[8px] font-extrabold bg-stone-200 text-stone-600 px-1 rounded">On Hold</span>
               </div>
 
-              {/* Nagad */}
+              {/* Nagad (On Hold) */}
               <div
-                className="h-9 px-3 bg-white rounded-xl shadow-xs border border-white/20 flex items-center gap-1.5 select-none hover:scale-105 hover:shadow-md transition-all cursor-default"
-                title="Nagad (নগদ) Payment"
+                className="h-9 px-3 bg-white/90 rounded-xl shadow-xs border border-white/20 flex items-center gap-1.5 select-none opacity-60 hover:opacity-80 transition-all cursor-default"
+                title="Nagad (নগদ) - বর্তমানে On Hold"
               >
                 <svg
                   viewBox="0 0 36 32"
@@ -381,12 +401,13 @@ export default function Footer() {
                 <span className="text-[#ED1C24] font-black text-xs tracking-tight">
                   nagad
                 </span>
+                <span className="text-[8px] font-extrabold bg-stone-200 text-stone-600 px-1 rounded">On Hold</span>
               </div>
 
-              {/* Visa Card */}
+              {/* Visa Card (On Hold) */}
               <div
-                className="h-9 px-3.5 bg-white rounded-xl shadow-xs border border-white/20 flex items-center justify-center select-none hover:scale-105 hover:shadow-md transition-all cursor-default"
-                title="Visa Card Payment"
+                className="h-9 px-3.5 bg-white/90 rounded-xl shadow-xs border border-white/20 flex items-center justify-center select-none opacity-60 hover:opacity-80 transition-all cursor-default"
+                title="Visa Card Payment - বর্তমানে On Hold"
               >
                 <svg
                   viewBox="0 0 54 18"
@@ -405,10 +426,10 @@ export default function Footer() {
                 </svg>
               </div>
 
-              {/* Mastercard */}
+              {/* Mastercard (On Hold) */}
               <div
-                className="h-9 px-3 bg-white rounded-xl shadow-xs border border-white/20 flex items-center gap-1.5 select-none hover:scale-105 hover:shadow-md transition-all cursor-default"
-                title="Mastercard Payment"
+                className="h-9 px-3 bg-white/90 rounded-xl shadow-xs border border-white/20 flex items-center gap-1.5 select-none opacity-60 hover:opacity-80 transition-all cursor-default"
+                title="Mastercard Payment - বর্তমানে On Hold"
               >
                 <svg
                   viewBox="0 0 36 22"

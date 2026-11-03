@@ -110,7 +110,9 @@ function mapSettingsFromRow(row: Record<string, unknown>): SiteSettings {
     nagadNumber: String(row.nagad_number || "01713-477780"),
     nagadAccountType:
       (row.nagad_account_type as SiteSettings["nagadAccountType"]) || "merchant",
-    nagadEnabled: Boolean(row.nagad_enabled ?? true),
+    nagadEnabled: Boolean(
+      row.nagad_enabled ?? INITIAL_SITE_SETTINGS.nagadEnabled
+    ),
     announcementEn: String(
       row.announcement_en || INITIAL_SITE_SETTINGS.announcementEn
     ),
@@ -118,7 +120,9 @@ function mapSettingsFromRow(row: Record<string, unknown>): SiteSettings {
       row.announcement_bn || INITIAL_SITE_SETTINGS.announcementBn
     ),
     sslcommerzEnabled: false,
-    bkashEnabled: Boolean(row.bkash_enabled ?? true),
+    bkashEnabled: Boolean(
+      row.bkash_enabled ?? INITIAL_SITE_SETTINGS.bkashEnabled
+    ),
     codEnabled: Boolean(row.cod_enabled ?? true),
     updatedAt: String(row.updated_at || new Date().toISOString()),
   };

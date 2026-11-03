@@ -431,9 +431,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<SiteSettings>(() => {
     if (typeof window !== "undefined") {
       try {
-        const stored = localStorage.getItem("sb_site_settings_v1");
-        if (stored) {
-          return { ...INITIAL_SITE_SETTINGS, ...JSON.parse(stored) };
+        const storedV2 = localStorage.getItem("sb_site_settings_v2");
+        if (storedV2) {
+          return { ...INITIAL_SITE_SETTINGS, ...JSON.parse(storedV2) };
+        }
+        const storedV1 = localStorage.getItem("sb_site_settings_v1");
+        if (storedV1) {
+          const parsed = JSON.parse(storedV1);
+          return {
+            ...INITIAL_SITE_SETTINGS,
+            ...parsed,
+            bkashEnabled: false,
+            nagadEnabled: false,
+            sslcommerzEnabled: false,
+            codEnabled: true,
+          };
         }
       } catch {}
     }
@@ -1328,6 +1340,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setSettings(nextSettings);
     if (typeof window !== "undefined") {
       try {
+        localStorage.setItem("sb_site_settings_v2", JSON.stringify(nextSettings));
         localStorage.setItem("sb_site_settings_v1", JSON.stringify(nextSettings));
       } catch {}
     }
