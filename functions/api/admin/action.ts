@@ -20,6 +20,11 @@ import {
   heroSlideInputSchema,
 } from "../../../src/lib/hero/schema";
 import { preorderSettingsInputSchema } from "../../../src/lib/preorder/schema";
+import {
+  DEPARTMENT_SECTION_KEYS,
+  sectionSlideInputSchema,
+  sectionSliderSettingsInputSchema,
+} from "../../../src/lib/sections/schema";
 
 async function cleanupStorageUrl(cfg: Config, publicUrl: string): Promise<void> {
   try {
@@ -115,6 +120,33 @@ const actionSchema = z.discriminatedUnion("action", [
   }),
   z.object({
     action: z.literal("preorder_reset_batch_booked"),
+  }),
+  z.object({
+    action: z.literal("section_save_slide"),
+    slide: sectionSlideInputSchema,
+  }),
+  z.object({
+    action: z.literal("section_delete_slide"),
+    id: z.string().uuid(),
+  }),
+  z.object({
+    action: z.literal("section_reorder"),
+    sectionId: z.enum(DEPARTMENT_SECTION_KEYS),
+    ids: z.array(z.string().uuid()).min(1).max(20),
+  }),
+  z.object({
+    action: z.literal("section_set_active"),
+    id: z.string().uuid(),
+    isActive: z.boolean(),
+  }),
+  z.object({
+    action: z.literal("section_save_settings"),
+    settings: sectionSliderSettingsInputSchema,
+  }),
+  z.object({
+    action: z.literal("section_reset_defaults"),
+    targetSection: z.enum(DEPARTMENT_SECTION_KEYS).optional(),
+    confirm: z.literal(true),
   }),
 ]);
 
@@ -269,6 +301,73 @@ export const onRequestPost = async (ctx: PagesContext): Promise<Response> => {
       const result = await rpc(cfg, "admin_preorder_reset_batch_booked", {
         p_actor: admin.userId,
       });
+      return json({ success: true, result });
+    }
+    case "section_save_slide": {
+      const result = await rpc<{ slide: unknown; orphanedImageUrl?: string | null }>(
+        cfg,
+        "admin_section_save_slide",
+        {
+          p_actor: admin.userId,
+          p_slide: d.slide,
+        }
+      );
+      if (result?.orphanedImageUrl && ctx.waitUntil) {
+        ctx.waitUntil(cleanupStorageUrl(cfg, result.orphanedImageUrl));
+      }
+      return json({ success: true, result });
+    }
+    case "section_delete_slide": {
+      const result = await rpc<{ deleted: boolean; orphanedImageUrl?: string | null }>(
+        cfg,
+        "admin_section_delete_slide",
+        {
+          p_actor: admin.userId,
+          p_id: d.id,
+        }
+      );
+      if (result?.orphanedImageUrl && ctx.waitUntil) {
+        ctx.waitUntil(cleanupStorageUrl(cfg, result.orphanedImageUrl));
+      }
+      return json({ success: true, result });
+    }
+    case "section_reorder": {
+      const result = await rpc(cfg, "admin_section_reorder", {
+        p_actor: admin.userId,
+        p_section_id: d.sectionId,
+        p_ids: d.ids,
+      });
+      return json({ success: true, result });
+    }
+    case "section_set_active": {
+      const result = await rpc(cfg, "admin_section_set_active", {
+        p_actor: admin.userId,
+        p_id: d.id,
+        p_active: d.isActive,
+      });
+      return json({ success: true, result });
+    }
+    case "section_save_settings": {
+      const result = await rpc(cfg, "admin_section_save_settings", {
+        p_actor: admin.userId,
+        p_settings: d.settings,
+      });
+      return json({ success: true, result });
+    }
+    case "section_reset_defaults": {
+      const result = await rpc<{ reset: boolean; orphanedImageUrls?: string[] }>(
+        cfg,
+        "admin_section_reset_defaults",
+        {
+          p_actor: admin.userId,
+          p_target_section: d.targetSection || null,
+        }
+      );
+      if (Array.isArray(result?.orphanedImageUrls) && ctx.waitUntil) {
+        for (const url of result.orphanedImageUrls) {
+          ctx.waitUntil(cleanupStorageUrl(cfg, url));
+        }
+      }
       return json({ success: true, result });
     }
   }

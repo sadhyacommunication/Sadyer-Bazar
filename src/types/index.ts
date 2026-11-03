@@ -348,3 +348,29 @@ export interface PreorderSettings {
   updatedAt?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Homepage Section Sliders CMS (see supabase/migrations/*_12_section_sliders_cms.sql)
+// ---------------------------------------------------------------------------
+import type {
+  DepartmentSectionKey,
+  SectionBannerLayout,
+  SectionSlideInput,
+  SectionSliderSettingsInput,
+} from "@/lib/sections/schema";
+import type {
+  SectionSlide,
+  SectionSliderSettings,
+  DepartmentMeta,
+} from "@/lib/sections/content";
+
+export type {
+  DepartmentSectionKey,
+  SectionBannerLayout,
+  SectionSlideInput,
+  SectionSliderSettingsInput,
+  SectionSlide,
+  SectionSliderSettings,
+  DepartmentMeta,
+};
+
+

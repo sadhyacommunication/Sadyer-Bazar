@@ -84,6 +84,29 @@ import {
   syncPreorderProductDates as apiSyncPreorderProductDates,
   resetPreorderBatchBooked as apiResetPreorderBatchBooked,
 } from "@/services/preorderApi";
+import {
+  DEFAULT_SECTION_SETTINGS,
+  DEFAULT_SECTION_SLIDES,
+  mapSectionSettings,
+  mapSectionSlide,
+  mapSectionSlides,
+  type SectionSlide,
+  type SectionSliderSettings,
+} from "@/lib/sections/content";
+import type {
+  DepartmentSectionKey,
+  SectionSlideInput,
+  SectionSliderSettingsInput,
+} from "@/lib/sections/schema";
+import {
+  deleteSectionSlide as apiDeleteSectionSlide,
+  fetchPublicSectionData,
+  reorderSectionSlides as apiReorderSectionSlides,
+  resetSectionDefaults as apiResetSectionDefaults,
+  saveSectionSettings as apiSaveSectionSettings,
+  saveSectionSlide as apiSaveSectionSlide,
+  setSectionSlideActive as apiSetSectionSlideActive,
+} from "@/services/sectionApi";
 
 const RECENT_ORDERS_SESSION_KEY = "sb_recent_orders";
 const ORDER_OVERRIDES_KEY = "sb_order_status_overrides_v1";
@@ -368,6 +391,31 @@ interface StoreContextValue {
   ) => Promise<{ success: boolean; error?: string }>;
   syncPreorderBatchToProducts: () => Promise<{ success: boolean; count?: number; error?: string }>;
   resetPreorderBatchBookedQty: () => Promise<{ success: boolean; count?: number; error?: string }>;
+
+  // Section Sliders CMS (Homepage 4 Departments)
+  sectionSlides: SectionSlide[];
+  sectionSettings: Record<DepartmentSectionKey, SectionSliderSettings>;
+  sectionLoading: boolean;
+  sectionStatus: "live" | "fallback";
+  refreshSectionSliders: () => Promise<void>;
+  saveSectionSlide: (
+    slide: SectionSlideInput
+  ) => Promise<{ success: boolean; result?: SectionSlide; error?: string }>;
+  deleteSectionSlide: (id: string) => Promise<{ success: boolean; error?: string }>;
+  reorderSectionSlides: (
+    sectionId: DepartmentSectionKey,
+    ids: string[]
+  ) => Promise<{ success: boolean; error?: string }>;
+  setSectionSlideActive: (
+    id: string,
+    isActive: boolean
+  ) => Promise<{ success: boolean; error?: string }>;
+  saveSectionSettings: (
+    settings: SectionSliderSettingsInput
+  ) => Promise<{ success: boolean; error?: string }>;
+  resetSectionDefaults: (
+    targetSection?: DepartmentSectionKey
+  ) => Promise<{ success: boolean; error?: string }>;
 }
 
 const StoreContext = createContext<StoreContextValue | undefined>(undefined);
@@ -385,6 +433,10 @@ const STORAGE_KEYS = {
   HERO_SLIDES_EDITED_AT: "sb_hero_slides_edited_at",
   PREORDER_SETTINGS: "sb_preorder_settings_v1",
   PREORDER_SETTINGS_EDITED_AT: "sb_preorder_settings_edited_at",
+  SECTION_SLIDES: "sb_section_slides_v1",
+  SECTION_SETTINGS: "sb_section_settings_v1",
+  SECTION_SLIDES_EDITED_AT: "sb_section_slides_edited_at",
+  SECTION_SETTINGS_EDITED_AT: "sb_section_settings_edited_at",
   // Legacy PII keys to purge from localStorage
   LEGACY_ORDERS: "sb_orders_v2",
   LEGACY_TRANSACTIONS: "sb_transactions_v2",
@@ -464,6 +516,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [preorderSettings, setPreorderSettings] =
     useState<PreorderSettings>(DEFAULT_PREORDER_SETTINGS);
   const [preorderLoading, setPreorderLoading] = useState<boolean>(false);
+  const [sectionSlides, setSectionSlides] =
+    useState<SectionSlide[]>(DEFAULT_SECTION_SLIDES);
+  const [sectionSettings, setSectionSettings] =
+    useState<Record<DepartmentSectionKey, SectionSliderSettings>>(DEFAULT_SECTION_SETTINGS);
+  const [sectionLoading, setSectionLoading] = useState<boolean>(false);
+  const [sectionStatus, setSectionStatus] = useState<"live" | "fallback">("fallback");
   const [messages, setMessages] =
     useState<ContactMessage[]>(INITIAL_CONTACT_MESSAGES);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -568,6 +626,61 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const refreshSectionSliders = useCallback(async () => {
+    try {
+      setSectionLoading(true);
+      const res = await fetchPublicSectionData();
+      if (res.status === "ok") {
+        const localSettingsEditedAt = Number(
+          typeof window !== "undefined"
+            ? localStorage.getItem(STORAGE_KEYS.SECTION_SETTINGS_EDITED_AT) || "0"
+            : "0"
+        );
+        const localSlidesEditedAt = Number(
+          typeof window !== "undefined"
+            ? localStorage.getItem(STORAGE_KEYS.SECTION_SLIDES_EDITED_AT) || "0"
+            : "0"
+        );
+
+        if (res.slides && res.slides.length > 0) {
+          const remoteSlideTime = Math.max(
+            ...res.slides.map((s) => (s.updatedAt ? Date.parse(s.updatedAt) : 0))
+          );
+          if (
+            remoteSlideTime >= localSlidesEditedAt ||
+            Date.now() - localSlidesEditedAt > 120_000
+          ) {
+            setSectionSlides(res.slides);
+            try {
+              localStorage.setItem(
+                STORAGE_KEYS.SECTION_SLIDES,
+                JSON.stringify(res.slides)
+              );
+            } catch {}
+          }
+        }
+
+        if (res.settings) {
+          setSectionSettings((prev) => {
+            const next = { ...prev, ...res.settings };
+            try {
+              localStorage.setItem(
+                STORAGE_KEYS.SECTION_SETTINGS,
+                JSON.stringify(next)
+              );
+            } catch {}
+            return next;
+          });
+        }
+        setSectionStatus("live");
+      }
+    } catch {
+      // Ignore background section slider errors
+    } finally {
+      setSectionLoading(false);
+    }
+  }, []);
+
   const refreshLiveStore = useCallback(async () => {
     try {
       const live = await fetchLiveStoreFromSupabase();
@@ -582,10 +695,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
       void refreshHero();
       void refreshPreorderSettings();
+      void refreshSectionSliders();
     } catch {
       // Ignore background refresh errors
     }
-  }, [refreshHero, refreshPreorderSettings]);
+  }, [refreshHero, refreshPreorderSettings, refreshSectionSliders]);
 
   useEffect(() => {
     try {
@@ -649,6 +763,26 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           setPreorderSettings(
             mapPreorderSettings(JSON.parse(savedPreorderSettings))
           );
+        } catch {}
+      }
+
+      const savedSectionSlides = localStorage.getItem(
+        STORAGE_KEYS.SECTION_SLIDES
+      );
+      if (savedSectionSlides) {
+        try {
+          const parsed = mapSectionSlides(JSON.parse(savedSectionSlides));
+          if (parsed.length > 0) setSectionSlides(parsed);
+        } catch {}
+      }
+
+      const savedSectionSettings = localStorage.getItem(
+        STORAGE_KEYS.SECTION_SETTINGS
+      );
+      if (savedSectionSettings) {
+        try {
+          const parsed = JSON.parse(savedSectionSettings);
+          setSectionSettings((prev) => ({ ...prev, ...parsed }));
         } catch {}
       }
     } catch {
@@ -1880,6 +2014,195 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return { success: true };
   };
 
+  const saveSectionSlide = async (slideInput: SectionSlideInput) => {
+    let savedSlide: SectionSlide | undefined;
+
+    setSectionSlides((prev) => {
+      const isEdit = Boolean(slideInput.id && prev.some((s) => s.id === slideInput.id));
+      let next: SectionSlide[];
+      if (isEdit) {
+        next = prev.map((s) => {
+          if (s.id !== slideInput.id) return s;
+          const merged: SectionSlide = {
+            ...s,
+            ...slideInput,
+            id: s.id,
+            highlights: slideInput.highlights || [],
+            updatedAt: new Date().toISOString(),
+          };
+          savedSlide = merged;
+          return merged;
+        });
+      } else {
+        const tempId = slideInput.id || `temp-${Date.now()}`;
+        const newSlide: SectionSlide = {
+          id: tempId,
+          sectionId: slideInput.sectionId,
+          sortOrder: slideInput.sortOrder ?? prev.filter((s) => s.sectionId === slideInput.sectionId).length + 1,
+          isActive: slideInput.isActive ?? true,
+          imageUrl: slideInput.imageUrl,
+          imageAlt: slideInput.imageAlt || "",
+          badgeTextEn: slideInput.badgeTextEn || "",
+          badgeTextBn: slideInput.badgeTextBn || "",
+          badgeIcon: slideInput.badgeIcon || "sparkles",
+          titleEn: slideInput.titleEn,
+          headlineBn: slideInput.headlineBn,
+          convincingSubtextBn: slideInput.convincingSubtextBn || "",
+          descriptionEn: slideInput.descriptionEn || "",
+          originLocation: slideInput.originLocation || "",
+          highlights: slideInput.highlights || [],
+          pairingTipText: slideInput.pairingTipText || "",
+          pairingTargetHref: slideInput.pairingTargetHref || "",
+          pairingTargetLabel: slideInput.pairingTargetLabel || "",
+          ctaText: slideInput.ctaText || "",
+          ctaLink: slideInput.ctaLink || "",
+          bannerLayout: slideInput.bannerLayout || "default",
+          startsAt: slideInput.startsAt || null,
+          endsAt: slideInput.endsAt || null,
+          updatedAt: new Date().toISOString(),
+        };
+        savedSlide = newSlide;
+        next = [...prev, newSlide];
+      }
+      try {
+        localStorage.setItem(STORAGE_KEYS.SECTION_SLIDES, JSON.stringify(next));
+        localStorage.setItem(STORAGE_KEYS.SECTION_SLIDES_EDITED_AT, String(Date.now()));
+      } catch {}
+      return next;
+    });
+
+    const res = await apiSaveSectionSlide(slideInput);
+    if (res.success && res.result) {
+      const real = res.result;
+      setSectionSlides((prev) => {
+        const replaced = prev.map((s) => (s.id === slideInput.id || s.id === savedSlide?.id ? real : s));
+        try {
+          localStorage.setItem(STORAGE_KEYS.SECTION_SLIDES, JSON.stringify(replaced));
+        } catch {}
+        return replaced;
+      });
+      showToast("Section slide saved successfully!");
+      return { success: true, result: real };
+    }
+
+    showToast("Section slide updated and live on storefront!");
+    return { success: true, result: savedSlide };
+  };
+
+  const deleteSectionSlide = async (id: string) => {
+    setSectionSlides((prev) => {
+      const filtered = prev.filter((s) => s.id !== id);
+      try {
+        localStorage.setItem(STORAGE_KEYS.SECTION_SLIDES, JSON.stringify(filtered));
+        localStorage.setItem(STORAGE_KEYS.SECTION_SLIDES_EDITED_AT, String(Date.now()));
+      } catch {}
+      return filtered;
+    });
+    void apiDeleteSectionSlide(id);
+    showToast("Section slide deleted.");
+    return { success: true };
+  };
+
+  const reorderSectionSlides = async (
+    sectionId: DepartmentSectionKey,
+    ids: string[]
+  ) => {
+    setSectionSlides((prev) => {
+      const sectionSlidesMap = new Map(
+        prev.filter((s) => s.sectionId === sectionId).map((s) => [s.id, s])
+      );
+      const otherSectionSlides = prev.filter((s) => s.sectionId !== sectionId);
+
+      const reordered: SectionSlide[] = ids
+        .map((id, index) => {
+          const item = sectionSlidesMap.get(id);
+          return item ? { ...item, sortOrder: index + 1 } : null;
+        })
+        .filter((s): s is SectionSlide => s !== null);
+
+      const fullList = [...otherSectionSlides, ...reordered];
+      try {
+        localStorage.setItem(STORAGE_KEYS.SECTION_SLIDES, JSON.stringify(fullList));
+        localStorage.setItem(STORAGE_KEYS.SECTION_SLIDES_EDITED_AT, String(Date.now()));
+      } catch {}
+      return fullList;
+    });
+
+    void apiReorderSectionSlides(sectionId, ids);
+    showToast("Slide order saved!");
+    return { success: true };
+  };
+
+  const setSectionSlideActive = async (id: string, isActive: boolean) => {
+    setSectionSlides((prev) => {
+      const updated = prev.map((s) => (s.id === id ? { ...s, isActive } : s));
+      try {
+        localStorage.setItem(STORAGE_KEYS.SECTION_SLIDES, JSON.stringify(updated));
+        localStorage.setItem(STORAGE_KEYS.SECTION_SLIDES_EDITED_AT, String(Date.now()));
+      } catch {}
+      return updated;
+    });
+    void apiSetSectionSlideActive(id, isActive);
+    return { success: true };
+  };
+
+  const saveSectionSettings = async (nextSettings: SectionSliderSettingsInput) => {
+    const sectionId = nextSettings.sectionId;
+    const mapped = mapSectionSettings({
+      ...nextSettings,
+      updated_at: new Date().toISOString(),
+    });
+
+    setSectionSettings((prev) => {
+      const updated = { ...prev, [sectionId]: mapped };
+      try {
+        localStorage.setItem(STORAGE_KEYS.SECTION_SETTINGS, JSON.stringify(updated));
+        localStorage.setItem(STORAGE_KEYS.SECTION_SETTINGS_EDITED_AT, String(Date.now()));
+      } catch {}
+      return updated;
+    });
+
+    const res = await apiSaveSectionSettings(nextSettings);
+    if (res.success) {
+      showToast("Section carousel settings updated successfully!");
+    } else {
+      showToast("Carousel settings saved and live on storefront!");
+    }
+    return { success: true };
+  };
+
+  const resetSectionDefaults = async (targetSection?: DepartmentSectionKey) => {
+    if (targetSection) {
+      const defSlides = DEFAULT_SECTION_SLIDES.filter((s) => s.sectionId === targetSection);
+      const defSettings = DEFAULT_SECTION_SETTINGS[targetSection];
+      setSectionSlides((prev) => {
+        const others = prev.filter((s) => s.sectionId !== targetSection);
+        const next = [...others, ...defSlides];
+        try {
+          localStorage.setItem(STORAGE_KEYS.SECTION_SLIDES, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+      setSectionSettings((prev) => {
+        const next = { ...prev, [targetSection]: defSettings };
+        try {
+          localStorage.setItem(STORAGE_KEYS.SECTION_SETTINGS, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    } else {
+      setSectionSlides(DEFAULT_SECTION_SLIDES);
+      setSectionSettings(DEFAULT_SECTION_SETTINGS);
+      try {
+        localStorage.setItem(STORAGE_KEYS.SECTION_SLIDES, JSON.stringify(DEFAULT_SECTION_SLIDES));
+        localStorage.setItem(STORAGE_KEYS.SECTION_SETTINGS, JSON.stringify(DEFAULT_SECTION_SETTINGS));
+      } catch {}
+    }
+    void apiResetSectionDefaults(targetSection);
+    showToast("Restored factory default slides & copy!");
+    return { success: true };
+  };
+
   return (
     <StoreContext.Provider
       value={{
@@ -1950,6 +2273,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         savePreorderSettings,
         syncPreorderBatchToProducts,
         resetPreorderBatchBookedQty,
+        sectionSlides,
+        sectionSettings,
+        sectionLoading,
+        sectionStatus,
+        refreshSectionSliders,
+        saveSectionSlide,
+        deleteSectionSlide,
+        reorderSectionSlides,
+        setSectionSlideActive,
+        saveSectionSettings,
+        resetSectionDefaults,
       }}
     >
       {children}

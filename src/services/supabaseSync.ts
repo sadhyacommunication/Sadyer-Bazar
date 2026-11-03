@@ -1,6 +1,7 @@
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { HeroAdminActionPayload } from "@/lib/hero/schema";
 import type { PreorderAdminActionPayload } from "@/lib/preorder/schema";
+import type { SectionAdminActionPayload } from "@/lib/sections/schema";
 import {
   Category,
   ContactMessage,
@@ -1277,6 +1278,7 @@ export async function submitReviewViaEdgeApi(input: {
 export type AdminEdgeActionPayload =
   | HeroAdminActionPayload
   | PreorderAdminActionPayload
+  | SectionAdminActionPayload
   | {
       action: "set_order_status";
       orderId: string;

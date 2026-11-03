@@ -39,6 +39,7 @@ import {
   Sparkles,
   Database,
   Palette,
+  Sliders,
 } from "lucide-react";
 import { rememberRecentOrderInSession, useStore } from "@/context/StoreContext";
 import { checkRateLimit } from "@/lib/security";
@@ -47,6 +48,7 @@ import { fetchAuthenticatedAdminDataFromSupabase } from "@/services/supabaseSync
 import HeroCmsManager from "@/components/admin/HeroCmsManager";
 import PreorderManager from "@/components/admin/PreorderManager";
 import BrandIdentityManager from "@/components/admin/BrandIdentityManager";
+import SectionCmsManager from "@/components/admin/SectionCmsManager";
 import {
   Category,
   ContactMessage,
@@ -153,6 +155,7 @@ type AdminTab =
   | "products"
   | "categories"
   | "hero"
+  | "section_sliders"
   | "preorders"
   | "brand"
   | "coupons"
@@ -199,6 +202,7 @@ export default function AdminDashboardPage() {
     syncResilientOrder,
     heroSlides,
     refreshHero,
+    sectionSlides,
     preorderSettings,
   } = useStore();
 
@@ -1080,6 +1084,11 @@ export default function AdminDashboardPage() {
                 icon: Sparkles,
               },
               {
+                id: "section_sliders",
+                label: `সেকশন ব্যানার ও স্লাইডার (${sectionSlides.length})`,
+                icon: Sliders,
+              },
+              {
                 id: "preorders",
                 label: "Pre-Order Batches",
                 icon: Flame,
@@ -1206,6 +1215,8 @@ export default function AdminDashboardPage() {
                 "Store Category & Department Manager"}
               {activeTab === "hero" &&
                 "Hero Banners, Carousel Slider & Homepage Highlights CMS"}
+              {activeTab === "section_sliders" &&
+                "হোমপেজ সেকশন ব্যানার ও ক্যারোসেল স্লাইডার CMS (Section Sliders)"}
               {activeTab === "preorders" &&
                 "Live Pre-Order Batch Booking & Catch Schedule CMS"}
               {activeTab === "brand" &&
@@ -2298,6 +2309,9 @@ export default function AdminDashboardPage() {
 
         {/* TAB: HERO CAROUSEL, BANNERS & HOMEPAGE CMS */}
         {activeTab === "hero" && <HeroCmsManager />}
+
+        {/* TAB: SECTION BANNERS & DEPARTMENT CAROUSELS CMS */}
+        {activeTab === "section_sliders" && <SectionCmsManager />}
 
         {/* TAB: PRE-ORDER BATCH BOOKING & SCHEDULE CMS */}
         {activeTab === "preorders" && <PreorderManager />}
