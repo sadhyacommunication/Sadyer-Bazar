@@ -23,7 +23,7 @@ export type SectionBannerLayout = (typeof SECTION_BANNER_LAYOUTS)[number];
 
 export const SECTION_MAX_SLIDES_PER_DEPT = 8;
 export const SECTION_STORAGE_BUCKET = "site-media";
-export const SECTION_STORAGE_PREFIX = "section-banners";
+export const SECTION_STORAGE_PREFIX = "hero";
 export const SECTION_STORAGE_PUBLIC_PATH = `/storage/v1/object/public/${SECTION_STORAGE_BUCKET}/`;
 export const SECTION_MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
 

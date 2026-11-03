@@ -425,7 +425,7 @@ export async function uploadSectionImage(file: File): Promise<SectionUploadResul
 
     const ext = blob.type === "image/webp" ? "webp" : "jpg";
     const rand = Math.random().toString(36).slice(2, 10);
-    const objectPath = `${SECTION_STORAGE_PREFIX}/${Date.now()}-${rand}.${ext}`;
+    const objectPath = `${SECTION_STORAGE_PREFIX}/section-${Date.now()}-${rand}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
       .from(SECTION_STORAGE_BUCKET)
@@ -436,6 +436,13 @@ export async function uploadSectionImage(file: File): Promise<SectionUploadResul
       });
 
     if (uploadError) {
+      const msg = uploadError.message ?? "";
+      if (/row-level security|unauthorized|not authorized|jwt/i.test(msg)) {
+        return {
+          ok: false,
+          error: "ছবি আপলোড করার অনুমতি নেই। অনুগ্রহ করে অ্যাডমিন হিসেবে পুনরায় লগইন করুন।",
+        };
+      }
       return { ok: false, error: uploadError.message };
     }
 

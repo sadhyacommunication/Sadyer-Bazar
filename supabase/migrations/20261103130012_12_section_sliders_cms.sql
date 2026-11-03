@@ -681,4 +681,22 @@ GRANT EXECUTE ON FUNCTION public.admin_section_set_active TO authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_section_save_settings TO authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_section_reset_defaults TO authenticated;
 
+-- Storage Policy Update (allows admin to upload hero/ and section-banners/ media)
+DO $$
+BEGIN
+  IF to_regclass('storage.buckets') IS NOT NULL AND to_regclass('storage.objects') IS NOT NULL THEN
+    DROP POLICY IF EXISTS site_media_admin_insert ON storage.objects;
+    DROP POLICY IF EXISTS site_media_admin_update ON storage.objects;
+
+    CREATE POLICY site_media_admin_insert ON storage.objects FOR INSERT TO authenticated
+      WITH CHECK (bucket_id = 'site-media' AND (name LIKE 'hero/%' OR name LIKE 'section-banners/%') AND public.is_admin());
+
+    CREATE POLICY site_media_admin_update ON storage.objects FOR UPDATE TO authenticated
+      USING (bucket_id = 'site-media' AND public.is_admin())
+      WITH CHECK (bucket_id = 'site-media' AND (name LIKE 'hero/%' OR name LIKE 'section-banners/%') AND public.is_admin());
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  NULL;
+END $$;
+
 COMMIT;
