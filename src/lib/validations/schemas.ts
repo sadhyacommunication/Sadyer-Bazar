@@ -40,8 +40,14 @@ export const createOrderSchema = z.object({
     .max(350, "Address is too long"),
   customerNote: z.string().trim().max(300).optional(),
   couponCode: z.string().trim().max(40).optional(),
-  paymentMethod: z.enum(["bkash", "nagad", "cod"]),
+  paymentMethod: z.enum(["bkash", "nagad", "cod", "qr_pay"]),
   paymentPlan: z.enum(["full", "advance", "cod"]),
+  manualPayChannel: z
+    .enum(["bkash", "nagad", "card_bank", "upay", "other"])
+    .optional(),
+  manualPaySender: z.string().trim().max(50).optional(),
+  manualPayTrxId: z.string().trim().max(60).optional(),
+  manualPayProofUrl: z.string().trim().max(600000).optional(),
   items: z.array(checkoutItemSchema).min(1, "Your cart is empty"),
   idempotencyKey: z.string().trim().max(100).optional(),
   turnstileToken: z.string().trim().max(2048).optional(),

@@ -39,6 +39,9 @@ export const INITIAL_SITE_SETTINGS: SiteSettings = {
   bkashEnabled: false,
   bkashAppKey: "",
   codEnabled: true,
+  qrPaymentEnabled: true,
+  qrCodeImageUrl: "/images/payments/sadhyer-bazar-qr.jpg",
+  qrMerchantName: "Sadhyer Bazar",
   updatedAt: new Date().toISOString(),
 };
 

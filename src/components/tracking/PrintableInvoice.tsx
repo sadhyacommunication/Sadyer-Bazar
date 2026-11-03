@@ -146,12 +146,25 @@ export default function PrintableInvoice({
             </p>
             <p className="text-xs">
               পেমেন্ট মাধ্যম:{" "}
-              <strong className="uppercase">{order.paymentMethod}</strong>
+              <strong className="uppercase">
+                {order.paymentMethod === "qr_pay"
+                  ? `Bangla QR (${order.manualPayChannel || "MFS"})`
+                  : order.paymentMethod}
+              </strong>
             </p>
             <p className="text-xs">
               পেমেন্ট স্ট্যাটাস:{" "}
-              <strong className="uppercase">{order.paymentStatus.replace("_", " ")}</strong>
+              <strong className="uppercase">
+                {order.paymentStatus === "review_pending"
+                  ? "Review Pending"
+                  : order.paymentStatus.replace("_", " ")}
+              </strong>
             </p>
+            {order.manualPayTrxId && (
+              <p className="text-xs">
+                TrxID: <strong className="font-mono">{order.manualPayTrxId}</strong>
+              </p>
+            )}
             {order.courierName && (
               <p className="text-xs">
                 কুরিয়ার: <strong>{order.courierName}</strong>

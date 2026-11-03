@@ -357,13 +357,17 @@ export default function OrderReceiptModal({
                   <p>
                     পেমেন্ট মাধ্যম:{" "}
                     <span className="font-black uppercase text-stone-900">
-                      {order.paymentMethod}
+                      {order.paymentMethod === "qr_pay"
+                        ? `Bangla QR (${order.manualPayChannel || "MFS"})`
+                        : order.paymentMethod}
                     </span>{" "}
-                    ({order.paymentStatus.replace("_", " ").toUpperCase()})
+                    ({order.paymentStatus === "review_pending"
+                      ? "REVIEW PENDING"
+                      : order.paymentStatus.replace("_", " ").toUpperCase()})
                   </p>
-                  {order.transactionId && (
+                  {(order.manualPayTrxId || order.transactionId) && (
                     <p className="font-mono text-[11px] text-stone-600">
-                      TrxID: {order.transactionId}
+                      TrxID: {order.manualPayTrxId || order.transactionId}
                     </p>
                   )}
                   <p className="text-stone-600">

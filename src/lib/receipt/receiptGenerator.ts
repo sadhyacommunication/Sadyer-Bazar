@@ -262,8 +262,17 @@ export async function renderReceiptToCanvas(
   ctx.font = "bold 14px sans-serif";
   ctx.fillText(`অর্ডার স্ট্যাটাস: ${order.orderStatus.toUpperCase()}`, rightColX, cursorY + 50);
 
+  const methodLabel =
+    order.paymentMethod === "qr_pay"
+      ? `BANGLA QR (${order.manualPayChannel || "MFS"}`.toUpperCase() + ")"
+      : order.paymentMethod.toUpperCase();
+  const statusLabel =
+    order.paymentStatus === "review_pending"
+      ? "REVIEW PENDING"
+      : order.paymentStatus.replace("_", " ").toUpperCase();
+
   ctx.fillText(
-    `পেমেন্ট মাধ্যম: ${order.paymentMethod.toUpperCase()} (${order.paymentStatus.replace("_", " ").toUpperCase()})`,
+    `পেমেন্ট মাধ্যম: ${methodLabel} (${statusLabel})`,
     rightColX,
     cursorY + 73
   );
@@ -683,7 +692,7 @@ export async function downloadReceiptAsHtml(
       <div style="text-align: right;">
         <strong style="color:#0F3D2E; text-transform:uppercase;">অর্ডার ও পেমেন্ট বিবরণ</strong>
         <p style="margin-top: 4px;">স্ট্যাটাস: <strong>${order.orderStatus.toUpperCase()}</strong></p>
-        <p>পদ্ধতি: <strong>${order.paymentMethod.toUpperCase()}</strong> (${order.paymentStatus.toUpperCase()})</p>
+        <p>পদ্ধতি: <strong>${order.paymentMethod === "qr_pay" ? `BANGLA QR (${(order.manualPayChannel || "MFS").toUpperCase()})` : order.paymentMethod.toUpperCase()}</strong> (${order.paymentStatus === "review_pending" ? "REVIEW PENDING" : order.paymentStatus.toUpperCase()})</p>
         <p>এলাকা: <strong>${order.deliveryZone === "inside_dhaka" ? "ঢাকা শহর (Inside Dhaka)" : "ঢাকার বাইরে (Outside Dhaka)"}</strong></p>
       </div>
     </div>

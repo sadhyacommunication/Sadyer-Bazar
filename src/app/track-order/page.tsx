@@ -49,6 +49,7 @@ function TrackOrderContent() {
   const gatewayError = searchParams.get("gatewayError") === "1";
   const paymentStatusParam = searchParams.get("payment");
   const gatewayParam = searchParams.get("gateway");
+  const qrSubmitted = searchParams.get("qrSubmitted") === "1";
 
   const { findOrderByCode, orders, settings } = useStore();
 
@@ -539,6 +540,34 @@ function TrackOrderContent() {
       )}
 
       {/* 3. Official Gateway Alerts (Success, Cancelled, Failed, Review) */}
+      {qrSubmitted && (
+        <div className="p-6 rounded-3xl bg-emerald-50 border-2 border-emerald-600/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print shadow-sm">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-[#0F3D2E] text-emerald-300 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-base sm:text-lg font-black text-[#0F3D2E]">
+                বাংলা কিউআর পেমেন্ট তথ্য সফলভাবে গ্রহণ করা হয়েছে
+              </h2>
+              <p className="text-xs sm:text-sm text-stone-700 leading-relaxed">
+                আপনার প্রেরিত Transaction ID (TrxID) আমাদের অ্যাডমিন টিম ব্যাংক/বিকাশ স্টেটমেন্টের সাথে যাচাই করছে। যাচাই সম্পন্ন হলেই অর্ডার চূড়ান্তভাবে কনফার্ম করা হবে।
+              </p>
+            </div>
+          </div>
+          {activeOrder && (
+            <button
+              type="button"
+              onClick={() => setIsReceiptModalOpen(true)}
+              className="px-4 py-2.5 rounded-2xl bg-[#0F3D2E] hover:bg-[#165b44] text-white text-xs font-black shrink-0 cursor-pointer transition shadow-md flex items-center justify-center gap-2 self-start sm:self-center"
+            >
+              <FileText className="w-4 h-4 text-emerald-300" />
+              <span>রসিদ দেখুন / ডাউনলোড</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {paymentStatusParam === "success" && (
         <div className="p-6 rounded-3xl bg-emerald-50 border-2 border-emerald-600/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print shadow-sm">
           <div className="flex items-start gap-4">
@@ -905,12 +934,18 @@ function TrackOrderContent() {
                   className={`px-3 py-0.5 rounded-full text-[11px] font-black uppercase ${
                     activeOrder.paymentStatus === "paid"
                       ? "bg-emerald-400 text-stone-950"
+                      : activeOrder.paymentStatus === "review_pending"
+                      ? "bg-amber-400 text-stone-950 animate-pulse"
                       : activeOrder.paymentStatus === "advance_paid"
                       ? "bg-amber-400 text-stone-950"
                       : "bg-white/15 text-white"
                   }`}
                 >
-                  {activeOrder.paymentStatus.replace("_", " ")}
+                  {activeOrder.paymentStatus === "review_pending"
+                    ? "রিভিউ অপেক্ষমান (Review Pending)"
+                    : activeOrder.paymentStatus === "paid"
+                    ? "পরিশোধিত (Paid)"
+                    : activeOrder.paymentStatus.replace("_", " ")}
                 </span>
               </div>
 
@@ -983,6 +1018,13 @@ function TrackOrderContent() {
                 <p className="text-[11px] font-mono text-emerald-300/80 pt-1 border-t border-emerald-800/60">
                   Verified TrxID: {activeOrder.transactionId}
                 </p>
+              )}
+
+              {activeOrder.manualPayTrxId && (
+                <div className="text-[11px] font-mono text-emerald-200/95 pt-1.5 border-t border-emerald-800/60 flex items-center justify-between">
+                  <span>Bangla QR TrxID ({activeOrder.manualPayChannel || "MFS"}):</span>
+                  <span className="font-bold tracking-wider">{activeOrder.manualPayTrxId}</span>
+                </div>
               )}
 
               <div className="pt-2 border-t border-emerald-800/60">

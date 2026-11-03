@@ -39,7 +39,7 @@ export const SAFE_SITE_SETTINGS_BASE_COLUMNS =
   "id, inside_dhaka_fee, outside_dhaka_fee, free_delivery_threshold, enable_free_delivery, preorder_advance_percent, support_phone, whatsapp_number, bkash_merchant_number, bkash_account_type, nagad_number, nagad_account_type, nagad_enabled, bkash_enabled, cod_enabled, announcement_en, announcement_bn, updated_at";
 
 export const SAFE_SITE_SETTINGS_COLUMNS =
-  `${SAFE_SITE_SETTINGS_BASE_COLUMNS}, brand_name_en, brand_name_bn, slogan_en, slogan_bn, logo_url, logo_mode, favicon_url`;
+  `${SAFE_SITE_SETTINGS_BASE_COLUMNS}, brand_name_en, brand_name_bn, slogan_en, slogan_bn, logo_url, logo_mode, favicon_url, qr_payment_enabled, qr_code_image_url, qr_merchant_name`;
 
 export interface PaymentAttemptRecord {
   id: string;
@@ -120,6 +120,20 @@ function mapSettingsFromRow(row: Record<string, unknown>): SiteSettings {
     sslcommerzEnabled: false,
     bkashEnabled: false,
     codEnabled: true,
+    qrPaymentEnabled:
+      row.qr_payment_enabled !== undefined
+        ? Boolean(row.qr_payment_enabled)
+        : INITIAL_SITE_SETTINGS.qrPaymentEnabled,
+    qrCodeImageUrl: String(
+      row.qr_code_image_url ||
+        INITIAL_SITE_SETTINGS.qrCodeImageUrl ||
+        "/images/payments/sadhyer-bazar-qr.jpg"
+    ),
+    qrMerchantName: String(
+      row.qr_merchant_name ||
+        INITIAL_SITE_SETTINGS.qrMerchantName ||
+        "Sadhyer Bazar"
+    ),
     updatedAt: String(row.updated_at || new Date().toISOString()),
   };
 }
@@ -243,6 +257,38 @@ export function mapOrderFromRow(row: Record<string, unknown>): Order {
       ? String(row.transaction_id)
       : row.transactionId
       ? String(row.transactionId)
+      : undefined,
+    manualPayChannel: (row.manual_pay_channel ||
+      row.manualPayChannel) as Order["manualPayChannel"],
+    manualPaySender: row.manual_pay_sender
+      ? String(row.manual_pay_sender)
+      : row.manualPaySender
+      ? String(row.manualPaySender)
+      : undefined,
+    manualPayTrxId: row.manual_pay_trx_id
+      ? String(row.manual_pay_trx_id)
+      : row.manualPayTrxId
+      ? String(row.manualPayTrxId)
+      : undefined,
+    manualPayProofUrl: row.manual_pay_proof_url
+      ? String(row.manual_pay_proof_url)
+      : row.manualPayProofUrl
+      ? String(row.manualPayProofUrl)
+      : undefined,
+    manualPayVerifiedAt: row.manual_pay_verified_at
+      ? String(row.manual_pay_verified_at)
+      : row.manualPayVerifiedAt
+      ? String(row.manualPayVerifiedAt)
+      : undefined,
+    manualPayVerifiedBy: row.manual_pay_verified_by
+      ? String(row.manual_pay_verified_by)
+      : row.manualPayVerifiedBy
+      ? String(row.manualPayVerifiedBy)
+      : undefined,
+    manualPayRejectReason: row.manual_pay_reject_reason
+      ? String(row.manual_pay_reject_reason)
+      : row.manualPayRejectReason
+      ? String(row.manualPayRejectReason)
       : undefined,
     courierName: row.courier_name
       ? String(row.courier_name)
@@ -652,8 +698,12 @@ export interface CreateOrderEdgeInput {
   customerAddress: string;
   customerNote?: string;
   couponCode?: string;
-  paymentMethod: "bkash" | "nagad" | "cod";
+  paymentMethod: "bkash" | "nagad" | "cod" | "qr_pay";
   paymentPlan: "full" | "advance" | "cod";
+  manualPayChannel?: Order["manualPayChannel"];
+  manualPaySender?: string;
+  manualPayTrxId?: string;
+  manualPayProofUrl?: string;
   items: {
     productId: string;
     variantId: string;
@@ -765,18 +815,22 @@ export function buildResilientCodOrder(
     couponCode: input.couponCode,
     totalAmount,
     advancePaid: 0,
-    dueAmount: totalAmount,
-    paymentMethod: "cod",
-    paymentPlan: "cod",
-    paymentStatus: "pending",
+    dueAmount: input.paymentMethod === "qr_pay" ? 0 : totalAmount,
+    paymentMethod: input.paymentMethod === "qr_pay" ? "qr_pay" : "cod",
+    paymentPlan: input.paymentMethod === "qr_pay" ? "full" : "cod",
+    paymentStatus: input.paymentMethod === "qr_pay" ? "review_pending" : "pending",
     orderStatus: "pending",
+    manualPayChannel: input.manualPayChannel,
+    manualPaySender: input.manualPaySender,
+    manualPayTrxId: input.manualPayTrxId,
+    manualPayProofUrl: input.manualPayProofUrl,
     hasPreorderItems: items.some((i) => i.isPreorder),
     isPendingDbSync: true,
     isResilientCod: true,
     items,
     createdAt: now,
     updatedAt: now,
-    payableNow: 0,
+    payableNow: input.paymentMethod === "qr_pay" ? totalAmount : 0,
   };
 
   // 1. Persist to known orders storage in localStorage so /track-order finds it immediately
@@ -854,6 +908,28 @@ export async function createOrderViaEdgeApi(
     };
 
     if (res.ok && data.success && data.order) {
+      const orderId = String(data.order.orderId || data.order.id || "");
+      const orderCode = String(data.order.orderCode || "");
+
+      // If customer submitted QR payment details, record proof
+      if (input.paymentMethod === "qr_pay" && input.manualPayTrxId) {
+        try {
+          const supabase = getSupabaseClient();
+          if (supabase && orderId && orderCode) {
+            await supabase.rpc("submit_manual_qr_payment_proof", {
+              p_order_id: orderId,
+              p_order_code: orderCode,
+              p_channel: input.manualPayChannel || "other",
+              p_sender: input.manualPaySender || input.customerPhone,
+              p_trx_id: input.manualPayTrxId,
+              p_proof_url: input.manualPayProofUrl || null,
+            });
+          }
+        } catch (proofErr) {
+          console.warn("[qr payment proof submit notice]:", proofErr);
+        }
+      }
+
       const mapped = mapOrderFromRow({
         ...data.order,
         customerName: input.customerName,
@@ -863,6 +939,12 @@ export async function createOrderViaEdgeApi(
         customerAddress: input.customerAddress,
         customerNote: input.customerNote,
         couponCode: input.couponCode,
+        manualPayChannel: input.manualPayChannel,
+        manualPaySender: input.manualPaySender,
+        manualPayTrxId: input.manualPayTrxId,
+        manualPayProofUrl: input.manualPayProofUrl,
+        paymentStatus:
+          input.paymentMethod === "qr_pay" ? "review_pending" : data.order.paymentStatus || "pending",
       });
 
       return {
@@ -874,8 +956,8 @@ export async function createOrderViaEdgeApi(
       };
     }
 
-    // Resilient fallback for Cash on Delivery when server/edge API is unavailable
-    if (input.paymentMethod === "cod") {
+    // Resilient fallback for Cash on Delivery or QR pay when edge API is unavailable
+    if (input.paymentMethod === "cod" || input.paymentMethod === "qr_pay") {
       const fallbackOrder = buildResilientCodOrder(input);
       return { success: true, order: fallbackOrder };
     }
@@ -886,13 +968,48 @@ export async function createOrderViaEdgeApi(
         : data.error?.message || "Failed to place order. Please check your details and try again.";
     return { success: false, error: msg };
   } catch (err) {
-    if (input.paymentMethod === "cod") {
+    if (input.paymentMethod === "cod" || input.paymentMethod === "qr_pay") {
       const fallbackOrder = buildResilientCodOrder(input);
       return { success: true, order: fallbackOrder };
     }
     return {
       success: false,
       error: err instanceof Error ? err.message : "Network error while placing order.",
+    };
+  }
+}
+
+export async function verifyManualQrPayment(
+  orderId: string,
+  action: "verify_confirm" | "reject_mismatch",
+  note?: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return { success: false, error: "Database not connected" };
+
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    const actorId = userData?.user?.id;
+    if (!actorId) {
+      return { success: false, error: "Admin authentication required" };
+    }
+
+    const { error } = await supabase.rpc("admin_verify_manual_qr_payment", {
+      p_order_id: orderId,
+      p_action: action,
+      p_actor: actorId,
+      p_note: note || null,
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to verify manual payment",
     };
   }
 }

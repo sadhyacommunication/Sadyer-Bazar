@@ -179,6 +179,7 @@ export default function AdminDashboardPage() {
     adjustOrderWeightAndBill,
     assignOrderLogistics,
     verifyCodOrderPhone,
+    verifyManualQrPayment,
     resolvePaymentAttempt,
     addProduct,
     updateProduct,
@@ -307,6 +308,8 @@ export default function AdminDashboardPage() {
   const [orderSearch, setOrderSearch] = useState("");
   const [selectedInvoiceOrder, setSelectedInvoiceOrder] =
     useState<Order | null>(null);
+  const [selectedProofImage, setSelectedProofImage] = useState<string | null>(null);
+  const [verifyingQrOrderId, setVerifyingQrOrderId] = useState<string | null>(null);
 
   // Messages Inbox State
   const [messageSearch, setMessageSearch] = useState("");
@@ -423,6 +426,8 @@ export default function AdminDashboardPage() {
       if (orderStatusFilter === "suspicious") {
         const isUnverifiedCod = ord.paymentMethod === "cod" && !ord.isPhoneVerified;
         if (!ord.isSuspicious && !isUnverifiedCod) return false;
+      } else if (orderStatusFilter === "qr_review") {
+        if (ord.paymentMethod !== "qr_pay" || ord.paymentStatus === "paid") return false;
       } else if (
         orderStatusFilter !== "all" &&
         ord.orderStatus !== orderStatusFilter
@@ -435,7 +440,9 @@ export default function AdminDashboardPage() {
           ord.orderCode.toLowerCase().includes(q) ||
           ord.customerName.toLowerCase().includes(q) ||
           ord.customerPhone.toLowerCase().includes(q) ||
-          ord.customerDistrict.toLowerCase().includes(q)
+          ord.customerDistrict.toLowerCase().includes(q) ||
+          Boolean(ord.manualPayTrxId && ord.manualPayTrxId.toLowerCase().includes(q)) ||
+          Boolean(ord.manualPaySender && ord.manualPaySender.toLowerCase().includes(q))
         );
       }
       return true;
@@ -824,6 +831,19 @@ export default function AdminDashboardPage() {
   const handleSaveDeliverySettings = async (e: React.FormEvent) => {
     e.preventDefault();
     await updateSiteSettings(settingsForm);
+  };
+
+  const handleAdminVerifyQr = async (
+    orderId: string,
+    action: "verify_confirm" | "reject_mismatch",
+    note?: string
+  ) => {
+    setVerifyingQrOrderId(orderId);
+    try {
+      await verifyManualQrPayment(orderId, action, note);
+    } finally {
+      setVerifyingQrOrderId(null);
+    }
   };
 
   if (checkingSession) {
@@ -1447,31 +1467,46 @@ export default function AdminDashboardPage() {
           <div className="bg-white rounded-3xl border border-stone-200/90 p-6 space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-2">
-                {[
-                  { key: "all", label: "All" },
-                  { key: "pending", label: "Pending" },
-                  { key: "confirmed", label: "Confirmed" },
-                  { key: "processing", label: "Processing" },
-                  { key: "shipped", label: "Shipped" },
-                  { key: "delivered", label: "Delivered" },
-                  { key: "suspicious", label: "⚠️ Security & COD Verify" },
-                ].map((st) => (
-                  <button
-                    key={st.key}
-                    onClick={() => setOrderStatusFilter(st.key)}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold uppercase transition cursor-pointer ${
-                      orderStatusFilter === st.key
-                        ? st.key === "suspicious"
-                          ? "bg-red-700 text-white"
-                          : "bg-[#0F3D2E] text-white"
-                        : st.key === "suspicious"
-                        ? "bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
-                        : "bg-stone-100 text-stone-700 hover:bg-stone-200"
-                    }`}
-                  >
-                    {st.label}
-                  </button>
-                ))}
+                {(() => {
+                  const qrPendingCount = orders.filter(
+                    (o) => o.paymentMethod === "qr_pay" && o.paymentStatus !== "paid"
+                  ).length;
+
+                  return [
+                    { key: "all", label: "All" },
+                    { key: "pending", label: "Pending" },
+                    {
+                      key: "qr_review",
+                      label: `⚡ QR Review ${qrPendingCount > 0 ? `(${qrPendingCount})` : ""}`,
+                      isHighlight: qrPendingCount > 0,
+                    },
+                    { key: "confirmed", label: "Confirmed" },
+                    { key: "processing", label: "Processing" },
+                    { key: "shipped", label: "Shipped" },
+                    { key: "delivered", label: "Delivered" },
+                    { key: "suspicious", label: "⚠️ Security & COD Verify" },
+                  ].map((st) => (
+                    <button
+                      key={st.key}
+                      onClick={() => setOrderStatusFilter(st.key)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold uppercase transition cursor-pointer flex items-center gap-1.5 ${
+                        orderStatusFilter === st.key
+                          ? st.key === "suspicious"
+                            ? "bg-red-700 text-white"
+                            : st.key === "qr_review"
+                            ? "bg-emerald-800 text-white"
+                            : "bg-[#0F3D2E] text-white"
+                          : st.key === "suspicious"
+                          ? "bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
+                          : st.isHighlight
+                          ? "bg-amber-100 text-amber-900 border border-amber-300 animate-pulse hover:bg-amber-200"
+                          : "bg-stone-100 text-stone-700 hover:bg-stone-200"
+                      }`}
+                    >
+                      {st.label}
+                    </button>
+                  ));
+                })()}
               </div>
 
               <div className="flex items-center gap-2.5 w-full sm:w-auto">
@@ -1576,6 +1611,23 @@ export default function AdminDashboardPage() {
                               : "📞 COD Unverified"}
                           </span>
                         )}
+                        {ord.paymentMethod === "qr_pay" && (
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                              ord.paymentStatus === "paid"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : ord.paymentStatus === "failed"
+                                ? "bg-red-100 text-red-800"
+                                : "bg-amber-100 text-amber-900 border border-amber-400 animate-pulse"
+                            }`}
+                          >
+                            {ord.paymentStatus === "paid"
+                              ? "✓ QR Verified & Paid"
+                              : ord.paymentStatus === "failed"
+                              ? "✕ QR Mismatch"
+                              : "⚡ QR Review Pending"}
+                          </span>
+                        )}
                         {ord.isPendingDbSync ? (
                           <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-extrabold flex items-center gap-1">
                             ⚡ Offline / Pending DB Sync
@@ -1623,6 +1675,137 @@ export default function AdminDashboardPage() {
                           >
                             <CheckCircle2 className="w-3 h-3" /> Verify & Confirm
                           </button>
+                        </div>
+                      )}
+
+                      {/* Bangla QR Payment Verification Block */}
+                      {ord.paymentMethod === "qr_pay" && (
+                        <div className="mt-3 p-3.5 rounded-2xl bg-gradient-to-br from-emerald-50/80 to-stone-50 border-2 border-emerald-600/30 space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded-md bg-[#0F3D2E] text-white text-[10px] font-black uppercase">
+                                Bangla QR Payment
+                              </span>
+                              <span
+                                className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                                  ord.paymentStatus === "paid"
+                                    ? "bg-emerald-700 text-white"
+                                    : ord.paymentStatus === "failed"
+                                    ? "bg-red-700 text-white"
+                                    : "bg-amber-500 text-white animate-pulse"
+                                }`}
+                              >
+                                {ord.paymentStatus === "paid"
+                                  ? "✓ Verified & Paid"
+                                  : ord.paymentStatus === "failed"
+                                  ? "✕ Mismatch / Rejected"
+                                  : "⏳ Verification Pending"}
+                              </span>
+                            </div>
+                            <span className="text-xs font-black text-[#0F3D2E]">
+                              মোট প্রদেয়: ৳{ord.totalAmount.toLocaleString()}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                            <div className="p-2 rounded-xl bg-white border border-stone-200">
+                              <span className="text-[10px] text-stone-500 block">মাধ্যম (Channel)</span>
+                              <span className="font-bold text-stone-900 uppercase">
+                                {ord.manualPayChannel || "MFS / Bank"}
+                              </span>
+                            </div>
+                            <div className="p-2 rounded-xl bg-white border border-stone-200">
+                              <span className="text-[10px] text-stone-500 block">প্রেরক নম্বর (Sender No.)</span>
+                              <span className="font-bold font-mono text-stone-900">
+                                {ord.manualPaySender || ord.customerPhone}
+                              </span>
+                            </div>
+                            <div className="p-2 rounded-xl bg-white border border-stone-200 flex items-center justify-between">
+                              <div className="min-w-0 pr-1">
+                                <span className="text-[10px] text-stone-500 block">Transaction ID (TrxID)</span>
+                                <span className="font-black font-mono text-emerald-800 tracking-wider truncate block">
+                                  {ord.manualPayTrxId || "NOT PROVIDED"}
+                                </span>
+                              </div>
+                              {ord.manualPayTrxId && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard?.writeText(ord.manualPayTrxId || "");
+                                    showToast(`TrxID "${ord.manualPayTrxId}" কপি করা হয়েছে!`);
+                                  }}
+                                  title="Copy TrxID to clipboard"
+                                  className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 transition cursor-pointer shrink-0"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {ord.manualPayProofUrl && (
+                            <div className="flex items-center gap-3 p-2 bg-white rounded-xl border border-stone-200">
+                              <span className="text-xs text-stone-600 font-medium">কাস্টমার আপলোডকৃত প্রমাণ:</span>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedProofImage(ord.manualPayProofUrl || null)}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                                <span>স্ক্রিনশট দেখুন (View Screenshot)</span>
+                              </button>
+                            </div>
+                          )}
+
+                          {ord.manualPayRejectReason && (
+                            <div className="p-2 rounded-xl bg-red-50 border border-red-200 text-red-900 text-xs">
+                              <strong>বাতিলের কারণ:</strong> {ord.manualPayRejectReason}
+                            </div>
+                          )}
+
+                          {ord.paymentStatus !== "paid" ? (
+                            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-emerald-600/20">
+                              <span className="text-[11px] font-bold text-stone-700">ভেরিফিকেশন অ্যাকশন:</span>
+                              <button
+                                type="button"
+                                disabled={verifyingQrOrderId === ord.id}
+                                onClick={() => handleAdminVerifyQr(ord.id, "verify_confirm")}
+                                className="px-3.5 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-xs cursor-pointer transition"
+                              >
+                                {verifyingQrOrderId === ord.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                )}
+                                <span>অ্যাকাউন্টে টাকা এসেছে, অর্ডার কনফার্ম করুন (Mark Paid & Confirm)</span>
+                              </button>
+                              <button
+                                type="button"
+                                disabled={verifyingQrOrderId === ord.id}
+                                onClick={() => {
+                                  const reason = window.prompt(
+                                    "TrxID অমিল বা বাতিল করার কারণ লিখুন:",
+                                    "অ্যাকাউন্ট স্টেটমেন্টে ট্রানজেকশন মেলেনি"
+                                  );
+                                  if (reason) handleAdminVerifyQr(ord.id, "reject_mismatch", reason);
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer transition"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                                <span>টাকা আসেনি / TrxID অমিল (Reject)</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="text-[11px] text-emerald-800 font-semibold flex items-center gap-1.5 pt-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                              <span>
+                                পেমেন্ট ব্যাংক/বিকাশ স্টেটমেন্টের সাথে যাচাইকৃত ও কনফার্মড{" "}
+                                {ord.manualPayVerifiedAt
+                                  ? `(${new Date(ord.manualPayVerifiedAt).toLocaleString("bn-BD")})`
+                                  : ""}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -3232,11 +3415,99 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
+            {/* Bangla QR MFS & Card Scan & Pay Configuration */}
+            <div>
+              <div className="border-b border-emerald-300 pb-3 mb-4">
+                <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-800">
+                  4. Bangla QR Configuration (বাংলা কিউআর পেমেন্ট সেটিংস)
+                </span>
+                <h3 className="text-lg font-extrabold text-stone-900 mt-0.5">
+                  বাংলা কিউআর মার্চেন্ট কোড ও ডিসপ্লে সেটিংস
+                </h3>
+                <p className="text-xs text-stone-500">
+                  চেকআউটে গ্রাহকদের এই কিউআর কোড প্রদর্শিত হবে যা বিকাশ, নগদ ও যেকোনো ব্যাংক অ্যাপ দিয়ে স্ক্যান করা যাবে।
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                    Merchant Name (মার্চেন্ট নাম) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.qrMerchantName || "Sadhyer Bazar"}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        qrMerchantName: e.target.value,
+                      })
+                    }
+                    placeholder="e.g. Sadhyer Bazar"
+                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                    QR Code Image URL (কিউআর ছবির পাথ / URL) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.qrCodeImageUrl || "/images/payments/sadhyer-bazar-qr.jpg"}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        qrCodeImageUrl: e.target.value,
+                      })
+                    }
+                    className="w-full px-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm font-mono"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-stone-50 border border-stone-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settingsForm.qrPaymentEnabled ?? true}
+                      onChange={(e) =>
+                        setSettingsForm({
+                          ...settingsForm,
+                          qrPaymentEnabled: e.target.checked,
+                        })
+                      }
+                      className="w-4 h-4 accent-[#0F3D2E]"
+                    />
+                    <span className="text-xs font-bold text-stone-800">
+                      Enable Bangla QR in Checkout (চেকআউট পেজে বাংলা কিউআর পেমেন্ট সক্রিয় রাখুন)
+                    </span>
+                  </label>
+                </div>
+
+                {/* Preview Thumbnail */}
+                <div className="sm:col-span-2 p-3 rounded-xl bg-stone-50 border border-stone-200 flex items-center gap-4">
+                  <img
+                    src={settingsForm.qrCodeImageUrl || "/images/payments/sadhyer-bazar-qr.jpg"}
+                    alt="Bangla QR Preview"
+                    className="w-20 h-20 object-contain bg-white rounded-lg border border-stone-300 p-1"
+                  />
+                  <div className="text-xs text-stone-600">
+                    <p className="font-bold text-stone-900">Current QR Code Image</p>
+                    <p className="text-[11px] text-stone-500">
+                      SADHYER BAZAR Official Interoperable Bangla QR Code
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Payment Gateways Status (On Hold) */}
             <div>
               <div className="border-b border-stone-200 pb-3 mb-4">
                 <span className="text-xs font-extrabold uppercase tracking-wider text-amber-700">
-                  4. Online Payment Gateways (Currently On Hold)
+                  5. Online Payment Gateways (Currently On Hold)
                 </span>
                 <h3 className="text-lg font-extrabold text-stone-900 mt-0.5">
                   অনলাইন গেটওয়ে স্ট্যাটাস (bKash, Nagad ও SSLCommerz অন হোল্ড)
@@ -3258,7 +3529,7 @@ export default function AdminDashboardPage() {
             <div>
               <div className="border-b border-stone-200 pb-3 mb-4">
                 <span className="text-xs font-extrabold uppercase tracking-wider text-[#0F3D2E]">
-                  5. Customer Support & Announcement
+                  6. Customer Support & Announcement
                 </span>
                 <h3 className="text-lg font-extrabold text-stone-900 mt-0.5">
                   সাপোর্ট ফোন নম্বর ও অ্যানাউন্সমেন্ট ব্যানার
@@ -4480,6 +4751,43 @@ export default function AdminDashboardPage() {
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Customer Payment Proof Screenshot Lightbox Modal */}
+      {selectedProofImage && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl border border-stone-200">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-200">
+              <h3 className="text-base font-extrabold text-stone-900 flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-emerald-700" />
+                <span>Customer Claimed Payment Proof Screenshot</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setSelectedProofImage(null)}
+                className="p-1 rounded-lg hover:bg-stone-100 text-stone-500 hover:text-stone-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="max-h-[75vh] overflow-auto rounded-2xl bg-stone-950 flex items-center justify-center p-2">
+              <img
+                src={selectedProofImage}
+                alt="Payment Proof"
+                className="max-h-[70vh] w-auto object-contain rounded-lg"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setSelectedProofImage(null)}
+                className="px-5 py-2.5 rounded-xl bg-stone-900 text-white text-xs font-bold hover:bg-stone-800 cursor-pointer"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

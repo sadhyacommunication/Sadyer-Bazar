@@ -55,6 +55,7 @@ import {
   upsertCouponToSupabase,
   upsertProductToSupabase,
   upsertSettingsToSupabase,
+  verifyManualQrPayment,
 } from "@/services/supabaseSync";
 import {
   DEFAULT_HERO_SETTINGS,
@@ -273,6 +274,11 @@ interface StoreContextValue {
     riderPhone: string
   ) => Promise<void>;
   verifyCodOrderPhone: (orderId: string) => Promise<void>;
+  verifyManualQrPayment: (
+    orderId: string,
+    action: "verify_confirm" | "reject_mismatch",
+    note?: string
+  ) => Promise<boolean>;
   resolvePaymentAttempt: (
     attemptId: string,
     resolution: "refunded" | "dismissed",
@@ -1208,6 +1214,47 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     showToast(`Phone verified for order! Status changed to CONFIRMED.`);
   };
 
+  const verifyManualQrPaymentAction = async (
+    orderId: string,
+    action: "verify_confirm" | "reject_mismatch",
+    note?: string
+  ): Promise<boolean> => {
+    const res = await verifyManualQrPayment(orderId, action, note);
+    if (!res.success) {
+      showToast(res.error || "Failed to update payment status on server.");
+      return false;
+    }
+
+    setOrders((prev) =>
+      prev.map((ord) => {
+        if (ord.id !== orderId) return ord;
+        if (action === "verify_confirm") {
+          return {
+            ...ord,
+            paymentStatus: "paid",
+            orderStatus: "confirmed",
+            advancePaid: ord.totalAmount,
+            dueAmount: 0,
+            manualPayVerifiedAt: new Date().toISOString(),
+          };
+        } else {
+          return {
+            ...ord,
+            paymentStatus: "failed",
+            manualPayRejectReason: note || "Transaction ID mismatch",
+          };
+        }
+      })
+    );
+
+    showToast(
+      action === "verify_confirm"
+        ? "পেমেন্ট সফলভাবে যাচাই ও অর্ডার নিশ্চিত করা হয়েছে!"
+        : "পেমেন্ট বাতিল (Rejected) হিসেবে চিহ্নিত করা হয়েছে।"
+    );
+    return true;
+  };
+
   const resolvePaymentAttempt = async (
     attemptId: string,
     resolution: "refunded" | "dismissed",
@@ -1864,6 +1911,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         adjustOrderWeightAndBill,
         assignOrderLogistics,
         verifyCodOrderPhone,
+        verifyManualQrPayment: verifyManualQrPaymentAction,
         resolvePaymentAttempt,
         addProduct,
         updateProduct,

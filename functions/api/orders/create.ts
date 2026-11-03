@@ -25,8 +25,12 @@ const createOrderBodySchema = z.object({
   customerAddress: z.string().trim().min(8, "Please provide your full delivery address").max(350),
   customerNote: z.string().trim().max(300).optional().nullable(),
   couponCode: z.string().trim().max(40).optional().nullable(),
-  paymentMethod: z.enum(["bkash", "nagad", "cod"]),
+  paymentMethod: z.enum(["bkash", "nagad", "cod", "qr_pay"]),
   paymentPlan: z.enum(["full", "advance", "cod"]),
+  manualPayChannel: z.enum(["bkash", "nagad", "card_bank", "upay", "other"]).optional().nullable(),
+  manualPaySender: z.string().trim().max(60).optional().nullable(),
+  manualPayTrxId: z.string().trim().max(60).optional().nullable(),
+  manualPayProofUrl: z.string().trim().max(1000000).optional().nullable(),
   items: z
     .array(
       z.object({
@@ -68,6 +72,28 @@ export const onRequestPost = async (ctx: PagesContext): Promise<Response> => {
     p_idempotency_key: d.idempotencyKey || null,
     p_client_ip_hash: ctx.data.ipHash ?? null,
   });
+
+  if (d.paymentMethod === "qr_pay" && (d.manualPayTrxId || d.manualPaySender)) {
+    const orderId = (order as any)?.id || (order as any)?.orderId;
+    const orderCode = (order as any)?.orderCode;
+    if (orderId && orderCode) {
+      try {
+        await rpc(cfg, "submit_manual_qr_payment_proof", {
+          p_order_id: orderId,
+          p_order_code: orderCode,
+          p_channel: d.manualPayChannel || "other",
+          p_sender: d.manualPaySender || d.customerPhone,
+          p_trx_id: d.manualPayTrxId || "",
+          p_proof_url: d.manualPayProofUrl || null,
+        });
+        (order as any).paymentStatus = "review_pending";
+        (order as any).manualPayTrxId = d.manualPayTrxId;
+        (order as any).manualPayChannel = d.manualPayChannel;
+      } catch (proofErr) {
+        console.error("submit_manual_qr_payment_proof warning:", proofErr);
+      }
+    }
+  }
 
   return json({ success: true, order }, 201);
 };

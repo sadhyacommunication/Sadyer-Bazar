@@ -1,8 +1,8 @@
 export type DeliveryZone = "inside_dhaka" | "outside_dhaka";
 
-export type PaymentMethod = "bkash" | "nagad" | "sslcommerz" | "cod";
+export type PaymentMethod = "bkash" | "nagad" | "sslcommerz" | "cod" | "qr_pay";
 
-export type ActiveCheckoutPaymentMethod = "bkash" | "nagad" | "cod";
+export type ActiveCheckoutPaymentMethod = "cod" | "qr_pay";
 
 export type PaymentPlan = "full" | "advance" | "cod";
 
@@ -11,7 +11,8 @@ export type PaymentStatus =
   | "advance_paid"
   | "paid"
   | "failed"
-  | "refunded";
+  | "refunded"
+  | "review_pending";
 
 export type OrderStatus =
   | "pending"
@@ -51,6 +52,10 @@ export interface SiteSettings {
   bkashEnabled: boolean;
   bkashAppKey?: string;
   codEnabled: boolean;
+  // Bangla QR Scan & Pay Configuration
+  qrPaymentEnabled?: boolean;
+  qrCodeImageUrl?: string;
+  qrMerchantName?: string;
   updatedAt: string;
 }
 
@@ -190,6 +195,14 @@ export interface Order {
   orderStatus: OrderStatus;
   hasPreorderItems: boolean;
   transactionId?: string;
+  // Manual Bangla QR Payment & Anti-Hacker Verification Details
+  manualPayChannel?: "bkash" | "nagad" | "card_bank" | "upay" | "other";
+  manualPaySender?: string;
+  manualPayTrxId?: string;
+  manualPayProofUrl?: string;
+  manualPayVerifiedAt?: string;
+  manualPayVerifiedBy?: string;
+  manualPayRejectReason?: string;
   courierName?: string;
   trackingReference?: string;
   riderName?: string;
