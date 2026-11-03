@@ -745,113 +745,51 @@ export default function CheckoutPage() {
                 </p>
               </button>
 
-              {/* 2. bKash (Kept On Hold) */}
-              {settings.bkashEnabled ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPaymentMethod("bkash");
-                    if (paymentPlan === "cod") setPaymentPlan("full");
-                  }}
-                  className={`p-2.5 sm:p-4 rounded-2xl border-2 text-left transition cursor-pointer space-y-1 sm:space-y-1.5 ${
-                    paymentMethod === "bkash"
-                      ? "border-pink-600 bg-pink-50/60 shadow-xs"
-                      : "border-stone-200 hover:border-stone-300"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-[#E2136E] text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
-                      Merchant PGW
-                    </span>
-                    <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#E2136E]" />
-                  </div>
-                  <p className="text-xs font-bold text-stone-900">
-                    bKash (বিকাশ)
-                  </p>
-                  <p className="text-[10px] sm:text-[11px] text-stone-600 font-semibold truncate">
-                    অফিসিয়াল টোকেনাইজড পেমেন্ট
-                  </p>
-                  <p className="text-[9px] sm:text-[10px] text-stone-400 truncate">
-                    অটোমেটিক সার্ভার ভেরিফাইড
-                  </p>
-                </button>
-              ) : (
-                <div
-                  aria-disabled="true"
-                  title="bKash online gateway is currently on hold"
-                  className="p-2.5 sm:p-4 rounded-2xl border-2 border-dashed border-stone-200 bg-stone-50/70 text-left opacity-60 cursor-not-allowed space-y-1 sm:space-y-1.5 select-none"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-stone-400 text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
-                      On Hold
-                    </span>
-                    <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#E2136E]/60" />
-                  </div>
-                  <p className="text-xs font-bold text-stone-600">
-                    bKash (বিকাশ)
-                  </p>
-                  <p className="text-[10px] sm:text-[11px] text-stone-400 truncate">
-                    মার্চেন্ট গেটওয়ে
-                  </p>
-                  <p className="text-[9px] sm:text-[10px] text-amber-700 font-medium truncate">
-                    সাময়িকভাবে স্থগিত (On Hold)
-                  </p>
+              {/* 2. bKash (Disabled On Hold like SSLCommerz) */}
+              <div
+                aria-disabled="true"
+                title="bKash online gateway is currently on hold"
+                className="p-2.5 sm:p-4 rounded-2xl border-2 border-dashed border-stone-200 bg-stone-50/70 text-left opacity-60 cursor-not-allowed space-y-1 sm:space-y-1.5 select-none"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-stone-400 text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
+                    On Hold
+                  </span>
+                  <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#E2136E]/60" />
                 </div>
-              )}
+                <p className="text-xs font-bold text-stone-500">
+                  bKash (বিকাশ)
+                </p>
+                <p className="text-[10px] sm:text-[11px] text-stone-400 truncate">
+                  মার্চেন্ট গেটওয়ে
+                </p>
+                <p className="text-[9px] sm:text-[10px] text-amber-700/90 font-medium truncate">
+                  সাময়িকভাবে স্থগিত (On Hold)
+                </p>
+              </div>
 
-              {/* 3. Nagad (Kept On Hold) */}
-              {settings.nagadEnabled ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPaymentMethod("nagad");
-                    if (paymentPlan === "cod") setPaymentPlan("full");
-                  }}
-                  className={`p-2.5 sm:p-4 rounded-2xl border-2 text-left transition cursor-pointer space-y-1 sm:space-y-1.5 ${
-                    paymentMethod === "nagad"
-                      ? "border-orange-500 bg-orange-50/60 shadow-xs"
-                      : "border-stone-200 hover:border-stone-300"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-[#F7931E] text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
-                      Merchant PGW
-                    </span>
-                    <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F7931E]" />
-                  </div>
-                  <p className="text-xs font-bold text-stone-900">
-                    Nagad (নগদ)
-                  </p>
-                  <p className="text-[10px] sm:text-[11px] text-stone-600 font-semibold truncate">
-                    অফিসিয়াল মার্চেন্ট গেটওয়ে
-                  </p>
-                  <p className="text-[9px] sm:text-[10px] text-stone-400 truncate">
-                    RSA ক্রিপ্টোগ্রাফিক ভেরিফাইড
-                  </p>
-                </button>
-              ) : (
-                <div
-                  aria-disabled="true"
-                  title="Nagad online gateway is currently on hold"
-                  className="p-2.5 sm:p-4 rounded-2xl border-2 border-dashed border-stone-200 bg-stone-50/70 text-left opacity-60 cursor-not-allowed space-y-1 sm:space-y-1.5 select-none"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-stone-400 text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
-                      On Hold
-                    </span>
-                    <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F7931E]/60" />
-                  </div>
-                  <p className="text-xs font-bold text-stone-600">
-                    Nagad (নগদ)
-                  </p>
-                  <p className="text-[10px] sm:text-[11px] text-stone-400 truncate">
-                    মার্চেন্ট গেটওয়ে
-                  </p>
-                  <p className="text-[9px] sm:text-[10px] text-amber-700 font-medium truncate">
-                    সাময়িকভাবে স্থগিত (On Hold)
-                  </p>
+              {/* 3. Nagad (Disabled On Hold like SSLCommerz) */}
+              <div
+                aria-disabled="true"
+                title="Nagad online gateway is currently on hold"
+                className="p-2.5 sm:p-4 rounded-2xl border-2 border-dashed border-stone-200 bg-stone-50/70 text-left opacity-60 cursor-not-allowed space-y-1 sm:space-y-1.5 select-none"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-stone-400 text-white text-[9px] sm:text-[10px] font-extrabold uppercase">
+                    On Hold
+                  </span>
+                  <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F7931E]/60" />
                 </div>
-              )}
+                <p className="text-xs font-bold text-stone-500">
+                  Nagad (নগদ)
+                </p>
+                <p className="text-[10px] sm:text-[11px] text-stone-400 truncate">
+                  মার্চেন্ট গেটওয়ে
+                </p>
+                <p className="text-[9px] sm:text-[10px] text-amber-700/90 font-medium truncate">
+                  সাময়িকভাবে স্থগিত (On Hold)
+                </p>
+              </div>
 
               {/* 4. SSLCommerz (Kept On Hold) */}
               <div
