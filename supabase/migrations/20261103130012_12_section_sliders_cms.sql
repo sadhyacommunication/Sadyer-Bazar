@@ -14,7 +14,30 @@
 -- =============================================================================
 BEGIN;
 
--- 1. Tables
+-- 1. Helper Link Validators (Support anchor hashes e.g. #dept-heritage-rice)
+CREATE OR REPLACE FUNCTION public.sb_section_valid_link(p text)
+RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
+  SELECT p IS NOT NULL
+     AND length(p) <= 300
+     AND (
+          p = ''
+       OR p ~ '^#[A-Za-z0-9_-]+$'
+       OR (p ~ '^/[A-Za-z0-9._~%/?#&=+@:,;!$()*-]*$' AND p !~ '^//')
+       OR p ~ '^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~%/?#&=+@:,;!$()*-]*)?$'
+     )
+$$;
+
+-- Keep sb_hero_valid_link backward compatible while supporting anchors as well
+CREATE OR REPLACE FUNCTION public.sb_hero_valid_link(p text)
+RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
+  SELECT public.sb_section_valid_link(p);
+$$;
+
+-- Drop obsolete constraints if table already exists from previous runs
+ALTER TABLE IF EXISTS public.section_slides DROP CONSTRAINT IF EXISTS section_slides_pairing_target_href_check;
+ALTER TABLE IF EXISTS public.section_slides DROP CONSTRAINT IF EXISTS section_slides_cta_link_check;
+
+-- 2. Tables
 CREATE TABLE IF NOT EXISTS public.section_slides (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   section_id            text NOT NULL CHECK (section_id IN ('dept_jamuna_fish', 'dept_village_chicken', 'dept_heritage_rice', 'dept_ghee_doi')),
@@ -34,10 +57,10 @@ CREATE TABLE IF NOT EXISTS public.section_slides (
   highlights            jsonb NOT NULL DEFAULT '[]'::jsonb
                         CHECK (jsonb_typeof(highlights) = 'array' AND jsonb_array_length(highlights) <= 6),
   pairing_tip_text      text NOT NULL DEFAULT '' CHECK (char_length(pairing_tip_text) <= 200),
-  pairing_target_href   text NOT NULL DEFAULT '' CHECK (public.sb_hero_valid_link(pairing_target_href)),
+  pairing_target_href   text NOT NULL DEFAULT '' CHECK (public.sb_section_valid_link(pairing_target_href)),
   pairing_target_label  text NOT NULL DEFAULT '' CHECK (char_length(pairing_target_label) <= 80),
   cta_text              text NOT NULL DEFAULT '' CHECK (char_length(cta_text) <= 60),
-  cta_link              text NOT NULL DEFAULT '' CHECK (public.sb_hero_valid_link(cta_link)),
+  cta_link              text NOT NULL DEFAULT '' CHECK (public.sb_section_valid_link(cta_link)),
   banner_layout         text NOT NULL DEFAULT 'default' CHECK (banner_layout IN ('default', 'reversed')),
   starts_at             timestamptz,
   ends_at               timestamptz,
@@ -45,6 +68,26 @@ CREATE TABLE IF NOT EXISTS public.section_slides (
   updated_at            timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT section_slides_schedule_chk CHECK (starts_at IS NULL OR ends_at IS NULL OR ends_at > starts_at)
 );
+
+-- Ensure constraints exist if table already pre-existed
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'section_slides_pairing_target_href_check'
+  ) THEN
+    ALTER TABLE public.section_slides
+      ADD CONSTRAINT section_slides_pairing_target_href_check
+      CHECK (public.sb_section_valid_link(pairing_target_href));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'section_slides_cta_link_check'
+  ) THEN
+    ALTER TABLE public.section_slides
+      ADD CONSTRAINT section_slides_cta_link_check
+      CHECK (public.sb_section_valid_link(cta_link));
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_section_slides_lookup
   ON public.section_slides (section_id, sort_order, created_at);
@@ -383,11 +426,11 @@ BEGIN
   IF char_length(v_subtext) > 450 THEN PERFORM public.sb_fail('Bengali Subtext is too long (max 450)'); END IF;
   IF char_length(v_desc_en) > 450 THEN PERFORM public.sb_fail('English Description is too long (max 450)'); END IF;
   IF char_length(v_origin) > 120 THEN PERFORM public.sb_fail('Origin location is too long (max 120)'); END IF;
-  IF NOT public.sb_hero_valid_link(v_cta_link) THEN
-    PERFORM public.sb_fail('Button link must be a safe route (e.g. /shop) or https address');
+  IF NOT public.sb_section_valid_link(v_cta_link) THEN
+    PERFORM public.sb_fail('Button link must be a safe route (e.g. /shop), anchor (#section), or https address');
   END IF;
-  IF NOT public.sb_hero_valid_link(v_tip_href) THEN
-    PERFORM public.sb_fail('Pairing link must be a safe route or https address');
+  IF NOT public.sb_section_valid_link(v_tip_href) THEN
+    PERFORM public.sb_fail('Pairing link must be a safe route, anchor (#section), or https address');
   END IF;
   IF v_layout NOT IN ('default', 'reversed') THEN
     v_layout := 'default';
@@ -629,6 +672,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION public.sb_section_valid_link(text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.sb_hero_valid_link(text) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_section_save_slide TO authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_section_delete_slide TO authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_section_reorder TO authenticated;
