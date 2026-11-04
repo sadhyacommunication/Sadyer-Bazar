@@ -127,7 +127,9 @@ export const onRequest = async (ctx: PagesContext): Promise<Response> => {
       response = errorResponse(err.status, err.code, err.message);
     } else if (err instanceof ConfigError) {
       console.error(`[config] request=${requestId} ${err.message}`);
-      response = errorResponse(503, "service_unavailable", "Service temporarily unavailable");
+      response = errorResponse(503, "service_unavailable", "Service temporarily unavailable", {
+        "X-Config-Error": err.message,
+      });
     } else {
       console.error(`[api] request=${requestId} unhandled:`, err instanceof Error ? err.stack ?? err.message : err);
       response = errorResponse(500, "internal_error", "Something went wrong. Please try again.");

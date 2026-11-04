@@ -27,7 +27,7 @@ run_worker_first = ["/api/*"]
 [vars]
 APP_ENV = "production"
 PAYMENT_MODE = "live"
-NEXT_PUBLIC_SITE_URL = "https://sadhyerbazar.com"
+NEXT_PUBLIC_SITE_URL = "https://sadhyarbazar.com"
 NEXT_PUBLIC_SUPABASE_URL = "https://uqyjtlndgnvfqjcdwbop.supabase.co"
 IP_HASH_SALT = "sb-prod-edge-rate-limit-salt-v2-2026"
 ALLOWED_ORIGINS = "https://sadhyarbazar.com,https://www.sadhyarbazar.com,https://sadhyerbazar.com,https://www.sadhyerbazar.com,https://sadyerbazar.com,https://www.sadyerbazar.com"
