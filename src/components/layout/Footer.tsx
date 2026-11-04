@@ -560,7 +560,9 @@ export default function Footer() {
         title="Chat with Sadhyer Bazar on WhatsApp"
       >
         <MessageCircle className="w-4 h-4 fill-current shrink-0" />
-        <span className="tabular-nums">{settings.supportPhone}</span>
+        <span className="tabular-nums">
+          WhatsApp: 0{settings.whatsappNumber.replace(/^88/, "")}
+        </span>
       </a>
 
       {/* Mobile Sticky Bottom Thumb Navigation Dock (When Cart is Empty & not on checkout or PDP) */}

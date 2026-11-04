@@ -470,6 +470,10 @@ export async function upsertSettingsToSupabase(
     nagad_enabled: settings.nagadEnabled ?? true,
     bkash_enabled: settings.bkashEnabled ?? true,
     cod_enabled: settings.codEnabled ?? true,
+    qr_payment_enabled: settings.qrPaymentEnabled ?? true,
+    qr_code_image_url:
+      settings.qrCodeImageUrl || "/images/payments/sadhyer-bazar-qr.jpg",
+    qr_merchant_name: settings.qrMerchantName || "Sadhyer Bazar",
     announcement_en: settings.announcementEn,
     announcement_bn: settings.announcementBn,
     updated_at: new Date().toISOString(),
@@ -481,8 +485,20 @@ export async function upsertSettingsToSupabase(
     .eq("id", 1);
 
   if (error && /column.*does not exist/i.test(error.message)) {
-    // If migration 09 hasn't run yet in Supabase, fallback to base columns
-    const { brand_name_en, brand_name_bn, slogan_en, slogan_bn, logo_url, logo_mode, favicon_url, ...basePayload } = safePayload;
+    // If migration 09/11 hasn't run yet in Supabase, fallback to base columns
+    const {
+      brand_name_en,
+      brand_name_bn,
+      slogan_en,
+      slogan_bn,
+      logo_url,
+      logo_mode,
+      favicon_url,
+      qr_payment_enabled,
+      qr_code_image_url,
+      qr_merchant_name,
+      ...basePayload
+    } = safePayload;
     const { error: baseErr } = await supabase
       .from("site_settings")
       .update(basePayload)
@@ -985,6 +1001,19 @@ export async function verifyManualQrPayment(
   action: "verify_confirm" | "reject_mismatch",
   note?: string
 ): Promise<{ success: boolean; error?: string }> {
+  try {
+    const edgeRes = await executeAdminActionViaEdgeApi({
+      action: "verify_manual_qr_payment",
+      orderId,
+      verificationAction: action,
+      note,
+    });
+    if (edgeRes.success) return { success: true };
+    if (edgeRes.error) return { success: false, error: edgeRes.error };
+  } catch (edgeErr) {
+    console.warn("[verifyManualQrPayment] Edge API fallback to direct RPC:", edgeErr);
+  }
+
   const supabase = getSupabaseClient();
   if (!supabase) return { success: false, error: "Database not connected" };
 
@@ -1024,7 +1053,7 @@ export async function quoteOrderViaEdgeApi(input: {
   }[];
   deliveryZone: Order["deliveryZone"];
   couponCode?: string;
-  paymentMethod: "bkash" | "nagad" | "cod";
+  paymentMethod: "bkash" | "nagad" | "cod" | "qr_pay";
   paymentPlan: "full" | "advance" | "cod";
 }): Promise<{
   success: boolean;
@@ -1314,6 +1343,12 @@ export type AdminEdgeActionPayload =
       action: "resolve_attempt";
       attemptId: string;
       resolution: "refunded" | "dismissed";
+      note?: string;
+    }
+  | {
+      action: "verify_manual_qr_payment";
+      orderId: string;
+      verificationAction: "verify_confirm" | "reject_mismatch";
       note?: string;
     };
 

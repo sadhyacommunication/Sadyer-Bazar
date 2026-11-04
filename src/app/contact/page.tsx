@@ -66,7 +66,7 @@ export default function ContactPage() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
-  const cleanPhone = settings.supportPhone.replace(/[^0-9]/g, "");
+  const cleanPhone = settings.supportPhone.split("-")[0].replace(/\D/g, "");
   const cleanWhatsapp = settings.whatsappNumber.replace(/[^0-9]/g, "");
 
   const handleInputChange = (

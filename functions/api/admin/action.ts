@@ -85,6 +85,12 @@ const actionSchema = z.discriminatedUnion("action", [
     note: z.string().trim().max(200).optional().default(""),
   }),
   z.object({
+    action: z.literal("verify_manual_qr_payment"),
+    orderId: z.string().trim().min(1).max(80),
+    verificationAction: z.enum(["verify_confirm", "reject_mismatch"]),
+    note: z.string().trim().max(300).optional().default(""),
+  }),
+  z.object({
     action: z.literal("hero_save_slide"),
     slide: heroSlideInputSchema,
   }),
@@ -216,6 +222,15 @@ export const onRequestPost = async (ctx: PagesContext): Promise<Response> => {
         p_actor: admin.userId,
       });
       return json({ success: true });
+    }
+    case "verify_manual_qr_payment": {
+      const result = await rpc(cfg, "admin_verify_manual_qr_payment", {
+        p_order_id: d.orderId,
+        p_action: d.verificationAction,
+        p_actor: admin.userId,
+        p_note: d.note || null,
+      });
+      return json({ success: true, result });
     }
     case "hero_save_slide": {
       const result = await rpc<{ slide: unknown; orphanedImageUrl?: string | null }>(

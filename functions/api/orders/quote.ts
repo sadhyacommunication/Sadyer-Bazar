@@ -22,7 +22,7 @@ const quoteSchema = z.object({
     .max(30),
   deliveryZone: z.enum(["inside_dhaka", "outside_dhaka"]),
   couponCode: z.string().trim().max(40).optional().nullable(),
-  paymentMethod: z.enum(["bkash", "nagad", "cod"]),
+  paymentMethod: z.enum(["bkash", "nagad", "cod", "qr_pay"]),
   paymentPlan: z.enum(["full", "advance", "cod"]),
 });
 

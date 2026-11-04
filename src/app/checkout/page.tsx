@@ -977,7 +977,7 @@ export default function CheckoutPage() {
                       <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white border border-stone-200/80">
                         <span className="w-5 h-5 rounded-full bg-[#0F3D2E] text-white text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">১</span>
                         <div className="leading-snug">
-                          <strong>অ্যাপ খুলুন ও স্ক্যান করুন:</strong> বিকাশ, নগদ বা ব্যাংক অ্যাপ (CityTouch, CellFin, EBL ইত্যাদি) ওপেন করে <strong>"স্ক্যান QR"</strong> অপশন সিলেক্ট করে কোডটি স্ক্যান করুন (মোবাইলে হলে ওপরের বাটন দিয়ে কিউআর ছবি ডাউনলোড করে গ্যালারি থেকে স্ক্যান করুন)।
+                          <strong>অ্যাপ খুলুন ও স্ক্যান করুন:</strong> বিকাশ, নগদ বা ব্যাংক অ্যাপ (CityTouch, CellFin, EBL ইত্যাদি) ওপেন করে <strong>&ldquo;স্ক্যান QR&rdquo;</strong> অপশন সিলেক্ট করে কোডটি স্ক্যান করুন (মোবাইলে হলে ওপরের বাটন দিয়ে কিউআর ছবি ডাউনলোড করে গ্যালারি থেকে স্ক্যান করুন)।
                         </div>
                       </div>
 

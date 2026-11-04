@@ -47,18 +47,19 @@ await db.exec(`
    VALUES ('c1','SAVE10','10%','percentage',10,100);
   UPDATE site_settings SET inside_dhaka_fee=70, outside_dhaka_fee=130, free_delivery_threshold=3000, preorder_advance_percent=25;
 `);
-for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown", "06_hero_cms", "07_preorder_settings"]) {
+for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown", "06_hero_cms", "07_preorder_settings", "08_admin_orders_resilience", "09_brand_identity", "10_payment_gateways_on_hold", "11_qr_payment_verification", "12_section_sliders_cms", "13_qr_quote_and_tracking_fix"]) {
   const file = fs.readdirSync(`${root}/migrations`).find((n) => n.includes(f));
   try { await db.exec(read(`migrations/${file}`)); console.log(`applied ${file}`); }
   catch (e) { console.log(`MIGRATION FAILED ${file}: ${e.message}`); process.exit(2); }
 }
-await db.exec("UPDATE coupons SET max_uses = 2 WHERE id = 'c1'");
+await db.exec("UPDATE coupons SET max_uses = 2 WHERE id = 'c1'; UPDATE site_settings SET bkash_enabled = true, nagad_enabled = true;");
 // idempotency: re-running every migration must succeed too
-for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown", "06_hero_cms", "07_preorder_settings"]) {
+for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown", "06_hero_cms", "07_preorder_settings", "08_admin_orders_resilience", "09_brand_identity", "10_payment_gateways_on_hold", "11_qr_payment_verification", "12_section_sliders_cms", "13_qr_quote_and_tracking_fix"]) {
   const file = fs.readdirSync(`${root}/migrations`).find((n) => n.includes(f));
   try { await db.exec(read(`migrations/${file}`)); } catch (e) { check(`re-run ${file}`, false, e.message); }
 }
 check("all migrations re-runnable (idempotent)", true);
+await db.exec("UPDATE coupons SET max_uses = 2 WHERE id = 'c1'; UPDATE site_settings SET bkash_enabled = true, nagad_enabled = true;");
 
 // ---- helpers ----------------------------------------------------------------------------------
 async function as(role, sql, params = [], sub = null) {
@@ -134,6 +135,11 @@ check("idempotency key bound to phone", !o3.ok, o3.err);
 // advance plan
 const adv = await mkOrder({ plan: "advance", method: "bkash", items: items("v-fish-1", 4) });  // 2000+70 ; 25% of 2000=500
 check("advance payable = max(fee, 25% of discounted subtotal) = 500", adv.ok && Number(adv.r.payableNow) === 500 && Number(adv.r.totalAmount) === 2070, adv.ok ? adv.r.payableNow : adv.err);
+
+// qr_pay order
+const qrPhone = "01713479999";
+const qrOrd = await mkOrder({ method: "qr_pay", plan: "full", phone: qrPhone, items: items("v-fish-1", 1) });
+check("qr_pay order created (1 x 500 + 70 = 570)", qrOrd.ok && Number(qrOrd.r.totalAmount) === 570 && Number(qrOrd.r.payableNow) === 570, qrOrd.err);
 
 // ---- 3. Payment flow ----------------------------------------------------------------------------
 console.log("\n=== payment flow ===");
@@ -252,6 +258,8 @@ tr = await fn("track_order_server", full.orderCode, "0000");
 check("track: wrong last4 -> null (no oracle)", tr.ok && tr.r === null);
 tr = await fn("track_order_server", "SB-0000-AAAAAAAAAA", "1234");
 check("track: unknown code -> null", tr.ok && tr.r === null);
+let trQr = await fn("track_order_server", qrOrd.r.orderCode, qrPhone.slice(-4));
+check("track: qr_pay order returns manualPay fields", trQr.ok && trQr.r && "manualPayChannel" in trQr.r);
 
 let last;
 for (let i = 0; i < 4; i++) last = await fn("rate_limit_hit", "t:bucket", 60, 3);

@@ -1063,6 +1063,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     const now = new Date().toISOString();
 
+    const prevStatus = target.orderStatus;
+    const prevUpdatedAt = target.updatedAt;
+
     // 1. Optimistic immediate state update (so UI changes instantly!)
     setOrders((prev) =>
       prev.map((o) =>
@@ -1102,6 +1105,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       });
       if (!res.success) {
         console.warn("[StoreContext] Server sync notice:", res.error);
+        // Rollback optimistic update on server rejection
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === target.id || o.orderCode === target.orderCode
+              ? { ...o, orderStatus: prevStatus, updatedAt: prevUpdatedAt }
+              : o
+          )
+        );
+        saveOrderStatusOverride(target.orderCode, {
+          orderCode: target.orderCode,
+          orderStatus: prevStatus,
+          updatedAt: prevUpdatedAt,
+        });
+        broadcastOrderChange({
+          orderCode: target.orderCode,
+          status: prevStatus,
+          updatedAt: prevUpdatedAt,
+        });
+        showToast(res.error || "Server rejected order status change.");
       }
     } catch (err) {
       console.warn("[StoreContext] Edge sync error:", err);
@@ -1116,6 +1138,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   ) => {
     const target = orders.find((o) => o.id === orderId || o.orderCode === orderId);
     if (!target) return;
+
+    const prevPaymentStatus = target.paymentStatus;
+    const prevAdvance = target.advancePaid;
+    const prevDue = target.dueAmount;
+    const prevTrxId = target.transactionId;
+    const prevUpdatedAt = target.updatedAt;
 
     const nextAdvance =
       advancePaid !== undefined
@@ -1179,6 +1207,36 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       });
       if (!res.success) {
         console.warn("[StoreContext] Payment sync notice:", res.error);
+        // Rollback optimistic update
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === target.id || o.orderCode === target.orderCode
+              ? {
+                  ...o,
+                  paymentStatus: prevPaymentStatus,
+                  advancePaid: prevAdvance,
+                  dueAmount: prevDue,
+                  transactionId: prevTrxId,
+                  updatedAt: prevUpdatedAt,
+                }
+              : o
+          )
+        );
+        saveOrderStatusOverride(target.orderCode, {
+          orderCode: target.orderCode,
+          paymentStatus: prevPaymentStatus,
+          advancePaid: prevAdvance,
+          dueAmount: prevDue,
+          updatedAt: prevUpdatedAt,
+        });
+        broadcastOrderChange({
+          orderCode: target.orderCode,
+          paymentStatus: prevPaymentStatus,
+          advancePaid: prevAdvance,
+          dueAmount: prevDue,
+          updatedAt: prevUpdatedAt,
+        });
+        showToast(res.error || "Server rejected payment status change.");
       }
     } catch (err) {
       console.warn("[StoreContext] Payment sync error:", err);
