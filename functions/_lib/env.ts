@@ -142,13 +142,18 @@ export function loadConfig(env: Env, requestUrl: string): Config {
   }
 
   // Browser origins allowed to call the API
-  const origins = new Set<string>([siteOrigin]);
+  const origins = new Set<string>([
+    siteOrigin,
+    "https://sadhyarbazar.com",
+    "https://www.sadhyarbazar.com",
+    "https://sadhyerbazar.com",
+    "https://www.sadhyerbazar.com",
+    "https://sadyerbazar.com",
+    "https://www.sadyerbazar.com",
+  ]);
   try {
     const reqUrl = new URL(requestUrl);
-    if (
-      reqUrl.protocol === "https:" &&
-      (reqUrl.hostname.endsWith(".workers.dev") || reqUrl.hostname.endsWith(".pages.dev"))
-    ) {
+    if (reqUrl.protocol === "https:") {
       origins.add(reqUrl.origin);
     }
   } catch {

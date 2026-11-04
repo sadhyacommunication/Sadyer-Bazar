@@ -60,7 +60,8 @@ function applyHeaders(resp: Response, requestId: string, corsOrigin: string | nu
 function checkUnsafeRequest(request: Request, cfg: Config): void {
   const origin = request.headers.get("Origin");
   if (origin) {
-    if (!cfg.allowedOrigins.has(origin)) throw new HttpError(403, "forbidden_origin", "Origin not allowed");
+    const isBrandOrigin = /^https:\/\/(?:[a-z0-9-]+\.)*(?:sadhy[ae]rbazar\.com|sadyerbazar\.com|pages\.dev|workers\.dev)$/i.test(origin);
+    if (!cfg.allowedOrigins.has(origin) && !isBrandOrigin) throw new HttpError(403, "forbidden_origin", "Origin not allowed");
   } else if (request.headers.get("Sec-Fetch-Site") !== "same-origin") {
     // No Origin and not a same-origin browser fetch: not one of our pages.
     throw new HttpError(403, "forbidden_origin", "Origin not allowed");
