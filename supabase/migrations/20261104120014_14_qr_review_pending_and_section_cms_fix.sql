@@ -412,6 +412,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.admin_section_reorder(uuid, text, uuid[]);
 CREATE OR REPLACE FUNCTION public.admin_section_reorder(
   p_actor      uuid,
   p_section_id text,
@@ -541,6 +542,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.admin_section_reset_defaults(uuid, text);
 CREATE OR REPLACE FUNCTION public.admin_section_reset_defaults(
   p_actor      uuid,
   p_section_id text DEFAULT NULL
