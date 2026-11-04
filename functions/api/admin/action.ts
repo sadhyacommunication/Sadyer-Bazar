@@ -91,6 +91,10 @@ const actionSchema = z.discriminatedUnion("action", [
     note: z.string().trim().max(300).optional().default(""),
   }),
   z.object({
+    action: z.literal("sync_resilient_order"),
+    order: z.record(z.unknown()),
+  }),
+  z.object({
     action: z.literal("hero_save_slide"),
     slide: heroSlideInputSchema,
   }),
@@ -229,6 +233,13 @@ export const onRequestPost = async (ctx: PagesContext): Promise<Response> => {
         p_action: d.verificationAction,
         p_actor: admin.userId,
         p_note: d.note || null,
+      });
+      return json({ success: true, result });
+    }
+    case "sync_resilient_order": {
+      const result = await rpc(cfg, "admin_sync_resilient_order", {
+        p_actor: admin.userId,
+        p_order: d.order,
       });
       return json({ success: true, result });
     }

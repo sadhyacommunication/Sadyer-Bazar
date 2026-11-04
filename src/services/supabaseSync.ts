@@ -955,8 +955,8 @@ export async function createOrderViaEdgeApi(
       };
     }
 
-    // Resilient fallback for Cash on Delivery or QR pay when edge API is unavailable
-    if (input.paymentMethod === "cod" || input.paymentMethod === "qr_pay") {
+    // Only fallback to resilient offline COD/QR if server error >= 500 (edge outage)
+    if (res.status >= 500 && (input.paymentMethod === "cod" || input.paymentMethod === "qr_pay")) {
       const fallbackOrder = buildResilientCodOrder(input);
       return { success: true, order: fallbackOrder };
     }
@@ -1336,6 +1336,10 @@ export type AdminEdgeActionPayload =
       orderId: string;
       verificationAction: "verify_confirm" | "reject_mismatch";
       note?: string;
+    }
+  | {
+      action: "sync_resilient_order";
+      order: Record<string, unknown>;
     };
 
 export async function executeAdminActionViaEdgeApi(
@@ -1493,86 +1497,20 @@ export async function fetchAuthenticatedAdminDataFromSupabase(): Promise<{
 export async function syncOrderToSupabase(
   order: Order
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = getSupabaseClient();
-  if (!supabase) {
-    return { success: false, error: "Database client is not available" };
-  }
-
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData?.session) {
+    const edgeRes = await executeAdminActionViaEdgeApi({
+      action: "sync_resilient_order",
+      order: order as unknown as Record<string, unknown>,
+    });
+
+    if (!edgeRes.success) {
       return {
         success: false,
-        error: "Admin authentication required to sync orders to the database.",
+        error: edgeRes.error || "Failed to sync order to database",
       };
     }
 
-    const orderRow = {
-      id: order.id,
-      order_code: order.orderCode,
-      customer_name: order.customerName,
-      customer_phone: order.customerPhone,
-      delivery_zone: order.deliveryZone,
-      customer_district: order.customerDistrict,
-      customer_address: order.customerAddress,
-      customer_note: order.customerNote || null,
-      subtotal: order.subtotal,
-      delivery_charge: order.deliveryCharge,
-      discount_amount: order.discountAmount,
-      coupon_code: order.couponCode || null,
-      weight_adjustment_amount: order.weightAdjustmentAmount || 0,
-      weight_adjustment_note: order.weightAdjustmentNote || null,
-      total_amount: order.totalAmount,
-      advance_paid: order.advancePaid || 0,
-      due_amount: order.dueAmount,
-      payment_method: order.paymentMethod,
-      payment_plan: order.paymentPlan,
-      payment_status: order.paymentStatus,
-      order_status: order.orderStatus,
-      has_preorder_items: order.hasPreorderItems,
-      transaction_id: order.transactionId || null,
-      courier_name: order.courierName || null,
-      tracking_reference: order.trackingReference || null,
-      rider_name: order.riderName || null,
-      rider_phone: order.riderPhone || null,
-      items: order.items,
-      created_at: order.createdAt,
-      updated_at: order.updatedAt,
-    };
-
-    // 1. Upsert into public.orders
-    const { error: ordErr } = await supabase.from("orders").upsert(orderRow);
-    if (ordErr) {
-      console.error("[syncOrderToSupabase] orders table error:", ordErr);
-      return { success: false, error: ordErr.message };
-    }
-
-    // 2. Upsert into public.order_items if items exist
-    if (Array.isArray(order.items) && order.items.length > 0) {
-      const itemsRows = order.items.map((i, idx) => ({
-        id: i.id || `${order.id}-item-${idx}`,
-        order_id: order.id,
-        product_id: i.productId,
-        variant_id: i.variantId,
-        product_title: i.productTitle,
-        product_title_bn: i.productTitleBn,
-        product_image: i.productImage,
-        variant_label: i.variantLabel,
-        cutting_preference: i.cuttingPreference || null,
-        is_preorder: Boolean(i.isPreorder),
-        quantity: i.quantity,
-        unit_price: i.unitPrice,
-        line_total: i.lineTotal,
-      }));
-      const { error: itemsErr } = await supabase
-        .from("order_items")
-        .upsert(itemsRows);
-      if (itemsErr) {
-        console.warn("[syncOrderToSupabase] order_items notice:", itemsErr.message);
-      }
-    }
-
-    // 3. Update local storage to mark as synced
+    // Update local storage to mark as synced
     if (typeof window !== "undefined") {
       try {
         const raw = localStorage.getItem("sb_known_orders_v1");

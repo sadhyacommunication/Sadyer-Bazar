@@ -47,14 +47,14 @@ await db.exec(`
    VALUES ('c1','SAVE10','10%','percentage',10,100);
   UPDATE site_settings SET inside_dhaka_fee=70, outside_dhaka_fee=130, free_delivery_threshold=3000, preorder_advance_percent=25;
 `);
-for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown", "06_hero_cms", "07_preorder_settings", "08_admin_orders_resilience", "09_brand_identity", "10_payment_gateways_on_hold", "11_qr_payment_verification", "12_section_sliders_cms", "13_qr_quote_and_tracking_fix", "14_qr_review_pending_and_section_cms_fix"]) {
+for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown", "06_hero_cms", "07_preorder_settings", "08_admin_orders_resilience", "09_brand_identity", "10_payment_gateways_on_hold", "11_qr_payment_verification", "12_section_sliders_cms", "13_qr_quote_and_tracking_fix", "14_qr_review_pending_and_section_cms_fix", "15_resilient_order_sync_and_coupons"]) {
   const file = fs.readdirSync(`${root}/migrations`).find((n) => n.includes(f));
   try { await db.exec(read(`migrations/${file}`)); console.log(`applied ${file}`); }
   catch (e) { console.log(`MIGRATION FAILED ${file}: ${e.message}`); process.exit(2); }
 }
 await db.exec("UPDATE coupons SET max_uses = 2 WHERE id = 'c1'; UPDATE site_settings SET bkash_enabled = true, nagad_enabled = true;");
 // idempotency: re-running every migration must succeed too
-for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown", "06_hero_cms", "07_preorder_settings", "08_admin_orders_resilience", "09_brand_identity", "10_payment_gateways_on_hold", "11_qr_payment_verification", "12_section_sliders_cms", "13_qr_quote_and_tracking_fix", "14_qr_review_pending_and_section_cms_fix"]) {
+for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown", "06_hero_cms", "07_preorder_settings", "08_admin_orders_resilience", "09_brand_identity", "10_payment_gateways_on_hold", "11_qr_payment_verification", "12_section_sliders_cms", "13_qr_quote_and_tracking_fix", "14_qr_review_pending_and_section_cms_fix", "15_resilient_order_sync_and_coupons"]) {
   const file = fs.readdirSync(`${root}/migrations`).find((n) => n.includes(f));
   try { await db.exec(read(`migrations/${file}`)); } catch (e) { check(`re-run ${file}`, false, e.message); }
 }
@@ -249,6 +249,54 @@ mp = await fn("admin_mark_order_paid", cod3.orderId, Number(cod3.dueAmount), "CO
 check("manual reference cannot be reused (replay guard)", !mp.ok, mp.err);
 const adj = await fn("admin_adjust_order_weight", cod3.orderId, -40, "weighed lighter", actor);
 check("weight adjustment keeps totals consistent (constraint)", adj.ok && Number(adj.r.totalAmount) === Number(cod3.totalAmount) - 40, adj.err);
+
+// admin_sync_resilient_order test
+const nonAdminActor = "00000000-0000-0000-0000-0000000000bb";
+const dummyResilientOrder = {
+  id: "ord-resilient-test-01",
+  orderCode: "SB-2611-TESTRESIL01",
+  customerName: "Resilient Customer",
+  customerPhone: "01713479111",
+  deliveryZone: "inside_dhaka",
+  customerDistrict: "Dhaka City",
+  customerAddress: "Dhanmondi, Dhaka",
+  subtotal: 1000,
+  deliveryCharge: 70,
+  discountAmount: 80,
+  couponCode: "FAMILYBOX8",
+  totalAmount: 990,
+  advancePaid: 0,
+  dueAmount: 990,
+  paymentMethod: "cod",
+  paymentPlan: "cod",
+  paymentStatus: "pending",
+  orderStatus: "pending",
+  items: [
+    {
+      id: "item-resil-01",
+      productId: "p-fish",
+      variantId: "v-fish-1",
+      productTitle: "Rui Fish",
+      quantity: 2,
+      unitPrice: 500,
+      lineTotal: 1000,
+    },
+  ],
+};
+
+let syncFail = await fn("admin_sync_resilient_order", nonAdminActor, JSON.stringify(dummyResilientOrder));
+check("admin_sync_resilient_order rejects non-admin", !syncFail.ok);
+
+let syncSuccess = await fn("admin_sync_resilient_order", actor, JSON.stringify(dummyResilientOrder));
+check("admin_sync_resilient_order successfully syncs offline order", syncSuccess.ok && syncSuccess.r.orderId === "ord-resilient-test-01", syncSuccess.err);
+
+// Confirming synced order via admin_set_order_status
+let confirmSynced = await fn("admin_set_order_status", "ord-resilient-test-01", "confirmed", actor);
+check("synced resilient order can be confirmed without rollback", confirmSynced.ok, confirmSynced.err);
+
+// Verify FAMILYBOX8 coupon seeded by migration 15 applies
+const famOrder = await mkOrder({ coupon: "FAMILYBOX8", items: items("v-fish-1", 4) });
+check("FAMILYBOX8 coupon seeded by migration 15 applies properly", famOrder.ok && Number(famOrder.r.discountAmount) > 0, famOrder.err);
 
 // ---- 5. Tracking, rate limit, guards ------------------------------------------------------------
 console.log("\n=== tracking / rate limit / guards ===");

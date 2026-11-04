@@ -1098,12 +1098,70 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     // 4. Server sync (if possible)
     try {
+      // If order is offline/pending DB sync, sync it to Supabase via admin_sync_resilient_order
+      if (target.isPendingDbSync) {
+        const syncRes = await syncOrderToSupabase({
+          ...target,
+          orderStatus: status,
+          updatedAt: now,
+        });
+        if (!syncRes.success) {
+          console.warn("[StoreContext] Resilient sync failed:", syncRes.error);
+          // Rollback optimistic update
+          setOrders((prev) =>
+            prev.map((o) =>
+              o.id === target.id || o.orderCode === target.orderCode
+                ? { ...o, orderStatus: prevStatus, updatedAt: prevUpdatedAt }
+                : o
+            )
+          );
+          saveOrderStatusOverride(target.orderCode, {
+            orderCode: target.orderCode,
+            orderStatus: prevStatus,
+            updatedAt: prevUpdatedAt,
+          });
+          broadcastOrderChange({
+            orderCode: target.orderCode,
+            status: prevStatus,
+            updatedAt: prevUpdatedAt,
+          });
+          showToast(syncRes.error || "Server rejected order status change.");
+        } else {
+          setOrders((prev) =>
+            prev.map((o) =>
+              o.id === target.id || o.orderCode === target.orderCode
+                ? { ...o, isPendingDbSync: false }
+                : o
+            )
+          );
+        }
+        return;
+      }
+
       const res = await executeAdminActionViaEdgeApi({
         action: "set_order_status",
         orderId: target.id,
         newStatus: status,
       });
       if (!res.success) {
+        // Self-healing: if server says order not found, attempt resilient sync
+        if (typeof res.error === "string" && res.error.toLowerCase().includes("not found")) {
+          const autoSync = await syncOrderToSupabase({
+            ...target,
+            orderStatus: status,
+            updatedAt: now,
+          });
+          if (autoSync.success) {
+            setOrders((prev) =>
+              prev.map((o) =>
+                o.id === target.id || o.orderCode === target.orderCode
+                  ? { ...o, isPendingDbSync: false }
+                  : o
+              )
+            );
+            return;
+          }
+        }
         console.warn("[StoreContext] Server sync notice:", res.error);
         // Rollback optimistic update on server rejection
         setOrders((prev) =>
@@ -1197,6 +1255,27 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     // 4. Server sync
     try {
+      if (target.isPendingDbSync) {
+        const syncRes = await syncOrderToSupabase({
+          ...target,
+          paymentStatus,
+          advancePaid: nextAdvance,
+          dueAmount: nextDue,
+          transactionId: effectiveTrxId,
+          updatedAt: now,
+        });
+        if (syncRes.success) {
+          setOrders((prev) =>
+            prev.map((o) =>
+              o.id === target.id || o.orderCode === target.orderCode
+                ? { ...o, isPendingDbSync: false }
+                : o
+            )
+          );
+          return;
+        }
+      }
+
       const paidAmount = Math.max(1, nextAdvance - target.advancePaid || target.totalAmount);
       const res = await executeAdminActionViaEdgeApi({
         action: "mark_order_paid",
@@ -1308,6 +1387,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     // 4. Server sync
     try {
+      if (target.isPendingDbSync) {
+        const syncRes = await syncOrderToSupabase({
+          ...target,
+          weightAdjustmentAmount,
+          weightAdjustmentNote,
+          totalAmount: nextTotal,
+          dueAmount: nextDue,
+          paymentStatus: nextPaymentStatus,
+          updatedAt: now,
+        });
+        if (syncRes.success) {
+          setOrders((prev) =>
+            prev.map((o) =>
+              o.id === target.id || o.orderCode === target.orderCode
+                ? { ...o, isPendingDbSync: false }
+                : o
+            )
+          );
+          return;
+        }
+      }
+
       const res = await executeAdminActionViaEdgeApi({
         action: "adjust_order_weight",
         orderId: target.id,
@@ -1380,6 +1481,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     // 4. Server sync
     try {
+      if (target.isPendingDbSync) {
+        const syncRes = await syncOrderToSupabase({
+          ...target,
+          courierName,
+          trackingReference,
+          riderName,
+          riderPhone,
+          orderStatus: nextStatus,
+          updatedAt: now,
+        });
+        if (syncRes.success) {
+          setOrders((prev) =>
+            prev.map((o) =>
+              o.id === target.id || o.orderCode === target.orderCode
+                ? { ...o, isPendingDbSync: false }
+                : o
+            )
+          );
+          return;
+        }
+      }
+
       const res = await executeAdminActionViaEdgeApi({
         action: "assign_logistics",
         orderId: target.id,
@@ -1432,7 +1555,34 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     action: "verify_confirm" | "reject_mismatch",
     note?: string
   ): Promise<boolean> => {
-    const res = await verifyManualQrPayment(orderId, action, note);
+    const target = orders.find((o) => o.id === orderId || o.orderCode === orderId);
+    if (target?.isPendingDbSync) {
+      const syncRes = await syncOrderToSupabase(target);
+      if (syncRes.success) {
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === target.id || o.orderCode === target.orderCode
+              ? { ...o, isPendingDbSync: false }
+              : o
+          )
+        );
+      }
+    }
+
+    let res = await verifyManualQrPayment(orderId, action, note);
+    if (!res.success && target && typeof res.error === "string" && res.error.toLowerCase().includes("not found")) {
+      const syncRes = await syncOrderToSupabase(target);
+      if (syncRes.success) {
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === target.id || o.orderCode === target.orderCode
+              ? { ...o, isPendingDbSync: false }
+              : o
+          )
+        );
+        res = await verifyManualQrPayment(orderId, action, note);
+      }
+    }
     if (!res.success) {
       showToast(res.error || "Failed to update payment status on server.");
       return false;
