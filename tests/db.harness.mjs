@@ -47,14 +47,14 @@ await db.exec(`
    VALUES ('c1','SAVE10','10%','percentage',10,100);
   UPDATE site_settings SET inside_dhaka_fee=70, outside_dhaka_fee=130, free_delivery_threshold=3000, preorder_advance_percent=25;
 `);
-for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown", "06_hero_cms", "07_preorder_settings", "08_admin_orders_resilience", "09_brand_identity", "10_payment_gateways_on_hold", "11_qr_payment_verification", "12_section_sliders_cms", "13_qr_quote_and_tracking_fix"]) {
+for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown", "06_hero_cms", "07_preorder_settings", "08_admin_orders_resilience", "09_brand_identity", "10_payment_gateways_on_hold", "11_qr_payment_verification", "12_section_sliders_cms", "13_qr_quote_and_tracking_fix", "14_qr_review_pending_and_section_cms_fix"]) {
   const file = fs.readdirSync(`${root}/migrations`).find((n) => n.includes(f));
   try { await db.exec(read(`migrations/${file}`)); console.log(`applied ${file}`); }
   catch (e) { console.log(`MIGRATION FAILED ${file}: ${e.message}`); process.exit(2); }
 }
 await db.exec("UPDATE coupons SET max_uses = 2 WHERE id = 'c1'; UPDATE site_settings SET bkash_enabled = true, nagad_enabled = true;");
 // idempotency: re-running every migration must succeed too
-for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown", "06_hero_cms", "07_preorder_settings", "08_admin_orders_resilience", "09_brand_identity", "10_payment_gateways_on_hold", "11_qr_payment_verification", "12_section_sliders_cms", "13_qr_quote_and_tracking_fix"]) {
+for (const f of ["01_foundation", "02_orders", "03_payments", "04_admin_ops", "05_rls_lockdown", "06_hero_cms", "07_preorder_settings", "08_admin_orders_resilience", "09_brand_identity", "10_payment_gateways_on_hold", "11_qr_payment_verification", "12_section_sliders_cms", "13_qr_quote_and_tracking_fix", "14_qr_review_pending_and_section_cms_fix"]) {
   const file = fs.readdirSync(`${root}/migrations`).find((n) => n.includes(f));
   try { await db.exec(read(`migrations/${file}`)); } catch (e) { check(`re-run ${file}`, false, e.message); }
 }
@@ -229,6 +229,7 @@ check("paid order cannot be cancelled without refund", !cancPaid.ok, cancPaid.er
 // ---- 4. Admin ops --------------------------------------------------------------------------------
 console.log("\n=== admin ops ===");
 const actor = "00000000-0000-0000-0000-0000000000aa";
+await db.exec(`INSERT INTO auth.users (id,email) VALUES ('${actor}','admin@x.com') ON CONFLICT DO NOTHING; INSERT INTO public.admins (user_id,email) VALUES ('${actor}','admin@x.com') ON CONFLICT DO NOTHING;`);
 const onl = (await mkOrder({ method: "bkash", plan: "full" })).r;
 let st = await fn("admin_set_order_status", onl.orderId, "confirmed", actor);
 check("online order with no verified payment cannot be confirmed by admin", !st.ok, st.err);
@@ -260,6 +261,15 @@ tr = await fn("track_order_server", "SB-0000-AAAAAAAAAA", "1234");
 check("track: unknown code -> null", tr.ok && tr.r === null);
 let trQr = await fn("track_order_server", qrOrd.r.orderCode, qrPhone.slice(-4));
 check("track: qr_pay order returns manualPay fields", trQr.ok && trQr.r && "manualPayChannel" in trQr.r);
+// Submit manual QR proof and verify
+const proofRes = await fn("submit_manual_qr_payment_proof", qrOrd.r.orderId, qrOrd.r.orderCode, "bkash", qrPhone, "TRXQRTEST001", null);
+check("submit_manual_qr_payment_proof succeeds with review_pending", proofRes.ok && proofRes.r.paymentStatus === "review_pending", proofRes.err);
+
+const qrVerifyRes = await fn("admin_verify_manual_qr_payment", qrOrd.r.orderId, "verify_confirm", actor, "Verified bank statement");
+check("admin_verify_manual_qr_payment settles order as paid and confirmed", qrVerifyRes.ok && qrVerifyRes.r.paymentStatus === "paid" && qrVerifyRes.r.status === "confirmed", qrVerifyRes.err);
+
+const qrReplayVerify = await fn("admin_verify_manual_qr_payment", qrOrd.r.orderId, "verify_confirm", actor, "Repeat attempt");
+check("re-verifying paid order is rejected", !qrReplayVerify.ok, qrReplayVerify.err);
 
 let last;
 for (let i = 0; i < 4; i++) last = await fn("rate_limit_hit", "t:bucket", 60, 3);
@@ -267,7 +277,7 @@ check("rate limiter blocks the 4th hit in the window", last.r.allowed === false 
 
 const guard = await as("authenticated", "UPDATE orders SET payment_status='paid'", [], "00000000-0000-0000-0000-000000000001");
 check("authenticated UPDATE orders denied", !guard.ok, guard.err);
-await db.exec(`INSERT INTO auth.users (id,email) VALUES ('00000000-0000-0000-0000-0000000000aa','admin@x.com'); INSERT INTO public.admins (user_id,email) VALUES ('00000000-0000-0000-0000-0000000000aa','admin@x.com');`);
+await db.exec(`INSERT INTO auth.users (id,email) VALUES ('00000000-0000-0000-0000-0000000000aa','admin@x.com') ON CONFLICT DO NOTHING; INSERT INTO public.admins (user_id,email) VALUES ('00000000-0000-0000-0000-0000000000aa','admin@x.com') ON CONFLICT DO NOTHING;`);
 let a1 = await as("authenticated", "SELECT count(*)::int AS n FROM orders", [], actor);
 check("admin (in admins table) can READ orders", a1.ok && a1.rows[0].n > 5, JSON.stringify(a1.rows ?? a1.err));
 let a2 = await as("authenticated", "UPDATE orders SET payment_status='paid' WHERE true", [], actor);
@@ -512,6 +522,44 @@ check("preorder: table CHECK constraint rejects advance percent > 100", !preBadA
 
 const preAud = (await svc("SELECT count(*)::int AS n FROM admin_audit_log WHERE action LIKE 'preorder.%' AND actor = $1", [actor])).rows[0].n;
 check("preorder: admin actions are audited", preAud >= 3, preAud);
+
+// ---- 8. Section Sliders CMS & RLS ---------------------------------------------------------------
+console.log("\n=== section sliders CMS & RLS ===");
+
+// Anon read before adding custom slide
+let secAnon = await as("anon", "SELECT count(*)::int AS n FROM section_slides WHERE section_id = 'dept_jamuna_fish'");
+check("section: anon can read seeded slides under RLS", secAnon.ok && secAnon.rows[0].n >= 1, JSON.stringify(secAnon.rows ?? secAnon.err));
+
+// Admin save slide via service_role with actor
+let secSave = await fn("admin_section_save_slide", actor, JSON.stringify({
+  sectionId: "dept_jamuna_fish",
+  titleEn: "Tangail Chomchom Fresh Batch",
+  headlineBn: "টাঙ্গাইলের আসল চমচম",
+  imageUrl: "/images/banners/hero-gawa-ghee-bogura-doi.jpg",
+  ctaLink: "/shop",
+  isActive: true,
+}));
+check("section: admin can save slide via RPC", secSave.ok && secSave.r.slide.headlineBn === "টাঙ্গাইলের আসল চমচম", secSave.err);
+const newSlideId = secSave.r?.slide?.id;
+
+// Check anon can now read the newly saved slide
+let secAnonAfter = await as("anon", "SELECT count(*)::int AS n FROM section_slides WHERE section_id = 'dept_jamuna_fish'");
+check("section: anon sees newly created active slide", secAnonAfter.ok && secAnonAfter.rows[0].n > secAnon.rows[0].n);
+
+// Anon direct write rejected
+let secAnonWrite = await as("anon", "UPDATE section_slides SET title_en = 'Hacked'");
+check("section: anon cannot UPDATE section_slides", !secAnonWrite.ok, secAnonWrite.err);
+
+// Admin reorder
+if (newSlideId) {
+  let allFlashIds = (await svc("SELECT id FROM section_slides WHERE section_id = 'dept_jamuna_fish' ORDER BY sort_order")).rows.map(r => r.id);
+  let secReorder = await fn("admin_section_reorder", actor, "dept_jamuna_fish", allFlashIds.reverse());
+  check("section: admin can reorder slides", secReorder.ok && secReorder.r.reordered === true, secReorder.err);
+
+  // Admin delete
+  let secDel = await fn("admin_section_delete_slide", actor, newSlideId);
+  check("section: admin can delete slide", secDel.ok && secDel.r.deleted === true, secDel.err);
+}
 
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

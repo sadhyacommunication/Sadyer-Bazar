@@ -375,7 +375,7 @@ export const onRequestPost = async (ctx: PagesContext): Promise<Response> => {
         "admin_section_reset_defaults",
         {
           p_actor: admin.userId,
-          p_target_section: d.targetSection || null,
+          p_section_id: d.targetSection || null,
         }
       );
       if (Array.isArray(result?.orphanedImageUrls) && ctx.waitUntil) {

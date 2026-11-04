@@ -928,25 +928,7 @@ export async function createOrderViaEdgeApi(
       const orderId = String(data.order.orderId || data.order.id || "");
       const orderCode = String(data.order.orderCode || "");
 
-      // If customer submitted QR payment details, record proof
-      if (input.paymentMethod === "qr_pay" && input.manualPayTrxId) {
-        try {
-          const supabase = getSupabaseClient();
-          if (supabase && orderId && orderCode) {
-            await supabase.rpc("submit_manual_qr_payment_proof", {
-              p_order_id: orderId,
-              p_order_code: orderCode,
-              p_channel: input.manualPayChannel || "other",
-              p_sender: input.manualPaySender || input.customerPhone,
-              p_trx_id: input.manualPayTrxId,
-              p_proof_url: input.manualPayProofUrl || null,
-            });
-          }
-        } catch (proofErr) {
-          console.warn("[qr payment proof submit notice]:", proofErr);
-        }
-      }
-
+      // QR payment proof is recorded securely at the Edge in /api/orders/create
       const mapped = mapOrderFromRow({
         ...data.order,
         customerName: input.customerName,
@@ -1156,6 +1138,10 @@ export async function trackOrderViaEdgeApi(
           : ord.weightAdjustmentAmount,
       weightAdjustmentNote:
         ov.weightAdjustmentNote || ord.weightAdjustmentNote,
+      manualPayRejectReason:
+        ov.manualPayRejectReason !== undefined
+          ? ov.manualPayRejectReason
+          : ord.manualPayRejectReason,
       updatedAt: ov.updatedAt || ord.updatedAt,
     };
   };

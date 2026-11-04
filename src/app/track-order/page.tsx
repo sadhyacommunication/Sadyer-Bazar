@@ -1027,6 +1027,21 @@ function TrackOrderContent() {
                 </div>
               )}
 
+              {activeOrder.manualPayRejectReason && (
+                <div className="p-3 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-200 text-xs space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-300">
+                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>পেমেন্ট যাচাইয়ের নোটিশ (Payment Notice):</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-amber-100">
+                    {activeOrder.manualPayRejectReason}
+                  </p>
+                  <p className="text-[10px] text-amber-200/80 pt-1">
+                    প্রয়োজনে সরাসরি যোগাযোগ করুন: <a href="tel:01713477780" className="underline font-bold text-amber-300">01713-477780</a>
+                  </p>
+                </div>
+              )}
+
               <div className="pt-2 border-t border-emerald-800/60">
                 <button
                   type="button"

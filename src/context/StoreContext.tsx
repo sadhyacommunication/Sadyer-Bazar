@@ -2164,6 +2164,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return { success: true, result: real };
     }
 
+    if (res.error) {
+      showToast(res.error);
+      return { success: false, error: res.error };
+    }
+
     showToast("Section slide updated and live on storefront!");
     return { success: true, result: savedSlide };
   };
